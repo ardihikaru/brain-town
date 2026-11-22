@@ -4,12 +4,5 @@
  * which is the signal to remove the marker. Never use these to hide a test bug.
  */
 export const KnownBug = {
-  /**
-   * Back-office (src/backoffice.src.html, paintProducts): `ORGS.find(o => o.id === p.org)` is undefined for a
-   * product without an org — every GAOS product, since GAOS events carry no org — and `o.vis` throws. loadLive()
-   * fails, the sign-in shows "Signed in, but the API did not answer" and the live back-office never opens.
-   */
-  backofficeProductWithoutOrg:
-    'BUG: back-office paintProducts() throws on a product without an org (every GAOS product), so the live ' +
-    'back-office never loads. See e2e/docs/test-catalog/web-backoffice.md (TC-BO-003).',
-} as const;
+  // None open. TC-BO-003 (back-office crash on a product without an org) was fixed in src/backoffice.src.html.
+} as const satisfies Record<string, string>;

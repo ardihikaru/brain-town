@@ -2,7 +2,6 @@ import { test, expect } from '@fixtures';
 import { expectStatus } from '@api/core/assertions';
 import { buildGaosTask, buildGaosTaskInfo } from '@data/factories/gaos.factory';
 import { omit } from '@data/factories/mutate';
-import { KnownBug } from '@utils/known-bugs';
 import { uniqueId } from '@utils/unique';
 import { Tag } from '@utils/tags';
 
@@ -14,7 +13,6 @@ test.describe('backoffice · event log', () => {
     'an accepted delivery appears in the event log live (TC-BO-020)',
     { tag: [Tag.smoke] },
     async ({ backoffice, ingestApi, integration }) => {
-      test.fail(true, KnownBug.backofficeProductWithoutOrg);
       const gaos = await integration('gaos');
       await expectStatus(await ingestApi.send(gaos.ingestPath, buildGaosTask(), { token: gaos.token }), 202);
       await backoffice.events.goto();
@@ -34,7 +32,6 @@ test.describe('backoffice · event log', () => {
       tag: [Tag.regression],
     },
     async ({ backoffice, ingestApi, integration }) => {
-      test.fail(true, KnownBug.backofficeProductWithoutOrg);
       const name = uniqueId('GAOS');
       const gaos = await integration('gaos', { name });
       await expectStatus(await ingestApi.send(gaos.ingestPath, buildGaosTask(), { token: gaos.token }), 202);
