@@ -10,6 +10,9 @@ human contribution rules are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Never commit secrets or `.env*` (except `.env.example`); store token hashes only.
 - Mask hidden orgs/products server-side; no personal data in events.
 - Test: `cd backend && go vet ./... && go test ./...`; run: `docker compose up --build`.
+- E2E/perf: `cd e2e && npm run check && npm run test:local` (`--repeat-each=3` for new specs), `npm run perf:local`.
+  Local stack only; always shut it down after a run (`npm run stack:down`). Rules: `e2e/AGENTS.md`,
+  `.claude/rules/e2e-automation.md`.
 
 ## Roles and models (mandatory)
 Role briefs are in `.claude/agents/`, design/motion skills in `.claude/skills/*/SKILL.md` (plain
@@ -33,4 +36,4 @@ markdown, Emil Kowalski, MIT). Full rule: `.claude/rules/agents-and-models.md`.
 5. After every merge, update the local main checkout: `git checkout main && git pull --ff-only` (must
    be clean and equal to `origin/main`); pull on the server too when deploying.
 
-Details: `.claude/rules/worktree-and-pr.md`.
+Details: `.claude/rules/worktree-and-pr.md`, `.claude/rules/e2e-automation.md`.

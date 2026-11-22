@@ -1,0 +1,51 @@
+{
+  "name": "brain-town-e2e",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Brain Town E2E automation (Playwright + TypeScript) and k6 performance tests, against the local compose stack only.",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "env:init": "node scripts/init-env.mjs",
+    "stack:up": "bash scripts/stack.sh up",
+    "stack:down": "bash scripts/stack.sh down",
+    "stack:status": "bash scripts/stack.sh status",
+    "test": "playwright test",
+    "test:local": "bash scripts/with-stack.sh npx playwright test",
+    "test:api": "playwright test --project=api-rest --project=api-stream",
+    "test:api:rest": "playwright test --project=api-rest",
+    "test:api:stream": "playwright test --project=api-stream",
+    "test:web": "playwright test --project=\"web-*\"",
+    "test:smoke": "playwright test --grep @smoke",
+    "test:regression": "playwright test --grep @regression",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:list": "playwright test --list",
+    "perf:local": "bash scripts/with-stack.sh --perf bash perf/run.sh",
+    "check:all": "npm run check && bash scripts/with-stack.sh npx playwright test",
+    "report": "playwright show-report",
+    "codegen": "playwright codegen",
+    "catalog": "node scripts/test-catalog.mjs --check",
+    "catalog:report": "node scripts/test-catalog.mjs --write && prettier --write docs/test-catalog/README.md",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run catalog"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^22.20.5",
+    "cross-env": "^10.1.0",
+    "dotenv": "^18.0.9",
+    "eslint": "^10.14.0",
+    "eslint-plugin-playwright": "^2.12.2",
+    "prettier": "^3.9.10",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.72.1",
+    "zod": "^4.6.7"
+  }
+}

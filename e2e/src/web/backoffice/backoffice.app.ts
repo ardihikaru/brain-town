@@ -1,0 +1,23 @@
+import type { Page } from '@playwright/test';
+import { DashboardPage } from './pages/dashboard.page';
+import { EventsPage } from './pages/events.page';
+import { IntegrationsPage } from './pages/integrations.page';
+import { LoginPage } from './pages/login.page';
+import { SetupPage } from './pages/setup.page';
+
+/** Exposed to tests as the `backoffice` fixture. */
+export class BackofficeApp {
+  readonly login: LoginPage;
+  readonly dashboard: DashboardPage;
+  readonly integrations: IntegrationsPage;
+  readonly setup: SetupPage;
+  readonly events: EventsPage;
+
+  constructor(readonly page: Page) {
+    this.login = new LoginPage(page);
+    this.dashboard = new DashboardPage(page);
+    this.integrations = new IntegrationsPage(page);
+    this.setup = new SetupPage(page);
+    this.events = new EventsPage(page);
+  }
+}
