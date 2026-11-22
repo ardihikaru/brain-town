@@ -148,8 +148,13 @@ Grouped events are merged on the server so a burst becomes one town event:
 
 ## Admin API additions
 
-Integration objects gain `events` (the list from the last `ping`, empty until then). The setup page uses it to show
-✓ subscribed / ⚠ missing per event.
+Integration objects gain `events`: the `hook.events` list from the last `ping`, plus every `X-GitHub-Event` value
+received afterwards with a valid signature (accepted, ignored or skipped alike, deduplicated, `ping` itself excluded).
+GitHub sends no new ping when the ticked events are edited, so this is how a newly ticked event turns ✓ on its first
+delivery. The list is capped at 64 entries. The setup page uses it to show ✓ subscribed / ⚠ missing per event.
+
+The `ping` is stored as an accepted event of type `ping` with `data.events` and published on `/admin/events` (and, like
+every accepted event, on `/events`, where the town ignores it), so the setup page updates live.
 
 ## Done checklist
 
