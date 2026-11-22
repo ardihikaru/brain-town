@@ -7,11 +7,14 @@ export interface CreateIntegrationInput {
   kind: string;
   name: string;
   org?: string;
+  /** GitHub only; any string so negative tests can send an invalid one. */
+  ownerType?: string;
 }
 
 export interface UpdateIntegrationInput {
   name?: string;
   org?: string;
+  ownerType?: string;
   feedUrl?: string;
 }
 
