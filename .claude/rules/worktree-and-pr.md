@@ -11,3 +11,8 @@
    Cross-repo dependencies: say "Tidak ada" when none.
 4. **Delete the worktree once the PR is created**: `git worktree remove <path>` (the branch
    stays on the remote). Confirm with `git worktree list`.
+5. **Delete the branch once its PR is merged, every time.** Merge with
+   `gh pr merge <n> --squash --delete-branch` (this removes the remote branch), then delete the
+   local branch (`git branch -D <branch>`; squash merges need `-D`) and run
+   `git fetch --prune`. Do not leave merged branches behind. Only touch your own branches:
+   never delete another session's open branch or worktree.
