@@ -253,7 +253,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   <div class="where" id="card-where"></div>
   <h3 id="card-name"></h3>
   <p id="card-desc"></p>
-  <div class="live" id="card-live"></div>
+  <div class="live" id="card-live" data-testid="town-card-live"></div>
   <div id="card-actions"><button id="card-open"></button><a id="card-link" target="_blank" rel="noopener"></a></div>
 </section>
 
@@ -310,11 +310,33 @@ const CONFIG = {
      task.failed           {org,repo,number,title,reason:"failed"|"canceled"}
      gate.requested        {org,repo,number,title}                the design gate asks for a decision
      gate.decided          {org,repo,number,title,decision:"approved"|"rejected"}
+   GitHub (gh:true; made by fromPublic from source "github" envelopes, ids "gh-..."; see docs/integrations/github.md).
+     org/repo name the town hall, productName is the real repo (or its alias when hidden:true); hidden events carry no titles.
+     issue.opened          {org,repo,number,title,label:"issue"|"pr",labels:["#hex"],productName,hidden,gh}   one person
+     issue.assigned        {org,repo,number,productName,hidden,gh}
+     task.done             {org,repo,number,done,total,productName,hidden,gh}      checklist progress
+     issue.closed          {org,repo,number,reason:"completed"|"not_planned",productName,hidden,gh}
+     issue.labeled         {org,repo,number,color:"#hex",label?,...}       a ribbon on the person
+     issue.subissues       {org,repo,number,count,done,...}                a family walks with the person
+     pr.opened             {org,repo,number,pr,draft,linked,...}           a scroll (linked: for issue number)
+     pr.merged / pr.closed {org,repo,number,pr,...}
+     pr.reviewed           {org,repo,number,pr,approved,changes,commented,...}   inspector stamp at the hall door
+     pr.checks             {org,repo,number,pr,check?,status:"passed"|"failed",...}
+     issue.commented       {org,repo,number|null,count,onPr?,pr?,...}      speech bubble
+     ci.run                {org,repo,run,status:"queued"|"running"|"passed"|"failed",jobs:{total,done,failed},workflow?,pr?,...}  cart
+     repo.pushed           {org,repo,commits,branch?,...}                  courier with parcels
+     ref.created/deleted   {org,repo,refType:"branch"|"tag",count,ref?,...}   eave lantern / banner
+     repo.labels           {org,repo,count,...}                            sign painter
+     discussion.opened     {org,repo,number,title,...}                     guest at the Tea House
+     discussion.answered   {org,repo,number,...}      discussion.commented {org,repo,number,count,...}
+     repo.starred          {org,repo,count,total,ghOrg,...}                lanterns rise above the org gate
    Issue and task events may also carry productName (shown instead of repo) and hidden:true.
    Live mode: once /events is open, only events flagged live:true (or local:true, staged by the
    town itself) pass the bus, so the simulator can never mix with the real stream.
    ============================================================ */
 const bus = { fns:[], live:false, on(f){this.fns.push(f)}, emit(ev){ if(this.live&&!ev.live&&!ev.local) return; for(const f of this.fns) f(ev); } };
+const RMQ=window.matchMedia('(prefers-reduced-motion: reduce)');   // checked live, when an object is created
+const calm=()=>paused||RMQ.matches;
 
 /* ---------- public envelope -> town events (pure, no DOM; see docs/integrations/*.md) ----------
    /events sends SSE messages  id: <seq>  event: <type>  data: {seq,id,type,source,at,payload}
@@ -323,7 +345,8 @@ const bus = { fns:[], live:false, on(f){this.fns.push(f)}, emit(ev){ if(this.liv
    org/repo halls: by repo name first, otherwise the next free hall (then round-robin). */
 const GAOS_STATE={backlog:'queued',ready:'queued',working:'progress','needs-you':'progress',blocked:'progress',review:'review',done:'closed',failed:'closed',canceled:'closed'};
 function makePublicAdapter(slots){
-  const slotOf=new Map(), used=new Set(), tasks=new Map(), seen=new Set(); let rr=0, extra=1000;
+  const slotOf=new Map(), used=new Set(), tasks=new Map(), seen=new Set(), gh=new Map(), prOf=new Map(); let rr=0, extra=1000;
+  const HEX=/^#[0-9a-f]{6}$/i;
   function slotFor(key,orgHint){ key=String(key||'unknown'); if(slotOf.has(key)) return slotOf.get(key);
     const s=slots.find(x=>x.repo===key&&(!orgHint||x.org===orgHint))||slots.find(x=>x.repo===key)||slots.find(x=>!used.has(x.org+'/'+x.repo))||slots[rr++%slots.length];
     used.add(s.org+'/'+s.repo); slotOf.set(key,s); return s; }
@@ -336,9 +359,66 @@ function makePublicAdapter(slots){
       out.push({type:'issue.opened',org:s.org,repo:s.repo,number:n,title,label:t.kind||'implement',productName,hidden}); }
     return {rec,isNew,base:{org:s.org,repo:s.repo,number:rec.number,title,productName,hidden}}; }
   function moveTo(rec,base,col,from,out){ if(!col||rec.column===col) return; rec.column=col; out.push({type:'task.column',...base,column:col,from}); }
+  /* ---- GitHub: one issue/PR/discussion is a person or a guest; see docs/integrations/github.md ----
+     A real repo lands on a fixed hall (slotFor), so productName (the real repo, or its alias when hidden)
+     is what every log line and pop shows. Hidden repos arrive without titles and are never given one here. */
+  function ghCtx(env){ const pr=env.product||{}, hidden=pr.visibility==='hidden', s=slotFor(pr.key||pr.name,env.org), name=hidden?(pr.name||'Private'):(pr.name||s.repo);
+    return {s,hidden,b:{org:s.org,repo:s.repo,productName:name,hidden}}; }
+  /* find or create the person behind an issue (or a PR that has no issue). kind: 'issue'|'pr'; subject: the task is that thing */
+  function ghEnsure(c,out,env,tid,kind,subject,reopen,labels){ tid=String(tid); const k=c.s.org+'/'+c.s.repo+'/'+tid; let rec=gh.get(k), fresh=!rec;
+    if(rec&&rec.closed&&reopen){ rec.closed=false; fresh=true; }
+    if(!rec){ let n=parseInt((tid.match(/(\d+)$/)||[])[1],10); if(!(n>0)||[...gh.values()].some(r=>r.slot===c.s&&r.number===n)) n=++extra;
+      rec={slot:c.s,number:n,kind,closed:false}; gh.set(k,rec); if(gh.size>3000) gh.delete(gh.keys().next().value); }
+    if(fresh){ const t=env.task||{}, word=kind==='pr'?'pull request':'issue';
+      const title=c.hidden?`Private ${word} ${rec.number}`:((subject&&t.title)||(kind==='pr'?'Pull request #':'Issue #')+tid);
+      out.push({type:'issue.opened',org:c.s.org,repo:c.s.repo,number:rec.number,title,label:kind==='pr'?'pr':'issue',labels:(Array.isArray(labels)?labels:[]).filter(x=>HEX.test(x)).slice(0,3),productName:c.b.productName,hidden:c.hidden,gh:true}); }
+    return rec; }
+  /* the person a PR belongs to: its linked issue, or the PR itself (unknown PRs are created on the spot) */
+  function ghPr(c,out,env,d){ const pk=c.s.org+'/'+c.s.repo+'/'+d.pr, t=env.task||{}; let l=prOf.get(pk), rec;
+    if(l) rec=gh.get(c.s.org+'/'+c.s.repo+'/'+l.id);
+    if(!rec){ if(d.issue!=null){ rec=ghEnsure(c,out,env,String(d.issue),'issue',false); l={id:String(d.issue),own:false}; }
+      else { const id=t.id!=null?String(t.id):String(d.pr); rec=ghEnsure(c,out,env,id,'pr',true); l={id,own:true}; out.push({type:'issue.assigned',org:c.s.org,repo:c.s.repo,number:rec.number,productName:c.b.productName,hidden:c.hidden,gh:true}); }
+      prOf.set(pk,l); if(prOf.size>3000) prOf.delete(prOf.keys().next().value); }
+    return {rec,own:l.own}; }
+  function fromGithub(env,type,d,out){ if(!type||type==='ping') return out;
+    const c=ghCtx(env), t=env.task||{}, b=c.b, tid=t.id==null?null:String(t.id), hid=c.hidden, safe=k=>hid?undefined:d[k];
+    const base=r=>({org:b.org,repo:b.repo,number:r.number,productName:b.productName,hidden:hid,gh:true});
+    const repoEv=x=>({type,org:b.org,repo:b.repo,productName:b.productName,hidden:hid,gh:true,...x});
+    switch(type){
+      case 'issue.opened': if(tid==null) break; ghEnsure(c,out,env,tid,'issue',true,true,d.labels); break;
+      case 'issue.assigned': { if(tid==null) break; const r=ghEnsure(c,out,env,tid,'issue',true); out.push({type,...base(r)}); break; }
+      case 'task.done': { if(tid==null) break; const r=ghEnsure(c,out,env,tid,'issue',true); out.push({type,...base(r),done:d.done|0,total:d.total|0}); break; }
+      case 'issue.closed': { if(tid==null) break; const r=ghEnsure(c,out,env,tid,'issue',true); r.closed=true; out.push({type,...base(r),reason:d.reason==='not_planned'?'not_planned':'completed'}); break; }
+      case 'issue.labeled': { if(tid==null||!HEX.test(d.color)) break; const r=ghEnsure(c,out,env,tid,'issue',true), lb=safe('label'); out.push({type,...base(r),color:d.color,...(lb?{label:String(lb)}:{})}); break; }
+      case 'issue.subissues': { if(tid==null) break; const r=ghEnsure(c,out,env,tid,'issue',true); out.push({type,...base(r),count:d.count|0,done:d.done|0}); break; }
+      case 'pr.opened': { if(d.pr==null) break; const pk=b.org+'/'+b.repo+'/'+d.pr; let r, linked=false;
+        if(d.issue!=null){ r=ghEnsure(c,out,env,String(d.issue),'issue',false); prOf.set(pk,{id:String(d.issue),own:false}); linked=true; }
+        else { const id=tid!=null?tid:String(d.pr); r=ghEnsure(c,out,env,id,'pr',true,true); prOf.set(pk,{id,own:true}); out.push({type:'issue.assigned',...base(r)}); }
+        out.push({type,...base(r),pr:d.pr,draft:!!d.draft,linked}); break; }
+      case 'pr.checks': { if(d.pr==null) break; const {rec}=ghPr(c,out,env,d), ck=safe('check'); out.push({type,...base(rec),pr:d.pr,...(ck?{check:String(ck)}:{}),status:d.status==='failed'?'failed':'passed'}); break; }
+      case 'pr.merged': { if(d.pr==null) break; const {rec,own}=ghPr(c,out,env,d); out.push({type,...base(rec),pr:d.pr}); if(own){ rec.closed=true; out.push({type:'issue.closed',...base(rec),reason:'completed'}); } break; }
+      case 'pr.closed': { if(d.pr==null) break; const {rec,own}=ghPr(c,out,env,d); out.push({type,...base(rec),pr:d.pr}); if(own){ rec.closed=true; out.push({type:'issue.closed',...base(rec),reason:'not_planned'}); } break; }
+      case 'pr.reviewed': { if(d.pr==null) break; const {rec}=ghPr(c,out,env,d); out.push({type,...base(rec),pr:d.pr,approved:d.approved|0,changes:d.changes|0,commented:d.commented|0}); break; }
+      case 'issue.commented': { const count=d.count|0||1;
+        if(t.kind==='pr'){ const pr=parseInt(tid,10), l=prOf.get(b.org+'/'+b.repo+'/'+pr), r=l&&gh.get(b.org+'/'+b.repo+'/'+l.id);
+          out.push(r?{type,...base(r),pr,onPr:true,count}:{type,org:b.org,repo:b.repo,productName:b.productName,hidden:hid,gh:true,number:null,pr,onPr:true,count}); }
+        else if(tid!=null){ const r=ghEnsure(c,out,env,tid,'issue',true); out.push({type,...base(r),count}); }
+        break; }
+      case 'ci.run': { const j=d.jobs||{}, st=['queued','running','passed','failed'].includes(d.status)?d.status:'running', wf=safe('workflow');
+        out.push(repoEv({run:d.run,status:st,jobs:{total:j.total|0,done:j.done|0,failed:j.failed|0},...(d.pr!=null?{pr:d.pr}:{}),...(wf?{workflow:String(wf)}:{})})); break; }
+      case 'repo.pushed': { const br=safe('branch'); out.push(repoEv({commits:d.commits|0||1,...(br?{branch:String(br)}:{})})); break; }
+      case 'ref.created': case 'ref.deleted': { const rf=safe('ref'); out.push(repoEv({refType:d.refType==='tag'?'tag':'branch',count:d.count|0||1,...(rf?{ref:String(rf)}:{})})); break; }
+      case 'repo.labels': out.push(repoEv({count:d.count|0||1})); break;
+      case 'discussion.opened': case 'discussion.answered': case 'discussion.commented': { if(tid==null) break; const n=parseInt(tid,10)||0, x={number:n};
+        if(type==='discussion.opened') x.title=hid?'Private discussion '+n:(t.title||'Discussion #'+n); else if(type==='discussion.commented') x.count=d.count|0||1;
+        out.push(repoEv(x)); break; }
+      case 'repo.starred': out.push(repoEv({count:d.count|0||1,total:d.total|0,ghOrg:env.org})); break;
+      default: break; }
+    return out; }
   return function fromPublic(msg){ if(!msg||typeof msg!=='object') return [];
     const env=(msg.payload&&typeof msg.payload==='object')?msg.payload:msg, type=env.type||msg.type, d=env.data||{}, out=[];
     if(env.id!=null){ const k=type+'|'+env.id; if(seen.has(k)) return []; seen.add(k); if(seen.size>4000) seen.delete(seen.values().next().value); }
+    if(msg.source==='github'||String(env.id).startsWith('gh-')) return fromGithub(env,type,d,out);
     switch(type){
       case 'product.upserted': { const pr=env.product||{}; slotFor(pr.key||pr.name); break; }
       case 'task.created': { const {rec,isNew,base}=ensure(env,out), c=(env.task||{}).column;
@@ -670,7 +750,7 @@ lantern(17.3,26.2); lantern(19.6,29.4); lantern(18.9,35.2);
 /* GitHub Valley (Chinese) */
 const orgs = CONFIG.orgs.map((cfg,i)=>{
   const [bx,by]=[[25,25],[31,25],[25,31]][i];
-  const org={id:cfg.id,bx,by,queue:[],gate:[bx+2,by+5],gatePt:[bx+2.5,by+4.6],products:[]};
+  const org={id:cfg.id,bx,by,queue:[],gate:[bx+2,by+5],gatePt:[bx+2.5,by+4.6],products:[],arr:0,over:0,ovf:new Map(),stars:{}};
   patches.push([bx+.15,by+.15,4.7,4.7,'#f8f1de']);
   const wc=pal('#eee9dc');
   S(bx+by+2.5,()=>{ box(bx+.1,by+.1,4.8,.14,0,.4,wc,LIGHT); box(bx+.1,by+.1,.14,4.8,0,.4,wc,LIGHT); });
@@ -678,15 +758,24 @@ const orgs = CONFIG.orgs.map((cfg,i)=>{
   cfg.repos.forEach((repo,j)=>{ const x=bx+.4+j*2.6, y=by+.5;
     const p=B({id:cfg.id+'/'+repo,name:repo,label:true,district:'GitHub Valley',k:'cn',x,y,w:1.7,d:1.6,h:2.1,org:cfg.id,repo,doorPt:[x+.85,y+2],visual:null,detail:{label:'Open the '+cfg.id+' board',open:()=>openDetail('org',cfg.id)},job:()=>p.visual,
       desc:`A product of the ${cfg.id} org. One agent handles one issue at a time, ticking off its tasks.`,live:()=>p.visual?`Working on #${p.visual.number}: ${p.visual.done||0}/${p.visual.total||'?'} tasks`:'Idle, waiting for the next issue'},cnHall);
+    p.gh={lan:[],ban:[],carts:[],stamp:null,painter:null,couriers:0}; S(p.cx+p.cy+.6,()=>drawHallGh(p)); S(p.cx+p.cy+1.65,()=>drawHallRail(p));
     org.products.push(p); });
   gate(bx+1.9,by+4.76,'y','paifang',1.2);
-  buildings.push({id:'org-'+cfg.id,name:cfg.id,label:true,major:true,district:'GitHub Valley',k:'cn',x:bx,y:by,w:5,d:5,h:.3,cx:bx+2.5,cy:by+3.9,labelZ:2.2,hitKey:-1,desc:'A GitHub org. Each person queueing inside the gate is one open issue; the halls at the back are its products.',live:()=>org.queue.length+' waiting at the gate',detail:{label:'Open the '+cfg.id+' board',open:()=>openDetail('org',cfg.id)}});
+  buildings.push({id:'org-'+cfg.id,name:cfg.id,label:true,major:true,district:'GitHub Valley',k:'cn',x:bx,y:by,w:5,d:5,h:.3,cx:bx+2.5,cy:by+3.9,labelZ:2.2,hitKey:-1,dyn:()=>org.over?`${cfg.id} · +${org.over}`:cfg.id,desc:'A GitHub org. Each person queueing inside the gate is one open issue; the halls at the back are its products. Star lanterns rise above the gate.',live:()=>`${org.queue.length} waiting at the gate · ★ ${orgStars(org)}`+(org.over?` · +${org.over} more`:''),detail:{label:'Open the '+cfg.id+' board',open:()=>openDetail('org',cfg.id)}});
   tree(bx+.6,by+4.2,'willow'); tree(bx+4.4,by+4.2,'willow');
   return org;
 });
 const orgBy=Object.fromEntries(orgs.map(o=>[o.id,o]));
 const BACKLOG = B({id:'backlog',name:'Backlog Pagoda',label:true,district:'GitHub Valley',k:'cn',x:32.3,y:32,w:2.4,d:2.4,h:5,tiers:5,red:true,wall:K.cn.wall,roofc:K.cn.roof,
-  desc:'Each closed issue is logged here. In the valley one issue is one person: they queue at their org gate until an agent takes them in.',live:()=>`${st.closed} closed · ${st.open} waiting`},pagoda);
+  desc:'Each closed issue is logged here. In the valley one issue is one person: they queue at their org gate until an agent takes them in.',live:()=>`${st.closed} closed · ${st.open} waiting · ★ ${townStars()}`},pagoda);
+
+/* Tea House: one guest per open GitHub discussion, seated at the table (see TEA below) */
+const TEA={seats:[[-.28,-.15],[.28,-.15],[-.28,.2],[.28,.2]],guests:[],wait:[],byKey:new Map(),arriving:0,answered:0,door:[35,36],entry:[35.3,36]};
+const TEAP={base:pal('#e8e6df'),wall:pal(K.cn.wall),roof:pal(K.cn.roof),wood:pal('#b99a77'),gold:pal('#dcae45')};
+const TEAH = B({id:'tea',name:'Tea House',label:true,district:'GitHub Valley',k:'cn',x:34.65,y:35,w:1.2,d:.9,h:2.2,door:TEA.door,entry:TEA.entry,
+  desc:'The tea house of GitHub Valley. Each guest at the table is one open discussion. Bubbles rise as people reply, and a guest bows and leaves once the discussion is answered.',
+  live:()=>`${TEA.guests.length} at the table · ${TEA.wait.length} waiting · ${TEA.answered} answered today`},teaHouse);
+
 ponds.push([33.2,35.1,.6]); tree(31.5,31.6,'willow'); tree(35.3,33.5,'willow'); tree(31.6,35.2,'willow');
 
 /* Kampung (Javanese) */
@@ -1012,6 +1101,11 @@ function drawWalker(a){
   else if(c==='news'){ ctx.fillStyle='#fff'; for(let i=0;i<3;i++){ ctx.fillRect(X+2.4,Y-6-i*1.7,6,1.7); ctx.strokeRect(X+2.4,Y-6-i*1.7,6,1.7); } }
   else if(c==='canvas'){ ctx.fillStyle='#fff'; ctx.fillRect(X+2.4,Y-12,7,8); ctx.strokeRect(X+2.4,Y-12,7,8); ctx.fillStyle='#e58fb0'; ctx.fillRect(X+3.6,Y-10.5,2.4,2.4); ctx.fillStyle='#6f8fb3'; ctx.fillRect(X+5.6,Y-8,2.6,2.4); }
   else if(c==='reel'){ ctx.beginPath(); ctx.arc(X+5,Y-6,3.2,0,7); ctx.fillStyle='#fff'; ctx.fill(); ctx.stroke(); ctx.beginPath(); ctx.arc(X+5,Y-6,1,0,7); ctx.fillStyle='#d9523c'; ctx.fill(); }
+  if(a.ribbons){ for(let i=0;i<a.ribbons.length;i++){ ctx.fillStyle=a.ribbons[i]; ctx.fillRect(X-2.3,Y-6.4+i*1.5,4.6,1.3); } }
+  if(c==='scroll'){ ctx.fillStyle='#f4ecd8'; ctx.fillRect(X+2.5,Y-7,6,2.4); ctx.fillStyle=INK; ctx.fillRect(X+2.5,Y-7.2,1,2.8); ctx.fillRect(X+7.5,Y-7.2,1,2.8); if(a.mark){ ctx.fillStyle=a.mark; ctx.beginPath(); ctx.arc(X+5.5,Y-5.8,1.1,0,7); ctx.fill(); } }
+  else if(c==='parcels'){ ctx.fillStyle='#d8b98a'; for(let i=0,n=Math.min(a.n||1,4);i<n;i++){ ctx.fillRect(X+2.3,Y-7.2-i*3.2+3.2,3.6,3.2); ctx.strokeRect(X+2.3,Y-7.2-i*3.2+3.2,3.6,3.2); } }
+  else if(c==='brush'){ ctx.beginPath(); ctx.moveTo(X+2.8,Y-4); ctx.lineTo(X+6,Y-12); ctx.lineWidth=1; ctx.stroke(); ctx.fillStyle='#d73a4a'; ctx.beginPath(); ctx.arc(X+6,Y-12.4,1,0,7); ctx.fill(); ctx.lineWidth=LIGHT; }
+  if(a.famMore){ const t='+'+a.famMore; ctx.font='500 7px "IBM Plex Mono"'; ctx.textAlign='center'; const w=ctx.measureText(t).width+5; ctx.fillStyle='#fff'; ctx.fillRect(X+4,Y-17,w,8); ctx.lineWidth=1; ctx.strokeRect(X+4,Y-17,w,8); ctx.lineWidth=LIGHT; ctx.fillStyle=INK; ctx.fillText(t,X+4+w/2,Y-11); }
   if(a.tag){ ctx.font='500 8px "IBM Plex Mono"'; ctx.textAlign='center'; const w=ctx.measureText(a.tag).width+5; ctx.fillStyle=a.done?'#2f8f6b':'#fff'; ctx.fillRect(X-w/2,Y-24,w,9); ctx.strokeRect(X-w/2,Y-24,w,9); ctx.fillStyle=a.done?'#fff':INK; ctx.fillText(a.tag,X,Y-17); }
 }
 
@@ -1152,8 +1246,181 @@ function issueTick(a,dt){ const org=a.org, is=a.issue; if(a.state!=='in'&&!a.onR
   if(a.state==='queue'){ const idx=org.queue.indexOf(a), tx=org.bx+4.4-idx*.55, ty=org.by+3.45; if(!a.path.length && Math.hypot(tx-a.x,ty-a.y)>.05) walk(a,[[tx,ty]]);
     const p=org.products.find(p=>p.repo===is.repo)||org.products[0];
     if((is.assigned||is.closed) && !p.visual){ p.visual=is; org.queue.splice(idx,1); a.state='toDoor'; a.prod=p; walk(a,[[p.doorPt[0],org.by+3.45],p.doorPt],()=>{ a.state='inside'; a.hidden=true; a.inT=0; }); } }
-  else if(a.state==='inside'){ a.inT+=dt; if(is.closed && a.inT>1.5){ a.prod.visual=null; a.hidden=false; a.done=true; a.color='#9ccfb5'; a.state='out'; a.tick=null; issues.delete(is.key);
-      pop(a.prod.cx,a.prod.cy,2.4,'✓ #'+is.number+' closed','#2f8f6b'); walk(a,[[a.prod.doorPt[0],org.by+3.9],org.gatePt],()=>travel(a,a.home,null,kill)); } } }
+  else if(a.state==='inside'){ a.inT+=dt; if(is.closed && a.inT>1.5){ a.prod.visual=null; a.hidden=false; a.done=true; a.color=is.reason==='not_planned'?'#c9ced4':'#9ccfb5'; a.state='out'; a.tick=null; issues.delete(is.key);
+      if(is.reason==='not_planned') pop(a.prod.cx,a.prod.cy,2.4,'#'+is.number+' not planned','#8d959c'); else pop(a.prod.cx,a.prod.cy,2.4,'✓ #'+is.number+' closed','#2f8f6b'); walk(a,[[a.prod.doorPt[0],org.by+3.9],org.gatePt],()=>travel(a,a.home,null,kill)); } } }
+
+/* ============================================================
+   GITHUB VALLEY — issues are people, PRs scrolls, CI runs carts, discussions guests, stars lanterns.
+   Rule: every animation reads its progress from T - t0. When the town is paused or reduced motion is on,
+   objects are created in their final state (no short-lived walkers) and get one pop() instead.
+   ============================================================ */
+const ease3=t=>1-Math.pow(1-Math.min(1,Math.max(0,t)),3);
+const orgStars=o=>{ let n=0; for(const k in o.stars) n+=o.stars[k]; return n; };
+const townStars=()=>orgs.reduce((a,o)=>a+orgStars(o),0);
+const ikey=ev=>ev.org+'/'+ev.repo+'#'+ev.number;
+const MAXORG=8, MAXTOWN=24, DECAY=1800, HEXC=/^#[0-9a-f]{6}$/i;
+const GHN={sky:0}, BUB=new Map();
+const CP={red:pal('#c8472f'),green:pal('#2f8f6b'),amber:pal('#f0b93a'),grey:pal('#d2d6d9'),wagon:pal('#7a5a3c')};
+const LANU=[.55,.75,.95,1.15], BANV=[.35,.75,1.15], PAINT=['#d73a4a','#0e8a16','#1d76db','#fbca04'];
+const GCOL=['#e6b655','#7fd6a3','#eba595','#8fb9e0','#c7b3e0','#9ccfb5'];
+
+/* ---- issue people on the main canvas ---- */
+function spawnIssue(org,ev){ const key=ikey(ev), h=pick(homes), cols=(ev.labels||[]).filter(x=>HEXC.test(x)).slice(0,3);
+  const is={key,org:org.id,repo:ev.repo,number:ev.number,label:ev.label||'issue',assigned:false,closed:false,done:0,total:0,last:T};
+  const a=spawn(h[0]+.5,h[1]+.5,{color:LABELC[ev.label]||'#d2d6d9',issue:is,org,state:'arrive',home:h,speed:rnd(1.7,2.1)}); if(cols.length) a.ribbons=cols;
+  is.person=a; issues.set(key,is); org.arr++; st.open++;
+  travel(a,org.gate,[org.gatePt],()=>{ org.arr--; if(is.closed&&is.reason==='not_planned'){ ghLeave(a,false); return; } a.state='queue'; org.queue.push(a); a.tick=issueTick; });
+  if(cols.length&&!calm()&&ev.gh) pop(a.x,a.y,.9,null,cols[0]);
+  return is; }
+function ghDrain(org){ if(!org.ovf.size||org.queue.length+org.arr>=MAXORG||issues.size>=MAXTOWN) return;
+  const [key,ev]=org.ovf.entries().next().value; org.ovf.delete(key); org.over=org.ovf.size; const is=spawnIssue(org,ev); if(ev._assigned) is.assigned=true; }
+function ghLeave(a,quiet){ const is=a.issue, org=a.org, i=org.queue.indexOf(a); if(i>=0) org.queue.splice(i,1); a.state='out'; a.tick=null; issues.delete(is.key);
+  if(!quiet){ a.color='#c9ced4'; if(!a.hidden) pop(a.x,a.y,1.1,'not planned','#8d959c'); }
+  walk(a,[org.gatePt],()=>travel(a,a.home,null,kill)); }
+function ghDecay(is){ const a=is.person; if(!a||a.dead){ issues.delete(is.key); return; } const org=a.org;
+  if(a.state==='queue'){ if(!is.closed){ is.closed=true; st.open=Math.max(0,st.open-1); } ghLeave(a,true); }
+  else if(a.state==='inside'){ if(a.prod&&a.prod.visual===is) a.prod.visual=null; if(!is.closed){ is.closed=true; st.open=Math.max(0,st.open-1); } a.hidden=false; a.state='out'; a.tick=null; issues.delete(is.key); walk(a,[[a.prod.doorPt[0],org.by+3.9],org.gatePt],()=>travel(a,a.home,null,kill)); } }
+
+/* ---- speech bubbles: one per subject every 5 s, the rest is summed and flushed ---- */
+function ghBubble(subject,n,at){ let b=BUB.get(subject); if(!b){ b={last:-99,pend:0,q:false}; BUB.set(subject,b); } b.pend+=n;
+  const go=()=>{ const q=at(); if(q) pop(q[0],q[1],q[2],'💬 '+b.pend,'#6f8fb3'); b.pend=0; b.last=T; b.q=false; };
+  if(T-b.last>=5) go(); else if(!b.q){ b.q=true; after(Math.max(.05,b.last+5-T),go); } }
+
+/* ---- inspector stamp at the hall door ---- */
+function drawStamp(a){ const age=T-a.t0, s=P(a.x,a.y,0), sc=1+.5*(1-ease3(age/.18)), al=age>6?Math.max(0,(6.5-age)/.5):1; if(al<=0) return;
+  ctx.save(); ctx.globalAlpha=al; ctx.translate(s[0],s[1]); ctx.scale(sc,sc); ctx.translate(-s[0],-s[1]);
+  miniKid(s,'#3c4654',5.6); ctx.beginPath(); ctx.moveTo(s[0]-2.6,s[1]-7.6); ctx.lineTo(s[0]+2.6,s[1]-7.6); ctx.lineWidth=HEAVY; ctx.stroke();
+  const col=a.ok?'#2f8f6b':'#c8472f'; ctx.beginPath(); ctx.arc(s[0],s[1]-18,5.5,0,7); ctx.fillStyle=col; ctx.fill(); ctx.lineWidth=LIGHT; ctx.stroke();
+  ctx.fillStyle='#fff'; ctx.font='700 8px "IBM Plex Sans"'; ctx.textAlign='center'; ctx.fillText(a.ok?'✓':'✗',s[0],s[1]-15.2); ctx.restore(); }
+function stampTick(a){ if(T-a.t0>6.5){ kill(a); if(a.hall.gh.stamp===a) a.hall.gh.stamp=null; } }
+function ghStamp(p,ev){ const g=p.gh; if(g.stamp) kill(g.stamp);
+  const a=spawn(p.doorPt[0]+.45,p.doorPt[1]-.05,{ox:0,oy:0,hold:true,ok:!(ev.changes>0),t0:calm()?T-.18:T,hall:p}); a.draw=drawStamp; a.tick=stampTick; g.stamp=a; }
+
+/* ---- eave lanterns (branches), banners (tags), CI rail ---- */
+function drawHallGh(p){ const g=p.gh; if(!g.lan.length&&!g.ban.length) return;
+  for(const l of g.lan){ const k=l.die?1-(T-l.die)/.2:1; if(k<=0) continue; const x=p.x+LANU[l.slot], y=p.y+p.d+.3, dr=(1-ease3((T-l.t0)/.22))*6;
+    ctx.globalAlpha=k; seg([x,y,.97],[x,y,.86],LIGHT); const q=P(x,y,.86); ctx.beginPath(); ctx.ellipse(q[0],q[1]+2.4-dr,1.8,2.4,0,0,7); ctx.fillStyle=night>.35?LIT:'#dcae45'; ctx.fill(); ctx.lineWidth=LIGHT; ctx.stroke(); }
+  for(const b of g.ban){ const k=b.die?1-(T-b.die)/.2:1; if(k<=0) continue; const q=P(p.x+p.w+.34,p.y+BANV[b.slot],.95), dr=(1-ease3((T-b.t0)/.22))*6;
+    ctx.globalAlpha=k; ctx.fillStyle='#2f6f8f'; ctx.fillRect(q[0]-1.5,q[1]-dr,3,9); ctx.lineWidth=LIGHT; ctx.strokeRect(q[0]-1.5,q[1]-dr,3,9); ctx.fillStyle='#dcae45'; ctx.fillRect(q[0]-1.5,q[1]-dr,3,1); }
+  ctx.globalAlpha=1; }
+function drawHallRail(p){ const y=p.y+2.4, x0=p.x-.1, x1=p.x+1.8;
+  seg([x0,y,0],[x1,y,0],LIGHT,'#8d959c'); seg([x0,y+.12,0],[x1,y+.12,0],LIGHT,'#8d959c');
+  for(let i=0;i<5;i++){ const x=x0+.2+i*.38; seg([x,y-.03,0],[x,y+.15,0],LIGHT,'#8d959c'); }
+  const cs=p.gh.carts; if(!cs.length) return; const yc=y+.06, still=calm();
+  for(let i=0;i<cs.length;i++){ const c=cs[i], dt=Math.min(.25,Math.max(0,T-c.tt)), tot=c.jobs.total||0; c.tt=T;
+    const tg=c.st==='queued'?0:c.st==='running'?.15+.7*(tot?Math.min(1,c.jobs.done/tot):0):c.st==='passed'?1:c.u;
+    if(still) c.u=tg; else c.u+=Math.max(-.25*dt,Math.min(.25*dt,tg-c.u));
+    const cx=p.x+.95+c.u*.8-i*.5, n=Math.min(tot,6), fl=c.jobs.failed|0, ok=Math.max(0,(c.jobs.done|0)-fl); let amber=c.st==='running';
+    const cols=c._cols||(c._cols=[]); cols.length=n; for(let j=0;j<n;j++){ cols[j]=j<fl?CP.red:j<fl+ok?CP.green:(amber?(amber=false,CP.amber):CP.grey); }
+    for(let j=n-1;j>=0;j--){ const bx=cx-.27-j*.14; box(bx-.065,yc-.065,.13,.13,.04,.13,cols[j],LIGHT); }
+    box(cx-.17,yc-.11,.34,.22,.04,.14,CP.wagon,LIGHT);
+    if(c.st==='failed'){ ctx.strokeStyle='#c8472f'; poly([[cx-.2,yc-.14,.04],[cx+.2,yc-.14,.04],[cx+.2,yc+.14,.04],[cx-.2,yc+.14,.04]],null,HEAVY); ctx.strokeStyle=INK; }
+    if(tot>6){ const q=P(cx-.27-5*.14-.2,yc,.12); ctx.font='500 7px "IBM Plex Mono"'; ctx.textAlign='center'; ctx.fillStyle=INK; ctx.fillText('+'+(tot-6),q[0],q[1]-3); } } }
+
+/* ---- star lanterns above the org gate ---- */
+function drawSky(a){ for(let i=0;i<a.k;i++){ const ag=T-a.t0-i*.35; if(ag<0||ag>4) continue; const u=ag/4, al=ag>3?4-ag:1,
+    q=P(a.x+(i-(a.k-1)/2)*.14+.08*Math.sin(T*2+i),a.y,1.9+2.7*u);
+    if(night>.35){ ctx.globalAlpha=al*.25; ctx.fillStyle=LIT; ctx.beginPath(); ctx.arc(q[0],q[1],6,0,7); ctx.fill(); }
+    ctx.globalAlpha=al; ctx.fillStyle='#ffd66b'; ctx.lineWidth=1; ctx.fillRect(q[0]-2,q[1]-2.5,4,5); ctx.strokeRect(q[0]-2,q[1]-2.5,4,5); }
+  ctx.globalAlpha=1; ctx.lineWidth=LIGHT; }
+function skyTick(a){ if(T-a.t0>4+(a.k-1)*.35){ kill(a); GHN.sky=Math.max(0,GHN.sky-a.k); } }
+
+/* ---- Tea House: guests are open discussions ---- */
+function teaHouse(o){ const {x,y,w,d,cx,cy}=o, RZ=1.1;
+  box(x-.1,y-.1,w+.2,d+.2,0,.12,TEAP.base,LIGHT); box(x+.1,y+.1,w-.2,.28,.12,.8,TEAP.wall);
+  const x0=x+.08, x1=x+w-.08, y0=y+.08, y1=y+d-.08;
+  seg([x0,y0,.12],[x0,y0,RZ],HEAVY,CN_RED); seg([x1,y0,.12],[x1,y0,RZ],HEAVY,CN_RED);
+  const seat=g=>{ const s=TEA.seats[g.seat], dip=T-g.bow<.6?2*Math.sin(Math.PI*(T-g.bow)/.6):0, q=P(cx+s[0],cy+s[1],.14); q[1]+=dip; miniKid(q,g.col,4); };
+  for(const g of TEA.guests) if(g.seat<2) seat(g);
+  box(cx-.2,cy-.12,.4,.24,.12,.14,TEAP.wood,LIGHT); { const q=P(cx,cy,.28); ctx.beginPath(); ctx.arc(q[0],q[1],1.3,0,7); ctx.fillStyle='#8d959c'; ctx.fill(); ctx.lineWidth=LIGHT; ctx.stroke(); }
+  for(const g of TEA.guests) if(g.seat>=2) seat(g);
+  seg([x0,y1,.12],[x0,y1,RZ],HEAVY,CN_RED); seg([x1,y1,.12],[x1,y1,RZ],HEAVY,CN_RED);
+  const t=frustum(x,y,w,d,RZ,.22,.3,TEAP.roof,.22); upticks(x,y,w,d,RZ,.22);
+  box(t[0],t[1],t[2],t[3],RZ+.22,.14,TEAP.wall); const t2=frustum(t[0],t[1],t[2],t[3],RZ+.36,.32,Math.min(t[2],t[3])/2,TEAP.roof,.08);
+  box(cx-.04,cy-.04,.08,.08,RZ+.68,.08,TEAP.gold,LIGHT); { const q=P(cx,cy,RZ+.76); ctx.beginPath(); ctx.moveTo(q[0],q[1]); ctx.lineTo(q[0],q[1]-5); ctx.lineWidth=HEAVY; ctx.stroke(); }
+  if(TEA.guests.length&&!RMQ.matches){ for(let k=0;k<2;k++){ const u=(T*.35+k/2)%1, q=P(cx+.04,cy,.3+u*.45); ctx.globalAlpha=(1-u)*.8; ctx.beginPath(); ctx.arc(q[0]+u*3,q[1],1.4+u*2.2,0,7); ctx.fillStyle='#fff'; ctx.fill(); ctx.lineWidth=LIGHT; ctx.stroke(); } ctx.globalAlpha=1; }
+  if(TEA.wait.length){ const q=P(cx,cy,RZ+1.13), tx='+'+TEA.wait.length; ctx.font='500 8px "IBM Plex Mono"'; ctx.textAlign='center'; const wd=ctx.measureText(tx).width+6; ctx.fillStyle='#fff'; ctx.fillRect(q[0]-wd/2,q[1]-12,wd,10); ctx.lineWidth=1; ctx.strokeRect(q[0]-wd/2,q[1]-12,wd,10); ctx.lineWidth=LIGHT; ctx.fillStyle=INK; ctx.fillText(tx,q[0],q[1]-4); } }
+function teaSeatXY(g){ const s=g&&g.seat>=0?TEA.seats[g.seat]:null; return s?[TEAH.cx+s[0],TEAH.cy+s[1],1.1]:[TEAH.cx,TEAH.cy,2.4]; }
+function teaSit(g){ if(g.left) return; const used=TEA.guests.map(x=>x.seat); let s=0; while(used.includes(s)) s++; g.seat=s; g.bow=-9; TEA.guests.push(g); if(g.answered) teaBow(g); }
+function teaAdmit(g){ if(TEA.guests.length+TEA.arriving>=4){ if(TEA.wait.length<30) TEA.wait.push(g); else TEA.byKey.delete(g.key); return; }
+  if(calm()){ teaSit(g); return; }
+  TEA.arriving++; const h=pick(homes), a=spawn(h[0]+.5,h[1]+.5,{color:g.col,speed:2});
+  travel(a,TEA.door,[TEA.entry],()=>{ kill(a); TEA.arriving--; teaSit(g); }); }
+function teaNext(){ while(TEA.wait.length&&TEA.guests.length+TEA.arriving<4) teaAdmit(TEA.wait.shift()); }
+function teaLeave(g,answered){ const i=TEA.guests.indexOf(g); if(i<0||g.left) return; TEA.guests.splice(i,1); g.left=true; TEA.byKey.delete(g.key); if(answered) TEA.answered++;
+  if(!calm()){ const a=spawn(TEA.entry[0],TEA.entry[1],{color:g.col,speed:2}); travel(a,pick(homes),null,kill); } teaNext(); }
+function teaBow(g){ g.bow=T; if(calm()) teaLeave(g,true); else after(.7,()=>teaLeave(g,true)); }
+
+/* ---- the town reacts to GitHub (and, for the shared issue lifecycle, to GAOS and the simulator) ---- */
+Object.assign(React,{
+  'issue.opened'(ev){ const org=orgBy[ev.org]; if(!org) return; const key=ikey(ev), is=issues.get(key);
+    if(is){ is.last=T; const a=is.person; if(is.closed&&a&&!a.dead&&(a.state==='queue'||a.state==='arrive')){ is.closed=false; is.reason=null; is.assigned=false; st.open++; } return; }
+    if(org.ovf.has(key)) return;
+    if(org.queue.length+org.arr>=MAXORG||issues.size>=MAXTOWN){ if(org.ovf.size<60){ org.ovf.set(key,{...ev,at:T}); org.over=org.ovf.size; } return; }
+    spawnIssue(org,ev); },
+  'issue.assigned'(ev){ const key=ikey(ev), is=issues.get(key); if(!is){ const org=orgBy[ev.org], o=org&&org.ovf.get(key); if(o) o._assigned=true; return; } is.assigned=true; is.last=T; },
+  'task.done'(ev){ const is=issues.get(ikey(ev)); if(!is) return; is.done=ev.done|0; is.total=ev.total|0; is.last=T; },
+  'issue.closed'(ev){ const key=ikey(ev), is=issues.get(key); if(!is){ const org=orgBy[ev.org]; if(org&&org.ovf.delete(key)) org.over=org.ovf.size; return; }
+    if(is.closed) return; is.closed=true; is.reason=ev.reason==='not_planned'?'not_planned':'completed'; is.last=T; st.open=Math.max(0,st.open-1); st.closed++;
+    const a=is.person; if(is.reason==='not_planned'&&a&&!a.dead&&a.state==='queue') ghLeave(a,false); },
+  'issue.labeled'(ev){ const is=issues.get(ikey(ev)), a=is&&is.person; if(!a||a.dead||!HEXC.test(ev.color)) return; is.last=T; const r=a.ribbons||(a.ribbons=[]), i=r.indexOf(ev.color); if(i>=0) r.splice(i,1); r.push(ev.color); if(r.length>3) r.shift(); if(!a.hidden) pop(a.x,a.y,.9,null,ev.color); },
+  'issue.subissues'(ev){ const is=issues.get(ikey(ev)), a=is&&is.person; if(!a||a.dead) return; is.last=T; const count=Math.max(0,ev.count|0), n=Math.min(count,4);
+    if(a.kidWant!==n){ a.kidWant=n; if(a.kids) for(const k of a.kids) kill(k); a.kids=[]; let used=0; for(const x of issues.values()) if(x!==is&&x.person&&x.person.kids) used+=x.person.kids.length;
+      const m=Math.max(0,Math.min(n,24-used)); if(m) addKids(a,m); }
+    a.famMore=count>4?count-4:0; const dn=Math.min(ev.done|0,n); (a.kids||[]).forEach((k,i)=>{ if(!k.c0) k.c0=k.color; k.color=i<dn?'#9ccfb5':k.c0; }); },
+  'pr.opened'(ev){ const is=issues.get(ikey(ev)), a=is&&is.person; if(!a||a.dead) return; is.last=T; a.carry='scroll'; a.mark=null; if(a.state==='queue'||a.state==='arrive') is.assigned=true; },
+  'pr.merged'(ev){ const p=hallOf(ev), is=issues.get(ikey(ev)); if(is&&is.person){ is.person.mark='#2f8f6b'; is.last=T; } if(p) pop(p.cx,p.cy,2.9,'PR #'+ev.pr+' merged','#2f8f6b'); },
+  'pr.closed'(ev){ const p=hallOf(ev), is=issues.get(ikey(ev)); if(is&&is.person){ is.person.carry=null; is.last=T; } if(p) pop(p.doorPt[0],p.doorPt[1],.5,null,'#8d959c'); },
+  'pr.checks'(ev){ const p=hallOf(ev); if(!p||(ev.status!=='passed'&&ev.status!=='failed')) return; pop(p.cx,p.cy,2.2,null,ev.status==='passed'?'#2f8f6b':'#c8472f'); },
+  'pr.reviewed'(ev){ const p=hallOf(ev); if(!p) return; const is=issues.get(ikey(ev)); if(is) is.last=T;
+    if(ev.changes>0||ev.approved>0){ ghStamp(p,ev); pop(p.cx,p.cy,3.1,ev.changes>0?'changes requested PR #'+ev.pr:'review ✓ PR #'+ev.pr,ev.changes>0?'#c8472f':'#2f8f6b'); }
+    else if(ev.commented>0) ghBubble('rv#'+ev.org+'/'+ev.repo+'/'+ev.pr,ev.commented|0,()=>[p.cx,p.cy,2.6]); },
+  'issue.commented'(ev){ const subj=ev.onPr?'pr#'+ev.org+'/'+ev.repo+'/'+ev.pr:'is#'+ikey(ev), is=ev.number!=null?issues.get(ikey(ev)):null; if(is) is.last=T;
+    ghBubble(subj,ev.count|0||1,()=>{ const i2=ev.number!=null&&issues.get(ikey(ev)), a=i2&&i2.person; if(a&&!a.dead&&!a.hidden) return [a.x,a.y,1.1]; const p=hallOf(ev); return p?[p.cx,p.cy,2.6]:null; }); },
+  'ci.run'(ev){ const p=hallOf(ev); if(!p) return; const g=p.gh; let c=g.carts.find(x=>x.run===ev.run);
+    if(!c){ c={run:ev.run,u:0,st:'queued',jobs:{total:0,done:0,failed:0},at:T,endAt:0,tt:T}; g.carts.push(c); if(g.carts.length>2) g.carts.shift(); }
+    c.st=ev.status; c.jobs=ev.jobs||c.jobs; c.at=T;
+    if(c.st==='passed'&&!c.endAt) c.endAt=T+5; else if(c.st==='failed'&&!c.endAt){ c.endAt=T+8; pop(p.cx,p.cy,2.9,'CI ✗','#c8472f'); } else if(c.st==='running'||c.st==='queued') c.endAt=0; },
+  'repo.pushed'(ev){ const org=orgBy[ev.org], p=hallOf(ev); if(!p) return; const g=p.gh, n=Math.max(1,ev.commits|0);
+    if(g.couriers>=2||calm()){ pop(p.cx,p.cy,2.7,'⇡ '+n+' commit'+(n>1?'s':''),'#b06a42'); return; }
+    g.couriers++; const a=spawn(org.gate[0]+.5,org.gate[1]+.5,{color:'#b06a42',hat:'cap',carry:'parcels',n,speed:2.3}); if(n>4) a.tag=String(n);
+    walk(a,[org.gatePt,[p.doorPt[0],org.by+3.45],p.doorPt],()=>{ pop(p.doorPt[0],p.doorPt[1],.5,null,'#b06a42'); g.couriers--; kill(a); }); },
+  'ref.created'(ev){ const p=hallOf(ev); if(!p) return; const tag=ev.refType==='tag', list=tag?p.gh.ban:p.gh.lan, max=tag?3:4, n=Math.min(Math.max(1,ev.count|0),max), t0=calm()?T-.22:T;
+    for(let i=0;i<n;i++){ const live=list.filter(x=>!x.die); let slot=0; while(live.some(x=>x.slot===slot)) slot++;
+      if(slot>=max){ const old=live.reduce((a,b)=>a.born<=b.born?a:b); slot=old.slot; list.splice(list.indexOf(old),1); }
+      list.push({slot,t0,born:T,die:0}); } },
+  'ref.deleted'(ev){ const p=hallOf(ev); if(!p) return; const tag=ev.refType==='tag', list=tag?p.gh.ban:p.gh.lan; let n=Math.max(1,ev.count|0);
+    for(let i=list.length-1;i>=0&&n>0;i--){ if(list[i].die) continue; n--; if(calm()) list.splice(i,1); else list[i].die=T; } },
+  'repo.labels'(ev){ const org=orgBy[ev.org], p=hallOf(ev); if(!p) return; const g=p.gh;
+    pop(p.cx,p.cy,2.7,'labels ×'+Math.max(1,ev.count|0),'#d73a4a'); if(calm()) return; if(g.painter&&!g.painter.dead){ g.painter.stay+=3; return; }
+    const a=spawn(org.gate[0]+.5,org.gate[1]+.5,{color:'#e8d9d4',hat:'cap',carry:'brush',speed:2.2}), spot=[p.x+p.w+.25,p.y+p.d+.2]; a.stay=3; g.painter=a;
+    walk(a,[org.gatePt,[spot[0],org.by+3.45],spot],()=>{ a.hold=true; a.t0=T; a.nx=T+.9; a.k=0;
+      a.tick=(b)=>{ if(T>=b.nx){ b.nx+=.9; pop(spot[0]+.1,spot[1],.7,null,PAINT[b.k++%4]); }
+        if(T-b.t0>=b.stay){ b.tick=null; b.hold=false; walk(b,[[spot[0],org.by+3.45],org.gatePt],()=>{ g.painter=null; kill(b); }); } }; }); },
+  'discussion.opened'(ev){ if(!ev.org) return; const key=ev.org+'/'+(ev.productName||ev.repo)+'/'+ev.number; if(TEA.byKey.has(key)) return;
+    const g={key,born:T,seat:-1,bow:-9,col:pick(GCOL),num:ev.number,left:false,answered:false}; TEA.byKey.set(key,g); teaAdmit(g); },
+  'discussion.answered'(ev){ const g=TEA.byKey.get(ev.org+'/'+(ev.productName||ev.repo)+'/'+ev.number); if(!g||g.answered) return; g.answered=true;
+    const w=TEA.wait.indexOf(g); if(w>=0){ TEA.wait.splice(w,1); TEA.byKey.delete(g.key); TEA.answered++; g.left=true; return; }
+    if(g.seat>=0) teaBow(g); },
+  'discussion.commented'(ev){ const key=ev.org+'/'+(ev.productName||ev.repo)+'/'+ev.number, g=TEA.byKey.get(key); if(!g) return;
+    ghBubble('ds#'+key,ev.count|0||1,()=>{ const q=teaSeatXY(g); return [q[0],q[1],q[2]]; }); },
+  'repo.starred'(ev){ const org=orgBy[ev.org]; if(!org) return; org.stars[ev.productName||ev.repo]=Math.max(0,ev.total|0); const n=Math.max(1,ev.count|0), k=Math.min(n,5);
+    if(calm()||GHN.sky+k>12){ pop(org.bx+2.5,org.by+4.8,2.2,'★ +'+n,'#dcae45'); return; }
+    GHN.sky+=k; const a=spawn(org.bx+2.5,org.by+4.8,{ox:0,oy:0,hold:true,top:true,k,t0:T}); a.draw=drawSky; a.tick=skyTick; },
+});
+
+/* once a second: decay, prune, overflow drain (cheap; no per-frame scans) */
+let ghNext=0, ghDay=1;
+function ghSweep(){ ghNext=T+1;
+  if(day!==ghDay){ ghDay=day; TEA.answered=0; if(typeof GH!=='undefined') for(const r of GH.repos.values()){ r.commits=0; r.pushes=0; } }
+  for(const org of orgs){ for(const [k,e] of org.ovf) if(T-e.at>DECAY) org.ovf.delete(k); org.over=org.ovf.size; ghDrain(org);
+    for(const p of org.products){ const g=p.gh;
+      for(let i=g.carts.length-1;i>=0;i--){ const c=g.carts[i]; if((c.endAt&&T>c.endAt)||T-c.at>120) g.carts.splice(i,1); }
+      for(const list of [g.lan,g.ban]) for(let i=list.length-1;i>=0;i--){ const l=list[i]; if((l.die&&T-l.die>.2)||T-l.born>900) list.splice(i,1); } } }
+  for(const is of issues.values()) if(T-is.last>DECAY) ghDecay(is);
+  for(const [k,b] of BUB) if(!b.q&&T-b.last>60) BUB.delete(k);
+  for(const g of TEA.guests.slice()) if(T-g.born>1200) teaLeave(g,false);
+  for(let i=TEA.wait.length-1;i>=0;i--) if(T-TEA.wait[i].born>1200){ TEA.byKey.delete(TEA.wait[i].key); TEA.wait.splice(i,1); } }
 
 /* ambient life: residents, traffic, farmers */
 function resident(){ const h=pick(homes); const a=spawn(h[0]+.5,h[1]+.5,{res:true,color:pick(['#c9d2dc','#d8cdb9','#cfe0d2','#e3cfd4']),speed:rnd(1.3,1.8)});
@@ -1180,21 +1447,49 @@ const absH=()=>T/CONFIG.dayLength*24+7.2, hh=h=>String(Math.floor(h)%24).padStar
 const QSTEPS=['Launch browser','Open page','Sign in','Run scenario','Check result','Screenshot'];
 const Sim={ vis:0, active:0,
   visit(page,title){ const bag=['ID','ID','ID','ID','ID','ID','ID','ID','MY','MY','SG','SG','IN','IN','US','US','JP','DE','NL','GB','AU','SA','EG','BR','KR','FR','TR']; bus.emit({type:'site.visit',id:'v'+(++this.vis),page,country:pick(bag),...(title?{title}:{})}); },
+  ciRun:0, dn:0, bots:0, stars:{}, disc:[],
   n:0, artId:0, vid:0, pr:100, liNext:0, liQ:0, qaRun:0, imgId:0, list:[], vq:[], run:false,
   schedule(){ const source=Math.random()<.5?'article':'topic'; const it={id:++this.vid,source,title:pick(source==='article'?TITLES.art:TITLES.vid),channel:pick(CONFIG.channels)}; this.vq.push(it); bus.emit({type:'video.scheduled',...it}); },
+  /* GitHub-shaped town events (productName = repo) */
+  gh(type,cfg,repo,x){ bus.emit({type,org:cfg.id,repo,productName:repo,gh:true,...x}); },
+  afterOpen(is){ const cfg=CONFIG.orgs.find(o=>o.id===is.org), gx={number:is.number};
+    if(Math.random()<.5){ const cols=['#d73a4a','#a2eeef','#0e8a16','#fbca04','#5319e7'], names=['bug','docs','ready','help wanted','design']; let t=rnd(2,5);
+      for(let k=0,n=1+Math.floor(Math.random()*2);k<n;k++){ const i=Math.floor(Math.random()*cols.length); after(t,()=>{ if(this.run&&!is.closed) this.gh('issue.labeled',cfg,is.repo,{...gx,color:cols[i],label:names[i]}); }); t+=rnd(1.5,3); } } },
   start(){ this.run=true; bus.emit({type:'magazine.printed',issue:127+day});
-    const issueLoop=()=>after(rnd(2.8,5.2),()=>{ if(!this.run) return; const cfg=pick(CONFIG.orgs); if(this.list.filter(i=>i.org===cfg.id&&!i.closed).length<7){ const is={org:cfg.id,repo:pick(cfg.repos),number:++this.n+40,title:pick(TITLES.iss),label:pick(['bug','bug','feature','feature','chore'])}; this.list.push(is); bus.emit({type:'issue.opened',...is}); } issueLoop(); });
+    const issueLoop=()=>after(rnd(2.8,5.2),()=>{ if(!this.run) return; const cfg=pick(CONFIG.orgs); if(this.list.filter(i=>i.org===cfg.id&&!i.closed).length<7){ const is={org:cfg.id,repo:pick(cfg.repos),number:++this.n+40,title:pick(TITLES.iss),label:pick(['bug','bug','feature','feature','chore'])}; this.list.push(is); bus.emit({type:'issue.opened',...is}); this.afterOpen(is); } issueLoop(); });
     issueLoop();
     for(const cfg of CONFIG.orgs) for(const repo of cfg.repos){ const work=()=>after(rnd(1.5,3.5),()=>{ if(!this.run) return; const is=this.list.find(i=>i.org===cfg.id&&i.repo===repo&&!i.taken); if(!is) return work(); is.taken=true; const id={org:is.org,repo:is.repo,number:is.number};
         after(rnd(4,7),()=>{ bus.emit({type:'issue.assigned',...id,agent:'agent-'+repo}); const tasks=TASKS[is.label], total=tasks.length; bus.emit({type:'task.created',...id,tasks});
-          const review=()=>{ const pr=++this.pr, names=['lint','tests','build']; bus.emit({type:'pr.opened',...id,pr,checks:names}); let flaky=Math.random()<.15;
-            const check=k=>{ const name=names[k]; bus.emit({type:'pr.checks',...id,pr,check:name,status:'running'}); after(rnd(1,1.8),()=>{
-                if(name==='tests'&&flaky){ flaky=false; bus.emit({type:'pr.checks',...id,pr,check:name,status:'failed'}); return after(2.5,()=>check(k)); }
-                bus.emit({type:'pr.checks',...id,pr,check:name,status:'passed'}); if(k<2) return check(k+1);
-                after(1,()=>{ bus.emit({type:'pr.merged',...id,pr}); after(.8,()=>{ is.closed=true; bus.emit({type:'issue.closed',...id}); this.list=this.list.filter(i=>!i.closed); work(); }); }); }); };
+          if(is.label==='feature'&&Math.random()<.25){ is.sub={count:2+Math.floor(Math.random()*5),done:0}; after(3,()=>{ if(!is.closed) this.gh('issue.subissues',cfg,repo,{number:is.number,count:is.sub.count,done:is.sub.done}); }); }
+          const review=()=>{ const pr=++this.pr, names=['lint','tests','build']; bus.emit({type:'pr.opened',...id,pr,checks:names}); is.prOpen=pr; let flaky=Math.random()<.15, run=++this.ciRun;
+            const ci=(status,done,failed=0)=>this.gh('ci.run',cfg,repo,{run,status,jobs:{total:3,done,failed},workflow:'CI',pr}); ci('queued',0);
+            const rv=x=>this.gh('pr.reviewed',cfg,repo,{number:is.number,pr,approved:0,changes:0,commented:0,...x});
+            const merge=()=>after(1,()=>{ bus.emit({type:'pr.merged',...id,pr}); is.prOpen=0; after(.8,()=>{ is.closed=true; bus.emit({type:'issue.closed',...id}); this.list=this.list.filter(i=>!i.closed); work(); }); });
+            const check=k=>{ const name=names[k]; bus.emit({type:'pr.checks',...id,pr,check:name,status:'running'}); ci('running',k); after(rnd(1,1.8),()=>{
+                if(name==='tests'&&flaky){ flaky=false; bus.emit({type:'pr.checks',...id,pr,check:name,status:'failed'}); ci('failed',k,1); run=++this.ciRun; return after(2.5,()=>{ ci('queued',0); check(k); }); }
+                bus.emit({type:'pr.checks',...id,pr,check:name,status:'passed'}); ci(k<2?'running':'passed',k+1); if(k<2) return check(k+1);
+                if(Math.random()<.15){ rv({changes:1}); after(3,()=>{ rv({approved:1}); merge(); }); } else { rv({approved:1}); merge(); } }); };
             check(0); };
-          const step=k=>{ bus.emit({type:'task.started',...id,index:k}); after(rnd(2.5,4.5),()=>{ bus.emit({type:'task.done',...id,index:k,done:k+1,total}); if(k+1<total) step(k+1); else review(); }); };
+          const step=k=>{ bus.emit({type:'task.started',...id,index:k}); after(rnd(2.5,4.5),()=>{ bus.emit({type:'task.done',...id,index:k,done:k+1,total}); if(is.sub&&is.sub.done<is.sub.count){ is.sub.done++; this.gh('issue.subissues',cfg,repo,{number:is.number,count:is.sub.count,done:is.sub.done}); } if(k+1<total) step(k+1); else review(); }); };
           step(0); }); }); work(); }
+    /* more GitHub life: comments, bot PRs, pushes, refs, labels, discussions, stars */
+    const anyRepo=()=>{ const cfg=pick(CONFIG.orgs); return [cfg,pick(cfg.repos)]; };
+    const commentLoop=()=>after(rnd(6,12),()=>{ if(!this.run) return; const open=this.list.filter(i=>!i.closed&&i.taken); if(open.length){ const is=pick(open), cfg=CONFIG.orgs.find(o=>o.id===is.org), onPr=is.prOpen&&Math.random()<.2;
+        this.gh('issue.commented',cfg,is.repo,{number:is.number,count:1+Math.floor(Math.random()*5),...(onPr?{onPr:true,pr:is.prOpen}:{})}); } commentLoop(); }); commentLoop();
+    const botLoop=()=>after(rnd(45,70),()=>{ if(!this.run) return; if(this.bots<3){ this.bots++; const [cfg,repo]=anyRepo(), n=++this.n+40, x={number:n}; this.gh('issue.opened',cfg,repo,{...x,title:pick(['Bump dependencies','Update lockfile','Format the code base']),label:'pr',labels:['#5319e7']}); this.gh('issue.assigned',cfg,repo,x);
+        this.gh('pr.opened',cfg,repo,{...x,pr:n,draft:false,linked:false});
+        after(15,()=>{ this.bots--; if(Math.random()<.8){ this.gh('pr.merged',cfg,repo,{...x,pr:n}); this.gh('issue.closed',cfg,repo,{...x,reason:'completed'}); } else { this.gh('pr.closed',cfg,repo,{...x,pr:n}); this.gh('issue.closed',cfg,repo,{...x,reason:'not_planned'}); } }); } botLoop(); }); botLoop();
+    const pushLoop=()=>after(rnd(15,25),()=>{ if(!this.run) return; const [cfg,repo]=anyRepo(); this.gh('repo.pushed',cfg,repo,{commits:1+Math.floor(Math.random()*7),branch:pick(['main','feat/export','fix/margin'])}); pushLoop(); }); pushLoop();
+    const brLoop=()=>after(rnd(30,50),()=>{ if(!this.run) return; const [cfg,repo]=anyRepo(); this.gh('ref.created',cfg,repo,{refType:'branch',count:1,ref:pick(['feat/charts','fix/legend','chore/deps','feat/theme'])}); brLoop(); }); brLoop();
+    const delLoop=()=>after(rnd(40,70),()=>{ if(!this.run) return; const [cfg,repo]=anyRepo(); this.gh('ref.deleted',cfg,repo,{refType:'branch',count:1+Math.floor(Math.random()*2),ref:'feat/old'}); delLoop(); }); delLoop();
+    const tagLoop=()=>after(rnd(90,150),()=>{ if(!this.run) return; const [cfg,repo]=anyRepo(); this.gh('ref.created',cfg,repo,{refType:'tag',count:1,ref:'v1.'+Math.floor(Math.random()*9)+'.'+Math.floor(Math.random()*9)}); tagLoop(); }); tagLoop();
+    const lblLoop=()=>after(rnd(60,90),()=>{ if(!this.run) return; const [cfg,repo]=anyRepo(); this.gh('repo.labels',cfg,repo,{count:1+Math.floor(Math.random()*3)}); lblLoop(); }); lblLoop();
+    const discLoop=()=>after(rnd(25,40),()=>{ if(!this.run) return; if(this.disc.filter(d=>d.open).length<5){ const [cfg,repo]=anyRepo(), d={cfg,repo,number:++this.dn,open:true}; this.disc.push(d); if(this.disc.length>20) this.disc.shift();
+        this.gh('discussion.opened',cfg,repo,{number:d.number,title:pick(['How do you split agents per repo?','Roadmap for next quarter','Ideas for the town map','Question about the export','Show and tell'])});
+        after(rnd(40,80),()=>{ if(!this.run||!d.open) return; d.open=false; this.gh('discussion.answered',cfg,repo,{number:d.number}); }); } discLoop(); }); discLoop();
+    const dcLoop=()=>after(rnd(8,14),()=>{ if(!this.run) return; const open=this.disc.filter(d=>d.open); if(open.length){ const d=pick(open); this.gh('discussion.commented',d.cfg,d.repo,{number:d.number,count:1+Math.floor(Math.random()*3)}); } dcLoop(); }); dcLoop();
+    for(const cfg of CONFIG.orgs) for(const repo of cfg.repos) this.stars[repo]=Math.floor(rnd(20,300));
+    const starLoop=()=>after(rnd(12,25),()=>{ if(!this.run) return; const [cfg,repo]=anyRepo(), c=1+Math.floor(Math.random()*3); this.stars[repo]+=c; this.gh('repo.starred',cfg,repo,{count:c,total:this.stars[repo],ghOrg:cfg.id}); starLoop(); }); starLoop();
     const visitLoop=()=>after(rnd(2.8,5.6)/(.4+(1-night)),()=>{ if(!this.run) return; const page=pick(['home','blog','blog']); this.visit(page,page==='blog'?pick(TITLES.art):null); visitLoop(); }); visitLoop();
     bus.on(ev=>{ if(!this.run||ev.type!=='article.published') return; for(let k=0;k<3+Math.floor(Math.random()*3);k++) after(k*rnd(.6,1.6),()=>this.visit('blog',ev.title)); });
     const artLoop=()=>after(rnd(10,18),()=>{ if(!this.run) return; const id=++this.artId, title=pick(TITLES.art), to=(Math.random()<.75&&this.liQ<5)?'linkedin':'blog'; if(to==='linkedin') this.liQ++; bus.emit({type:'article.drafted',id,title,to});
@@ -1207,7 +1502,7 @@ const Sim={ vis:0, active:0,
         const step=k=>after(rnd(1.5,2.6),()=>{ const ok=k<2||Math.random()>.035; bus.emit({type:'qa.step',...id,index:k,step:QSTEPS[k],status:ok?'passed':'failed'}); if(ok) passed++;
           if(ok&&k+1<QSTEPS.length) return step(k+1);
           bus.emit({type:'qa.run.finished',...id,passed,failed:ok?0:1,total:QSTEPS.length});
-          if(!ok&&this.list.filter(i=>i.org===cfg.id&&!i.closed).length<7){ const is={org:cfg.id,repo,number:++this.n+40,title:`QA: ${spec} fails at “${QSTEPS[k]}”`,label:'bug'}; this.list.push(is); bus.emit({type:'issue.opened',...is}); }
+          if(!ok&&this.list.filter(i=>i.org===cfg.id&&!i.closed).length<7){ const is={org:cfg.id,repo,number:++this.n+40,title:`QA: ${spec} fails at “${QSTEPS[k]}”`,label:'bug'}; this.list.push(is); bus.emit({type:'issue.opened',...is}); this.afterOpen(is); }
           qa(); }); step(0); }); qa(); }
     const imgLoop=()=>after(rnd(9,17),()=>{ if(!this.run) return; const kind=Math.random()<.65?'image':'video', r={id:++this.imgId,kind,title:pick(kind==='image'?['Cover image','Thumbnail','Post banner','Diagram']:['Scene clip','Intro sting','Loop for a post'])};
       bus.emit({type:'imago.requested',...r}); after(rnd(10,18),()=>bus.emit({type:'imago.delivered',...r})); imgLoop(); }); imgLoop();
@@ -1233,7 +1528,10 @@ const Sim={ vis:0, active:0,
    EventSource.onmessage never fires; every type gets its own listener. EventSource reconnects by
    itself and resends Last-Event-ID, so the server can replay what was missed. */
 const LIVE_TYPES=['product.upserted','task.created','task.moved','task.claimed','task.qa','task.done','task.failed','gate.requested','gate.decided',
-  'qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit'];
+  'qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit',
+  /* GitHub (no 'ping': it never reaches the town) */
+  'issue.opened','issue.assigned','issue.closed','issue.labeled','issue.subissues','issue.commented','pr.opened','pr.checks','pr.merged','pr.closed','pr.reviewed',
+  'ci.run','repo.pushed','ref.created','ref.deleted','repo.labels','discussion.opened','discussion.answered','discussion.commented','repo.starred'];
 const modeEl=document.getElementById('mode');
 let btMode='demo';
 function setBrand(m){ if(m===btMode) return; btMode=m;
@@ -1250,17 +1548,37 @@ function connectLive(url,onFail){ let opened=false, es;
   es.onopen=()=>{ opened=true; Sim.stop(); bus.live=true; setMode('live SSE'); };
   es.onerror=()=>{ if(!opened){ es.close(); if(onFail) onFail(); } else setMode('reconnecting'); };
   return es; }
-window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>bus.emit({live:true,...ev}), config:CONFIG, fromPublic };
+/* read-only view for tests: plain data only, halls keyed by org/<real repo or alias>, never titles */
+function ghSnapshot(){ const o={orgs:{},halls:{},tea:{seated:TEA.guests.length,waiting:TEA.wait.length,answered:TEA.answered},ghIssues:GH.issues.size};
+  for(const org of orgs){ o.orgs[org.id]={queue:org.queue.length,over:org.over,stars:orgStars(org)};
+    for(const p of org.products){ const g=p.gh; o.halls[org.id+'/'+p.repo]={repo:g.name||p.repo,visual:p.visual?p.visual.number:null,lanterns:g.lan.filter(x=>!x.die).length,banners:g.ban.filter(x=>!x.die).length,carts:g.carts.map(c=>({run:c.run,status:c.st})),stamp:g.stamp?(g.stamp.ok?'approved':'changes'):null}; } }
+  return o; }
+window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>bus.emit({live:true,...ev}), config:CONFIG, fromPublic, snapshot:ghSnapshot };
 
 /* ============================================================
    UI: feed log, stats, controls
    ============================================================ */
 const logEl=document.getElementById('log'); let pendingLog=[], booting=true;
 function clockStr(){ const m=Math.floor(tod*1440); return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
+const PN=ev=>ev.productName||ev.repo;
 function describe(ev){ switch(ev.type){
   case 'issue.opened': return `${ev.productName||ev.org+'/'+ev.repo} #${ev.number} ${ev.title||''}`;
-  case 'issue.assigned': case 'issue.closed': return `${ev.org}/${ev.repo} #${ev.number}`;
-  case 'task.done': return `${ev.repo} #${ev.number} ${ev.done}/${ev.total}`;
+  case 'issue.assigned': return `${PN(ev)} #${ev.number}`;
+  case 'issue.closed': return `${PN(ev)} #${ev.number}${ev.reason==='not_planned'?' not planned':''}`;
+  case 'task.done': return ev.gh?`${PN(ev)} #${ev.number} ${ev.done}/${ev.total} tasks`:`${ev.repo} #${ev.number} ${ev.done}/${ev.total}`;
+  case 'issue.labeled': return `${PN(ev)} #${ev.number} labelled${ev.label?' “'+ev.label+'”':''}`;
+  case 'issue.subissues': return `${PN(ev)} #${ev.number} ${ev.done}/${ev.count} sub-issues done`;
+  case 'issue.commented': return `${PN(ev)} ${ev.onPr?'PR #'+ev.pr:'#'+ev.number} +${ev.count} comment${ev.count===1?'':'s'}`;
+  case 'pr.reviewed': { const parts=[]; if(ev.approved) parts.push('approved ×'+ev.approved); if(ev.changes) parts.push('changes requested ×'+ev.changes); if(ev.commented) parts.push(ev.commented+' comment'+(ev.commented===1?'':'s')); return `${PN(ev)} PR #${ev.pr} ${parts.join(' · ')}`; }
+  case 'pr.closed': return `${PN(ev)} PR #${ev.pr} closed without merge`;
+  case 'ci.run': return `${PN(ev)} ${ev.workflow||'CI'} ${ev.status} ${ev.jobs.done}/${ev.jobs.total} jobs${ev.jobs.failed?' · '+ev.jobs.failed+' failed':''}`;
+  case 'repo.pushed': return `${PN(ev)} ${ev.commits} commit${ev.commits===1?'':'s'}${ev.branch?' to '+ev.branch:''}`;
+  case 'ref.created': case 'ref.deleted': return `${PN(ev)} ${ev.type==='ref.created'?'+':'−'}${ev.count} ${ev.refType==='tag'?'tag':'branch'}${ev.count===1?'':ev.refType==='tag'?'s':'es'}${ev.ref?' '+ev.ref:''}`;
+  case 'repo.labels': return `${PN(ev)} ${ev.count} label change${ev.count===1?'':'s'}`;
+  case 'discussion.opened': return `${PN(ev)} discussion #${ev.number} ${ev.title||''}`;
+  case 'discussion.answered': return `${PN(ev)} discussion #${ev.number} answered`;
+  case 'discussion.commented': return `${PN(ev)} discussion #${ev.number} +${ev.count} ${ev.count===1?'reply':'replies'}`;
+  case 'repo.starred': return `${PN(ev)} +${ev.count} ★ (${ev.total} total)`;
   case 'magazine.printed': return `issue #${ev.issue}`;
   case 'video.scheduled': return `${ev.channel}: ${ev.title} (from ${ev.source})`;
   case 'video.stage': return `${ev.channel}: ${ev.stage}${ev.rework?' (rework)':''}`;
@@ -1275,8 +1593,9 @@ function describe(ev){ switch(ev.type){
   case 'gate.decided': return `${ev.productName||ev.repo} #${ev.number} ${ev.decision}`;
   case 'task.created': return `${ev.repo} #${ev.number} ${ev.tasks.length} tasks`;
   case 'task.started': return `${ev.repo} #${ev.number} task ${ev.index+1}`;
-  case 'pr.opened': case 'pr.merged': return `${ev.repo} PR ${ev.pr} for #${ev.number}`;
-  case 'pr.checks': return `${ev.repo} PR ${ev.pr} ${ev.check} ${ev.status}`;
+  case 'pr.opened': return ev.gh?`${PN(ev)} PR #${ev.pr}${ev.linked?' for #'+ev.number:''}${ev.draft?' (draft)':''}`:`${ev.repo} PR ${ev.pr} for #${ev.number}`;
+  case 'pr.merged': return ev.gh?`${PN(ev)} PR #${ev.pr} merged`:`${ev.repo} PR ${ev.pr} for #${ev.number}`;
+  case 'pr.checks': return ev.gh?`${PN(ev)} PR #${ev.pr} ${ev.check||'check'} ${ev.status}`:`${ev.repo} PR ${ev.pr} ${ev.check} ${ev.status}`;
   case 'video.started': return `${ev.channel}: ${ev.title}${ev.collab?' with '+ev.collab:''}`;
   case 'video.published': return `${ev.title} on ${ev.platform||'youtube'}`;
   case 'article.scheduled': return `${ev.title} → ${ev.to} at ${ev.publishAt}`;
@@ -1285,7 +1604,7 @@ function describe(ev){ switch(ev.type){
   case 'imago.requested': case 'imago.delivered': return `${ev.kind}: ${ev.title}`;
   case 'article.published': return `${ev.title} → ${ev.to}`;
   default: return ev.title||''; } }
-bus.on(ev=>{ if(React[ev.type]) React[ev.type](ev); if(ev.type!=='qa.step'&&!ev.local) pendingLog.push([clockStr(),ev]); if(pendingLog.length>60) pendingLog.shift(); });
+bus.on(ev=>{ if(ev.gh&&ev.productName&&ev.org){ const p0=hallOf(ev); if(p0) p0.gh.name=ev.productName; } if(React[ev.type]) React[ev.type](ev); if(ev.type!=='qa.step'&&!ev.local) pendingLog.push([clockStr(),ev]); if(pendingLog.length>60) pendingLog.shift(); });
 function flushLog(){ if(!pendingLog.length) return; for(const [t,ev] of pendingLog){ const li=document.createElement('li'); const tm=document.createElement('time'); tm.textContent=t; const b=document.createElement('b'); b.textContent=ev.type; li.append(tm,b,document.createTextNode(' '+describe(ev))); logEl.prepend(li); }
   pendingLog=[]; while(logEl.children.length>60) logEl.lastChild.remove(); }
 const $=id=>document.getElementById(id);
@@ -1408,7 +1727,7 @@ function hit(mx,my){ const [wx,wy]=toWorld(mx,my); let best=null,bk=-9;
    ============================================================ */
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const PLS={v:0,items:new Map(),seq:0}, PNAME={youtube:'YouTube',facebook:'Facebook',instagram:'Instagram',tiktok:'TikTok'}, PCULT={youtube:'jp',facebook:'eu',instagram:'ar',tiktok:'cn'};
-const YTS={v:0,items:new Map(),seq:0}, GH={v:0,issues:new Map(),seq:0}, LIS={v:0,items:new Map(),seq:0}, QAS={v:0,repos:new Map()};
+const YTS={v:0,items:new Map(),seq:0}, GH={v:0,issues:new Map(),seq:0,repos:new Map(),disc:new Map()}, LIS={v:0,items:new Map(),seq:0}, QAS={v:0,repos:new Map()};
 for(const cfg of CONFIG.orgs) for(const repo of cfg.repos) QAS.repos.set(cfg.id+'/'+repo,{key:cfg.id+'/'+repo,org:cfg.id,repo,run:null,runs:0,pass:0,fail:0});
 const ORGC=Object.fromEntries(CONFIG.orgs.map((o,i)=>[o.id,['#e6b655','#a9c6de','#c7b3e0'][i%3]]));
 const STAGES=[
@@ -1449,23 +1768,43 @@ bus.on(ev=>{ const t=ev.type, now=clockStr();
     else if(t==='video.published'){ it.state='published'; it.kind=ev.kind; (it.platforms=it.platforms||[]).push('youtube'); it.publishedAt=now; it.seq=++YTS.seq;
       const pub=[...YTS.items.values()].filter(x=>x.state==='published').sort((a,b)=>a.seq-b.seq); while(pub.length>6) YTS.items.delete(pub.shift().id); }
     YTS.v++; }
-  else if(ev.org && /^(issue|task|pr|gate)\./.test(t)){ const key=ev.org+'/'+ev.repo+'#'+ev.number; let is=GH.issues.get(key);
-    if(!is){ is={key,org:ev.org,repo:ev.repo,number:ev.number,title:ev.title||'',label:ev.label||'bug',productName:ev.productName,state:'queued',openedAt:now,tasks:[],checks:{},seq:++GH.seq}; GH.issues.set(key,is); }
+  else if(ev.gh&&ev.org&&/^(ci|repo|ref|discussion)\./.test(t)){ ghRepoStore(ev,t,now); }
+  else if(ev.org && /^(issue|task|pr|gate)\./.test(t)){ if(ev.number==null) return; const key=ev.org+'/'+ev.repo+'#'+ev.number; let is=GH.issues.get(key);
+    if(!is&&GH_UPDATE_ONLY.has(t)) return;
+    if(!is){ is={key,org:ev.org,repo:ev.repo,number:ev.number,title:ev.title||'',label:ev.label||'bug',productName:ev.productName,state:'queued',openedAt:now,tasks:[],checks:{},seq:++GH.seq,ribbons:[],comments:0}; GH.issues.set(key,is); if(t==='issue.opened'&&ev.labels) is.ribbons=ev.labels.slice(0,3); }
+    else if(t==='issue.opened'&&is.state==='closed'){ Object.assign(is,{title:ev.title||is.title,state:'queued',openedAt:now,closedAt:null,fail:null,reason:null,merged:false,prClosed:false,pr:null,checks:{},tasks:[],review:null,sub:null,comments:0,ribbons:(ev.labels||[]).slice(0,3),seq:++GH.seq}); }
     if(ev.productName) is.productName=ev.productName;
     if(t==='issue.assigned'){ is.state='progress'; is.agent=ev.agent||('agent-'+ev.repo); is.startedAt=now; }
     else if(t==='task.created'){ is.tasks=ev.tasks.map(x=>({t:x,s:'todo'})); }
     else if(t==='task.started'){ if(is.tasks[ev.index]) is.tasks[ev.index].s='doing'; }
     else if(t==='task.done'){ if(!is.tasks.length&&ev.total) is.tasks=Array.from({length:ev.total},(_,k)=>({t:'Task '+(k+1),s:'todo'})); const n=ev.done??((ev.index??0)+1); is.tasks.forEach((x,k)=>{ if(k<n) x.s='done'; }); }
-    else if(t==='pr.opened'){ is.state='review'; is.pr=ev.pr; is.checks={}; (ev.checks||['lint','tests','build']).forEach(c=>is.checks[c]='queued'); }
-    else if(t==='pr.checks'){ is.checks[ev.check]=ev.status; }
+    else if(t==='pr.opened'){ is.state='review'; is.pr=ev.pr; is.prClosed=false; is.checks={}; (ev.checks||(ev.gh?[]:['lint','tests','build'])).forEach(c=>is.checks[c]='queued'); }
+    else if(t==='pr.checks'){ is.checks[ev.check||'check']=ev.status; }
+    else if(t==='issue.labeled'){ if(!is.ribbons.includes(ev.color)) is.ribbons.push(ev.color); if(is.ribbons.length>3) is.ribbons.shift(); }
+    else if(t==='issue.subissues'){ is.sub={count:ev.count|0,done:ev.done|0}; }
+    else if(t==='issue.commented'){ is.comments=(is.comments||0)+(ev.count|0); }
+    else if(t==='pr.reviewed'){ const r=is.review||(is.review={approved:0,changes:0}); r.approved+=ev.approved|0; r.changes+=ev.changes|0; }
+    else if(t==='pr.closed'){ is.prClosed=true; }
     else if(t==='pr.merged'){ is.merged=true; }
-    else if(t==='issue.closed'){ is.fail=null; is.col='done'; closeIssue(is,ev.org,now); }
+    else if(t==='issue.closed'){ is.fail=null; is.col='done'; is.reason=ev.reason||null; closeIssue(is,ev.org,now); }
     else if(t==='task.column'){ is.col=ev.column; is.state=GAOS_STATE[ev.column]||'queued'; if(is.state==='closed'){ is.fail=(ev.column==='done')?null:ev.column; closeIssue(is,ev.org,now); } else { is.fail=null; if(is.state==='progress'&&!is.startedAt) is.startedAt=now; if(is.state==='queued') is.agent=null; } }
     else if(t==='task.failed'){ is.col=ev.reason; is.fail=ev.reason; closeIssue(is,ev.org,now); }
     else if(t==='gate.requested'){ is.gate='waiting'; }
     else if(t==='gate.decided'){ is.gate=ev.decision; }
     GH.v++; } });
 
+const GH_UPDATE_ONLY=new Set(['issue.labeled','issue.subissues','issue.commented','pr.reviewed','pr.closed']);
+function ghRepoStore(ev,t,now){ const name=ev.productName||ev.repo;
+  if(t.startsWith('discussion.')){ const key=ev.org+'/'+name+'/'+ev.number; let d=GH.disc.get(key);
+    if(t==='discussion.opened'){ if(!d){ d={key,org:ev.org,number:ev.number,title:ev.title||'Discussion #'+ev.number,open:true,seq:++GH.seq}; GH.disc.set(key,d); if(GH.disc.size>60){ const old=[...GH.disc.values()].filter(x=>!x.open)[0]||GH.disc.values().next().value; GH.disc.delete(old.key); } } }
+    else if(d&&t==='discussion.answered') d.open=false;
+    GH.v++; return; }
+  const key=ev.org+'/'+name; let r=GH.repos.get(key); if(!r){ r={name,org:ev.org,stars:0,ci:null,commits:0,pushes:0,branches:0,tags:0}; GH.repos.set(key,r); }
+  if(t==='repo.starred') r.stars=ev.total|0;
+  else if(t==='ci.run'){ const j=ev.jobs||{}; r.ci={status:ev.status,done:j.done|0,total:j.total|0,failed:j.failed|0,at:now}; }
+  else if(t==='repo.pushed'){ r.commits+=ev.commits|0; r.pushes++; }
+  else if(t==='ref.created'||t==='ref.deleted'){ const k=ev.refType==='tag'?'tags':'branches'; r[k]=Math.max(0,r[k]+(t==='ref.created'?1:-1)*(ev.count|0)); }
+  GH.v++; }
 function closeIssue(is,org,now){ is.state='closed'; is.closedAt=now; is.seq=++GH.seq;
   const done=[...GH.issues.values()].filter(x=>x.org===org&&x.state==='closed').sort((a,b)=>a.seq-b.seq); while(done.length>5) GH.issues.delete(done.shift().key); }
 let detail=null;
@@ -1503,23 +1842,32 @@ function ytSteps(){ const all=[...YTS.items.values()], b=all.filter(x=>x.state==
   <ol class="steps">${steps.map((s,i)=>`<li class="${i===fk?'here':''}"><span class="n">Step ${i+1} of 8</span><b>${s[0]}</b><p>${s[1]}</p>${tok(s[2])}</li>`).join('')}</ol>
   <div class="follow"><h4>Follow one video</h4>${f?`<p><b>${esc(f.channel)}</b> is making “${esc(f.title)}” from ${f.source==='article'?'a blog article':'a planned topic'}${f.collab?', as a reel with '+esc(f.collab):''}. It is at <b>${STAGES[fk-1][1]}</b>, step ${fk+1} of 8, outlined above.${f.reworks?' Review already sent it back to Scenes once.':''}</p>`:'<p>No video is in production this minute. The next one starts when a studio picks an item from the queue.</p>'}</div>`; }
 function issueCard(is,pos){ let h=`<article class="kc"><div class="top"><span class="num">#${is.number}</span><span class="chip">${esc(is.productName||is.repo)}</span><span class="chip ${esc(is.label)}">${esc(is.label)}</span></div><div class="t">${esc(is.title)}</div>`;
+  if(is.ribbons&&is.ribbons.length) h=h.replace('<div class="t">','<div class="t">'+is.ribbons.map(c=>`<span title="${esc(c)}" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${HEXC.test(c)?c:'#ccc'};border:1px solid var(--ink);margin-right:3px"></span>`).join('')+' ');
   if(is.state==='queued') h+=`<div class="m">opened ${is.openedAt} · ${pos===1?'next':'position '+pos} for ${esc(is.repo)}</div>`;
-  else if(is.state==='closed') h+=`<div class="m">${is.fail?esc(is.fail)+' · ':'PR '+(is.pr??'')+' merged · '}closed ${is.closedAt}</div>`;
+  else if(is.state==='closed') h+=is.reason==='not_planned'?`<div class="m">not planned · closed ${is.closedAt}</div>`:`<div class="m">${is.fail?esc(is.fail)+' · ':(is.pr!=null?'PR '+is.pr+' merged · ':'')}closed ${is.closedAt}</div>`;
   else h+=`<div class="m">${esc(is.agent||'agent')} · started ${is.startedAt||''}${is.col&&is.col!=='working'?' · '+esc(is.col):''}${is.gate?' · design gate '+esc(is.gate):''}</div>`;
   if((is.state==='progress'||is.state==='review')&&is.tasks.length) h+='<ul class="tasks">'+is.tasks.map(x=>`<li class="${x.s}">${esc(x.t)}</li>`).join('')+'</ul>';
   if(is.state==='review'&&is.pr) h+=`<div class="m">Pull request ${is.pr}${is.merged?' · merged':''}</div><div class="checks">`+Object.entries(is.checks).map(([c,s])=>`<span class="ck ${s}">${c} ${s==='passed'?'✓':s==='failed'?'✗ retrying':s==='running'?'…':'·'}</span>`).join('')+'</div>';
+  { const ch=[]; if(is.sub) ch.push(`<span class="chip">sub-issues ${is.sub.done}/${is.sub.count}</span>`); if(is.comments) ch.push(`<span class="chip">💬 ${is.comments}</span>`);
+    if(is.review&&is.review.changes) ch.push('<span class="chip failed">changes requested</span>'); else if(is.review&&is.review.approved) ch.push('<span class="chip passed">approved</span>'); if(is.prClosed) ch.push('<span class="chip">PR closed</span>');
+    if(ch.length) h+='<div class="checks">'+ch.join('')+'</div>'; }
   return h+'</article>'; }
+function repoStrip(r){ const p=['★ '+r.stars]; if(r.ci) p.push(`CI ${r.ci.status} ${r.ci.done}/${r.ci.total} (${r.ci.at})`); p.push(r.commits+' commit'+(r.commits===1?'':'s')+' today'); p.push('⎇ '+r.branches+' branch'+(r.branches===1?'':'es')); p.push(r.tags+' tag'+(r.tags===1?'':'s'));
+  return `<div style="margin:0 0 6px;font:11px/1.4 var(--font-mono);color:var(--ink-soft)"><b style="color:var(--ink)">${esc(r.name)}</b> · ${p.map(esc).join(' · ')}</div>`; }
 function orgBoard(id){ const cfg=CONFIG.orgs.find(o=>o.id===id), all=[...GH.issues.values()].filter(x=>x.org===id);
   const q=all.filter(x=>x.state==='queued').sort((a,b)=>a.seq-b.seq), pos={};
   const col=(st2,emptyT)=>{ const l=all.filter(x=>x.state===st2); if(st2==='closed') l.sort((a,b)=>b.seq-a.seq); return l.length?l.map(x=>issueCard(x)).join(''):none(emptyT); };
   return `<p class="lede">Each card is one issue, and one person at the ${esc(id)} gate in town. Every repo has one agent, and an agent works one issue at a time, so the rest wait in line.</p>
   <ol class="flow"><li data-n="1">Issue opened, joins the queue</li><li data-n="2">The repo’s agent takes the oldest one</li><li data-n="3">Splits it into tasks, does them in order</li><li data-n="4">Opens a pull request, checks run</li><li data-n="5">Merge closes the issue</li></ol>
+  ${[...GH.repos.values()].filter(r=>r.org===id).map(repoStrip).join('')}
   <div class="board">
     <div class="col"><h4>Waiting <i>${q.length}</i></h4><p class="hint">Oldest first, per repo.</p>${q.length?q.map(x=>{ pos[x.repo]=(pos[x.repo]||0)+1; return issueCard(x,pos[x.repo]); }).join(''):none('The queue is empty.')}</div>
     <div class="col"><h4>In progress <i>${all.filter(x=>x.state==='progress').length} of ${cfg?cfg.repos.length:2}</i></h4><p class="hint">Tasks tick off one at a time.</p>${col('progress','Both agents are free.')}</div>
     <div class="col"><h4>In review <i>${all.filter(x=>x.state==='review').length}</i></h4><p class="hint">Lint, tests and build must pass.</p>${col('review','No pull request is open.')}</div>
     <div class="col"><h4>Closed <i>latest 5</i></h4><p class="hint">Merged and done.</p>${col('closed','Nothing closed yet.')}</div>
-  </div>`; }
+  </div>
+  <h4 style="font-family:var(--font-display);font-size:14px;margin:14px 0 6px">Tea House <i style="font-family:var(--font-mono);font-style:normal;font-weight:400;font-size:11px;color:var(--ink-soft)">open discussions</i></h4>
+  ${(()=>{ const l=[...GH.disc.values()].filter(x=>x.org===id&&x.open); return l.length?'<ul class="tasks" style="border:0;margin:0;padding:0">'+l.map(x=>`<li>#${x.number} ${esc(x.title)}</li>`).join('')+'</ul>':none('No open discussion.'); })()}`; }
 const KIND={
   yt:{store:()=>YTS,LH:540,where:'Video Generator · example factory',title:()=>'Video factory',views:[['people','People'],['queues','Board'],['steps','How a video is made']],draw:(...a)=>drawYtScene(...a),html:tab=>tab==='queues'?ytQueues():ytSteps(),
     intro:()=>`<p class="lede">Each person is one video on its way through the generator. They wait in the article or topic queue, walk their channel’s row from station to station, wait for the publish slot, then leave by box car for the platforms. Point at anyone to see the title.</p><div class="legend">${CONFIG.channels.map(ch=>`<span><i style="background:${chColor(ch)}"></i>${esc(ch)}</span>`).join('')}<span>white sheet: from an article</span><span>yellow note: from a topic</span><span>grey helper: creator studio on a reel</span></div>`},
@@ -1559,7 +1907,7 @@ function qaBoard(){ const cls={passed:'done',doing:'doing',failed:'fail'};
     return `<div class="col"><h4>${esc(r.repo)} <i>${esc(r.org)}</i></h4><p class="hint">${r.runs} runs · ${r.pass} passed · ${r.fail} failed</p>`+(run?`<article class="kc" style="border-left-color:${ORGC[r.org]}"><div class="top"><span class="chip">${esc(run.spec)}</span><span class="chip ${stt}">${stt}</span></div><ul class="tasks" style="border-top:0;margin-top:2px;padding-top:0">${run.steps.map(x=>`<li class="${cls[x.s]||'todo'}">${esc(x.t)}</li>`).join('')}</ul>${run.state==='done'?`<div class="m">finished ${run.at}${run.failed?' · bug opened':''}</div>`:''}</article>`:none('No run yet.'))+'</div>'; }).join('')+'</div>'; }
 
 /* ---------- People mode: the same stores, drawn as walking figures ---------- */
-const LABELC={bug:'#eba595',feature:'#a9c6de',chore:'#d2d6d9'};
+const LABELC={bug:'#eba595',feature:'#a9c6de',chore:'#d2d6d9',issue:'#a9c6de',pr:'#c7b3e0'};
 const scene={actors:new Map(),fresh:true,tick:0,mx:-99,my:-99};
 function sceneReset(){ scene.actors.clear(); scene.fresh=true; }
 function actor(key,item,tx,ty,spawn,dt,terminal){ let a=scene.actors.get(key);
@@ -1909,7 +2257,7 @@ function phaseTick(){ const p=phaseOf(); if(phaseNow===p[1]) return; const first
   else if(p[1]==='evening'){ highlight('good','Evening: lamps come on and the night market opens on LinkedIn Street.',30,18.5); borrow(5,(f,done)=>{ const s=pick(stalls); travel(f,s.door,[[s.stand[0]+rnd(-.3,.3)-f.ox,s.stand[1]-f.oy]],()=>{ f.hold=true; after(rnd(6,10),done); }); }); }
   else if(p[1]==='night'){ highlight('star','Night: the town is lit, fireflies are out in the park, and the Haunted Forest is restless.',15.2,9.5); } }
 function update(dt){ T+=dt; const prev=tod; tod=(tod+dt/CONFIG.dayLength)%1; if(prev<.25&&tod>=.25&&T>5){ Sim.dayTick(); } if(tod<prev) day++;
-  const h=tod*24; night = h<5?1 : h<7?(7-h)/2 : h<18?0 : h<20?(h-18)/2 : 1; shake=Math.max(0,shake-dt*1.7); farmTick(dt); phaseTick();
+  const h=tod*24; night = h<5?1 : h<7?(7-h)/2 : h<18?0 : h<20?(h-18)/2 : 1; shake=Math.max(0,shake-dt*1.7); farmTick(dt); phaseTick(); if(T>=ghNext) ghSweep();
   for(let i=timers.length-1;i>=0;i--) if(timers[i].t<=T){ const f=timers[i].fn; timers.splice(i,1); f(); }
   for(const a of agents) stepAgent(a,dt);
   for(let i=agents.length-1;i>=0;i--) if(agents[i].dead) agents.splice(i,1);
