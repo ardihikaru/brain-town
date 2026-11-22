@@ -39,9 +39,9 @@ test.describe('backoffice · integrations', () => {
   );
 
   const widths = [
-    { width: 1280, id: 'TC-BO-011' },
-    { width: 820, id: 'TC-BO-012' },
-    { width: 390, id: 'TC-BO-013' },
+    { width: 1280, id: 'TC-BO-015' },
+    { width: 820, id: 'TC-BO-016' },
+    { width: 390, id: 'TC-BO-017' },
   ];
   for (const { width, id } of widths) {
     test(

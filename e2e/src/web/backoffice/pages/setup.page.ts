@@ -47,12 +47,6 @@ export class SetupPage extends BasePage {
   readonly eventMap = this.page.getByRole('region', { name: 'What becomes what' });
   readonly eventMapTable = this.eventMap.getByRole('table');
 
-  /** Opens the setup page of an existing integration. */
-  async open(id: string): Promise<void> {
-    await this.page.goto(`./#setup-${id}`);
-    await this.expectLoaded();
-  }
-
   /** Measures every body and header cell of the event map (no assertions). */
   async measureEventMapCells(): Promise<EventMapCell[]> {
     return this.eventMapTable.locator('tr').evaluateAll((rows) =>
