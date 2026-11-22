@@ -27,10 +27,15 @@ interface SetupDeps {
  */
 export async function setupGithub(
   { apiContextFor, adminApi, cleanup }: SetupDeps,
-  input: { name?: string; org?: string } = {},
+  input: { name?: string; org?: string; ownerType?: string } = {},
 ): Promise<{ github: GithubClient; target: GithubTarget }> {
   const created = await expectJson(
-    await adminApi.createIntegration({ kind: 'github', name: input.name ?? uniqueId('github'), org: input.org }),
+    await adminApi.createIntegration({
+      kind: 'github',
+      name: input.name ?? uniqueId('github'),
+      org: input.org,
+      ownerType: input.ownerType,
+    }),
     CreatedGithubIntegrationSchema,
     201,
   );

@@ -18,6 +18,8 @@ export const IntegrationSchema = z
     feedUrl: z.string().optional(),
     /** GitHub only: events subscribed on the webhook. Other kinds send an empty list (or null). */
     events: z.array(z.string()).nullish(),
+    /** GitHub only: who owns the repos; "" until set at creation or adopted from the first payload. */
+    ownerType: z.enum(['', 'user', 'organization']),
     tokenHint: z.string().length(4),
     createdAt: z.iso.datetime({ offset: true }),
     lastEventAt: z.string(),
@@ -26,9 +28,29 @@ export const IntegrationSchema = z
   .strict();
 export type Integration = z.infer<typeof IntegrationSchema>;
 
+/** One repository of a GitHub owner, sorted by name in the list. today/rejected count today's deliveries. */
+export const RepoRowSchema = z
+  .object({
+    name: z.string(),
+    private: z.boolean(),
+    hookEvents: z.array(z.string()),
+    lastEventAt: z.string(),
+    lastRejectedAt: z.string(),
+    today: z.number().int().nonnegative(),
+    rejected: z.number().int().nonnegative(),
+    product: z.string(),
+    visibility: z.enum(['public', 'hidden']),
+    alias: z.string(),
+    aliasCustom: z.boolean(),
+    defaultAlias: z.string(),
+  })
+  .strict();
+export type RepoRow = z.infer<typeof RepoRowSchema>;
+
 export const IntegrationRowSchema = IntegrationSchema.extend({
   today: z.number().int().nonnegative(),
   errors: z.number().int().nonnegative(),
+  repos: z.array(RepoRowSchema),
 });
 export const IntegrationListSchema = z.array(IntegrationRowSchema);
 
