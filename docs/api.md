@@ -15,6 +15,7 @@ platform repos; this service only receives (see `integrations/`).
 | `PUBLIC_URL` | `http://127.0.0.1:8080` | `https://` turns on `Secure` cookies. |
 | `INGEST_RATE`, `INGEST_BURST` | `50`, `200` | Per-integration token bucket for ingest. |
 | `BRAIN_TOWN_MODE` | `demo` | Reported by `/api/admin/session`. |
+| `BRAIN_TOWN_SECRET_KEY` | empty | Base64 of exactly 32 bytes (`openssl rand -base64 32`); encrypts GitHub webhook secrets (AES-256-GCM). Required when `BRAIN_TOWN_MODE=prod`. Otherwise, when empty, a random key is generated per process (one warning is logged) and GitHub secrets created then stop working after a restart. Server-side env only. |
 
 ## Ingest
 
@@ -33,6 +34,27 @@ shown once, when an integration is created or its secret is rotated.
 `site.visit` keeps only `page`, `country` (two uppercase letters) and an optional `title`;
 anything else the sender adds (an IP, a user agent) is dropped before storage.
 Rejected deliveries (401 for a known integration, 422) are logged and show in the event log.
+
+### GitHub
+
+`POST /ingest/github/<integration-id>` takes GitHub's own signed webhook deliveries (no bearer token):
+`X-Hub-Signature-256` (HMAC-SHA256 of the raw body with the integration's `whsec_` secret), `X-GitHub-Event`,
+`X-GitHub-Delivery`, `Content-Type: application/json`. The route is more specific than
+`/ingest/{kind}/{id}` and wins. The GitHub payload is never stored, only a small envelope.
+Contract, event mapping and rollups: [`integrations/github.md`](integrations/github.md).
+
+| Status | When |
+| --- | --- |
+| `202` | `{"status":"accepted"}`, `"ignored"` (event or action the town does not use) or `"skipped"` (bot sender, duplicate CI source). |
+| `401` | Unknown or non-GitHub integration, or missing or wrong signature (logged as rejected for a known integration). |
+| `409` | `X-GitHub-Delivery` already accepted for this integration (grouped deliveries are claimed too). |
+| `413` / `415` | Body over 2 MB / content type is not `application/json`. |
+| `422` | Missing `X-GitHub-Event` or `X-GitHub-Delivery`, body not JSON, or organisation mismatch (`field`). |
+| `429` | Same per-integration bucket as the other sources. `Retry-After: 1`. |
+| `503` | The secret cannot be decrypted (`BRAIN_TOWN_SECRET_KEY` missing or changed), or busy (4 bodies already in flight, `Retry-After: 1`). |
+
+Grouped events (comments, reviews, pushes, labels, stars, CI runs, ...) are merged for 15 s per key (at most
+1,000 open rollups, flushed on shutdown) and stored as one event with id `gh-roll-<first delivery id>`.
 
 ## Streams
 
@@ -57,12 +79,17 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | `POST /api/admin/login`, `/logout`; `GET /session` | Sign in (10 failures/min cap), out, check. |
 | `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). |
 | `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `feedUrl` (https JSON Feed 1.1 URL of a `site` integration, pulled every 5 minutes; empty disables), delete. |
-| `POST /api/admin/integrations/{id}/token` | Rotate the secret; the old one stops working. |
+| `POST /api/admin/integrations/{id}/token` | Rotate the secret; the old one stops working. For a `github` integration this makes a new `whsec_` secret (returned in the same `token` field). |
+| `GET /api/admin/integrations/{id}/secret` | `github` only, `Cache-Control: no-store`: `{"secret":"whsec_…"}` so the setup page can show it again. `404` for an unknown id or another kind, `503` when it cannot be decrypted. |
 | `GET /api/admin/products` | Orgs and products. |
 | `PUT /api/admin/orgs/{key}`, `/products/{key}` | `visibility` (`public`/`hidden`), `alias`, product `hall`. |
 | `GET /api/admin/events?integration=&type=&delivery=&q=&limit=` | Event log, newest first. |
 | `GET/PUT /api/admin/settings` | `retentionDays` (1 to 3650, pruned hourly), `animation`. |
 | `GET /api/admin/stats` | Counts. |
+
+Integration objects carry `events` (the events subscribed on a GitHub webhook, from its last `ping`; `[]` until
+then). `secretEnc` and `tokenHash` are never returned. A `github` integration has no token hash; its
+`tokenHint` is the last 4 characters of the secret, and its `ingestPath` is `/ingest/github/<id>`.
 
 Orgs and products are created automatically from the events that mention them. A new product
 takes the visibility its sender reports; after that the back-office value wins.
@@ -83,5 +110,4 @@ Event), `ABOUT` (Event to Product). Retention deletes old `Event` and `Seen` ver
 
 ## Not built yet
 
-GitHub signed webhooks (no contract
-yet), the JSON Feed/RSS puller, pausing an integration, and changing the admin password.
+The JSON Feed/RSS puller, pausing an integration, and changing the admin password.

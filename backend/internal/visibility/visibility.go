@@ -15,7 +15,7 @@ type Resolver interface {
 }
 
 // sensitive data fields removed when the event is about a hidden org or product.
-var sensitive = []string{"title", "url", "reason", "step", "spec", "steps"}
+var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check"}
 
 // Aliases reports whether the event is hidden and, if so, the public names to show.
 func Aliases(r Resolver, ev store.Event) (hidden bool, orgAlias, productAlias string) {

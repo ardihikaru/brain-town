@@ -6,8 +6,9 @@
 
 - **US-BO-01** — As the admin I want to sign in through the page so that I reach the live back-office.
 - **US-BO-02** — As the admin I want to add an integration in the page so that I can copy its URL and one-time token.
-- **US-BO-04** — As the admin I want Copy on the setup page to never copy a masked token so that I never paste a dead credential; when the token is no longer shown I rotate it and copy the new one.
 - **US-BO-03** — As the admin I want the event log to update live so that I see deliveries as they arrive.
+- **US-BO-04** — As the admin I want Copy on the setup page to never copy a masked token so that I never paste a dead credential; when the token is no longer shown I rotate it and copy the new one.
+- **US-BO-05** — As the admin I want a GitHub setup page that shows the secret on demand and which events are ticked so that I can wire the org webhook without guessing.
 
 ## Test cases
 
@@ -25,5 +26,12 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-BO-014 | US-BO-04 | Given the hidden state, when Rotate and copy then Cancel is clicked, then the hidden state returns and the old token still gets 202                           | +   | E2E   | P1  | automated | `tests/web/backoffice/secret.spec.ts`       |
 | ☑    | TC-BO-020 | US-BO-03 | Given the event log, when a delivery is accepted, then its row appears live as ok                                                                             | +   | E2E   | P0  | automated | `tests/web/backoffice/events.spec.ts`       |
 | ☑    | TC-BO-021 | US-BO-03 | Given the event log, when a delivery is rejected, then its row appears live as rejected                                                                       | -   | E2E   | P1  | automated | `tests/web/backoffice/events.spec.ts`       |
+| ☑    | TC-BO-030 | US-BO-05 | Given a GitHub integration, when Show is pressed, then the field goes from empty to the whsec_ secret, no bullet characters, and it signs deliveries          | +   | E2E   | P0  | automated | `tests/web/backoffice/github-setup.spec.ts` |
+| ☑    | TC-BO-031 | US-BO-05 | Given a hidden secret, when Copy is pressed, then the clipboard holds the real secret and it signs deliveries                                                 | +   | E2E   | P0  | automated | `tests/web/backoffice/github-setup.spec.ts` |
+| ☑    | TC-BO-032 | US-BO-05 | Given the checklist, when a chip is opened, then the details say what GitHub sends, what is kept, what shows in town and how bursts group                     | +   | WEB   | P1  | automated | `tests/web/backoffice/github-setup.spec.ts` |
+| ☑    | TC-BO-033 | US-BO-05 | Given no ping yet, then every chip is neutral and no warning shows                                                                                            | +   | WEB   | P2  | automated | `tests/web/backoffice/github-setup.spec.ts` |
+| ☑    | TC-BO-034 | US-BO-05 | Given a ping without Pull requests, then the missing-mandatory callout lists it and its chip is missing                                                       | -   | E2E   | P0  | automated | `tests/web/backoffice/github-setup.spec.ts` |
+| ☑    | TC-BO-035 | US-BO-05 | Given a complete ping, then chips show subscribed, not needed and not ticked, and no callout                                                                  | +   | E2E   | P1  | automated | `tests/web/backoffice/github-setup.spec.ts` |
+| ☑    | TC-BO-036 | US-BO-05 | Given the open setup page, when a ping arrives, then the chips update live                                                                                    | +   | E2E   | P0  | automated | `tests/web/backoffice/github-setup.spec.ts` |
 
 **Fixed bug (TC-BO-003).** `paintProducts()` in `src/backoffice.src.html` read `o.vis` for the product's org, and `o` was undefined for a product without an org (every GAOS product), so the live back-office failed to load. It is guarded now and TC-BO-001/010/020/021 run without `test.fail()`.

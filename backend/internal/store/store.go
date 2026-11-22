@@ -33,6 +33,8 @@ type Integration struct {
 	FeedURL        string    `json:"feedUrl,omitempty"` // site only: JSON Feed 1.1 URL pulled by internal/feed (https)
 	TokenHash      string    `json:"tokenHash,omitempty"`
 	TokenHint      string    `json:"tokenHint,omitempty"`
+	SecretEnc      string    `json:"secretEnc,omitempty"` // github only: AES-256-GCM sealed webhook secret; never sent by the admin API
+	Events         []string  `json:"events"`              // github only: events subscribed on the webhook, from the last ping
 	CreatedAt      time.Time `json:"createdAt"`
 	LastEventAt    time.Time `json:"lastEventAt"`
 	LastRejectedAt time.Time `json:"lastRejectedAt"`
@@ -242,14 +244,20 @@ func (st *Store) CheckToken(id, token string) (*Integration, bool) {
 
 // ---- integrations ----
 
+// public returns a copy that is safe to hand out: no token hash, no sealed secret, events never nil.
+func (i *Integration) public() Integration {
+	c := *i
+	c.TokenHash, c.SecretEnc = "", ""
+	c.Events = append([]string{}, i.Events...)
+	return c
+}
+
 func (st *Store) Integrations() []Integration {
 	st.mu.RLock()
 	defer st.mu.RUnlock()
 	out := make([]Integration, 0, len(st.s.Integrations))
 	for _, i := range st.s.Integrations {
-		c := *i
-		c.TokenHash = ""
-		out = append(out, c)
+		out = append(out, i.public())
 	}
 	sort.Slice(out, func(a, b int) bool {
 		return out[a].CreatedAt.Before(out[b].CreatedAt) || (out[a].CreatedAt.Equal(out[b].CreatedAt) && out[a].ID < out[b].ID)
@@ -264,9 +272,30 @@ func (st *Store) GetIntegration(id string) (Integration, bool) {
 	if !ok {
 		return Integration{}, false
 	}
+	return i.public(), true
+}
+
+// Lookup returns a full copy of an integration, including the sealed secret. Server-side use only;
+// never serialise the result.
+func (st *Store) Lookup(id string) (Integration, bool) {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	i, ok := st.s.Integrations[id]
+	if !ok {
+		return Integration{}, false
+	}
 	c := *i
-	c.TokenHash = ""
+	c.Events = append([]string{}, i.Events...)
 	return c, true
+}
+
+func (st *Store) add(i *Integration) {
+	idb := make([]byte, 3)
+	_, _ = rand.Read(idb)
+	i.ID = i.Kind + "-" + hex.EncodeToString(idb)
+	i.CreatedAt = time.Now().UTC()
+	st.s.Integrations[i.ID] = i
+	st.qIntegration(i)
 }
 
 // CreateIntegration returns the plaintext token once.
@@ -274,14 +303,102 @@ func (st *Store) CreateIntegration(kind, name, org string) (Integration, string)
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	plain, hash, hint := NewToken()
-	idb := make([]byte, 3)
-	_, _ = rand.Read(idb)
-	i := &Integration{ID: kind + "-" + hex.EncodeToString(idb), Kind: kind, Name: name, Org: org, TokenHash: hash, TokenHint: hint, CreatedAt: time.Now().UTC()}
-	st.s.Integrations[i.ID] = i
+	i := &Integration{Kind: kind, Name: name, Org: org, TokenHash: hash, TokenHint: hint}
+	st.add(i)
+	return i.public(), plain
+}
+
+// CreateSecretIntegration creates an integration that authenticates by webhook signature (github).
+// It has no token hash, so the bearer-token path can never accept it.
+func (st *Store) CreateSecretIntegration(kind, name, org, secretEnc, hint string) Integration {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i := &Integration{Kind: kind, Name: name, Org: org, SecretEnc: secretEnc, TokenHint: hint}
+	st.add(i)
+	return i.public()
+}
+
+// RotateSecret replaces the sealed secret of a github integration.
+func (st *Store) RotateSecret(id, secretEnc, hint string) bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i, ok := st.s.Integrations[id]
+	if !ok || i.Kind != "github" {
+		return false
+	}
+	i.SecretEnc, i.TokenHint, i.TokenHash = secretEnc, hint, ""
 	st.qIntegration(i)
-	c := *i
-	c.TokenHash = ""
-	return c, plain
+	return true
+}
+
+// SetEvents saves the events subscribed on the webhook (from a ping).
+func (st *Store) SetEvents(id string, events []string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if i, ok := st.s.Integrations[id]; ok {
+		if len(events) > MaxIntegrationEvents {
+			events = events[:MaxIntegrationEvents]
+		}
+		i.Events = append([]string{}, events...)
+		st.qIntegration(i)
+	}
+}
+
+// MaxIntegrationEvents caps the events list kept on an integration.
+const MaxIntegrationEvents = 64
+
+// AddEvent records an X-GitHub-Event seen with a valid signature. It persists only when the list changes.
+func (st *Store) AddEvent(id, event string) {
+	if event == "" || event == "ping" || len(event) > 64 {
+		return
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i, ok := st.s.Integrations[id]
+	if !ok || len(i.Events) >= MaxIntegrationEvents {
+		return
+	}
+	for _, e := range i.Events {
+		if e == event {
+			return
+		}
+	}
+	i.Events = append(append([]string{}, i.Events...), event)
+	st.qIntegration(i)
+}
+
+// AdoptOrg sets the integration's org when it has none yet and reports the org now in effect.
+func (st *Store) AdoptOrg(id, org string) string {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i, ok := st.s.Integrations[id]
+	if !ok {
+		return org
+	}
+	if i.Org == "" && org != "" {
+		i.Org = org
+		st.qIntegration(i)
+	}
+	return i.Org
+}
+
+// ClaimDelivery atomically records a delivery key for dedupe and bumps the integration's LastEventAt.
+// It returns false when the key was already claimed. Single events use AddAccepted instead.
+func (st *Store) ClaimDelivery(integration, key string) bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	k := integration + "\x00" + key
+	if _, dup := st.s.Seen[k]; dup {
+		return false
+	}
+	now := time.Now().UTC()
+	st.s.Seen[k] = now
+	st.q(Op{Kind: OpSeen, Key: k, At: now})
+	if i, ok := st.s.Integrations[integration]; ok {
+		i.LastEventAt = now
+		st.qIntegration(i)
+	}
+	return true
 }
 
 func (st *Store) UpdateIntegration(id string, name, org, feedURL *string) (Integration, bool) {
@@ -301,16 +418,14 @@ func (st *Store) UpdateIntegration(id string, name, org, feedURL *string) (Integ
 		i.FeedURL = *feedURL
 	}
 	st.qIntegration(i)
-	c := *i
-	c.TokenHash = ""
-	return c, true
+	return i.public(), true
 }
 
 func (st *Store) RotateToken(id string) (string, bool) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	i, ok := st.s.Integrations[id]
-	if !ok {
+	if !ok || i.Kind == "github" { // github rotates its signing secret via RotateSecret
 		return "", false
 	}
 	plain, hash, hint := NewToken()
@@ -397,6 +512,7 @@ func (st *Store) touch(org, product, name, reportedVis, kind string) {
 
 func (st *Store) qIntegration(i *Integration) {
 	c := *i
+	c.Events = append([]string(nil), i.Events...)
 	st.q(Op{Kind: OpIntegration, Integration: &c})
 }
 func (st *Store) qOrg(o *Org) { c := *o; st.q(Op{Kind: OpOrg, Org: &c}) }

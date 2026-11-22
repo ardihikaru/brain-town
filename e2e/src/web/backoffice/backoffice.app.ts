@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test';
 import { DashboardPage } from './pages/dashboard.page';
 import { EventsPage } from './pages/events.page';
+import { GithubSetupPage } from './pages/github-setup.page';
 import { IntegrationsPage } from './pages/integrations.page';
 import { LoginPage } from './pages/login.page';
 import { SetupPage } from './pages/setup.page';
@@ -12,6 +13,7 @@ export class BackofficeApp {
   readonly integrations: IntegrationsPage;
   readonly setup: SetupPage;
   readonly events: EventsPage;
+  readonly githubSetup: GithubSetupPage;
 
   constructor(readonly page: Page) {
     this.login = new LoginPage(page);
@@ -19,5 +21,6 @@ export class BackofficeApp {
     this.integrations = new IntegrationsPage(page);
     this.setup = new SetupPage(page);
     this.events = new EventsPage(page);
+    this.githubSetup = new GithubSetupPage(page);
   }
 }

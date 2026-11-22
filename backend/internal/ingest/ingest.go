@@ -7,10 +7,10 @@ import (
 	"io"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
+	"github.com/ardihikaru/brain-town/backend/internal/ratelimit"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
 )
 
@@ -18,52 +18,17 @@ type Handler struct {
 	St  *store.Store
 	Hub *hub.Hub
 
-	rate, burst float64 // per-integration token bucket: sustained events/s and burst size
-
-	mu      sync.Mutex
-	buckets map[string]*bucket
-}
-
-type bucket struct {
-	tokens float64
-	last   time.Time
+	lim *ratelimit.Limiter // per-integration token bucket
 }
 
 // New builds the handler. rate and burst bound each integration; non-positive values fall back to 50/s, burst 200.
 func New(st *store.Store, h *hub.Hub, rate, burst float64) *Handler {
-	if rate <= 0 {
-		rate = 50
-	}
-	if burst <= 0 {
-		burst = 200
-	}
-	return &Handler{St: st, Hub: h, rate: rate, burst: burst, buckets: map[string]*bucket{}}
+	return &Handler{St: st, Hub: h, lim: ratelimit.New(rate, burst)}
 }
 
 type verr struct{ Field, Msg string }
 
 func (e verr) Error() string { return e.Field + ": " + e.Msg }
-
-func (h *Handler) allow(id string) bool {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	now := time.Now()
-	b, ok := h.buckets[id]
-	if !ok {
-		b = &bucket{tokens: h.burst, last: now}
-		h.buckets[id] = b
-	}
-	b.tokens += now.Sub(b.last).Seconds() * h.rate
-	if b.tokens > h.burst {
-		b.tokens = h.burst
-	}
-	b.last = now
-	if b.tokens < 1 {
-		return false
-	}
-	b.tokens--
-	return true
-}
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	kind, id := r.PathValue("kind"), r.PathValue("id")
@@ -82,7 +47,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 401, "token missing or wrong", "")
 		return
 	}
-	if !h.allow(id) {
+	if !h.lim.Allow(id) {
 		w.Header().Set("Retry-After", "1")
 		reply(w, 429, "slow down", "")
 		return
