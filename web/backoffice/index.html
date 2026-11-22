@@ -119,6 +119,7 @@ main{padding:22px 26px 60px;min-width:0}
 .steps li.done::before{content:"✓";background:var(--good);color:#fff;border-color:var(--good)}
 .copy{display:flex;gap:6px;margin-top:6px}
 .copy input{flex:1;font-family:var(--font-mono);font-size:12px}
+.copy .sec-note{flex:1;align-self:center;min-width:0}
 pre{margin:0;font-family:var(--font-mono);font-size:11.5px;line-height:1.5;background:var(--ground);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;overflow:auto;white-space:pre}
 pre.md{white-space:pre-wrap;max-height:340px}
 details summary{cursor:pointer;font-weight:500}
@@ -226,7 +227,7 @@ body{overflow-x:clip}
   .pad{padding:13px}
   .tail{max-height:none}
   .tail li{grid-template-columns:58px minmax(0,1fr)}
-  .copy{flex-wrap:wrap} .copy input{flex:1 1 100%} .copy button{flex:1}
+  .copy{flex-wrap:wrap} .copy input{flex:1 1 100%} .copy button{flex:1} .copy .sec-note{flex:1 1 100%}
   .icard dl{gap:4px}
   .icard .row>*{flex:1} .icard .row .pill{flex:none} .icard .row a{flex:1 1 100%} .icard .row a button{width:100%}
   [data-page=events] .panel.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
@@ -512,8 +513,15 @@ $('icards').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.ta
 
 /* ============================ setup ============================ */
 let su=null, wait=null;
-const secretOf=i=>LIVE?(i.token||'bt_live_••••••••••••••••••••'+(i.hint||'')):'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
-function field(label,val,id,mask){ return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}" data-testid="${id}">${mask?`<button type="button" data-reveal="${id}">Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}">Copy</button></div></div>`; }
+const secretOf=i=>LIVE?(i.token||''):'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
+function field(label,val,id,mask){ const sec=id==='su-sec', tt=n=>sec?` data-testid="${id}-${n}"`:'';
+  return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}" data-testid="${id}">${mask?`<button type="button" data-reveal="${id}"${tt('show')}>Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}"${tt('copy')}>Copy</button></div></div>`; }
+const secLabel=i=>i.kind==='github'?'Webhook secret':'BRAIN_TOWN_TOKEN';
+const secRowHidden=i=>`<span class="small muted sec-note" data-testid="su-sec-hidden">Hidden. Shown once when created.${i.hint?' Ends in '+esc(i.hint)+'.':''}</span><button type="button" data-rotate-sec data-testid="su-sec-rotate">Rotate and copy</button>`;
+const secRowConfirm=()=>`<span class="small muted sec-note" id="su-sec-warn">The current secret stops working right away.</span><button type="button" class="primary" aria-describedby="su-sec-warn" data-rotate-go data-testid="su-sec-rotate-confirm">Rotate now</button><button type="button" aria-describedby="su-sec-warn" data-rotate-cancel data-testid="su-sec-rotate-cancel">Cancel</button>`;
+function secHTML(i){ const label=secLabel(i);
+  if(LIVE&&!i.token) return `<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row">${secRowHidden(i)}</div></div>`;
+  return field(label,secretOf(i),'su-sec',true); }
 function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true}; }
   su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
   $('su-title').textContent=i.name; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;
@@ -524,7 +532,7 @@ function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWit
     site:['Copy the task file below into the site repo and hand it to the agent or developer working there.','Part 1 adds a feed. Paste its URL in the field below and Brain Town starts pulling every 5 minutes.','Part 2 adds a publish hook and Part 3 a visit beacon that reports only the page and the visitor’s country. Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> in the server secrets.','Check that <code>https://mfardiansyah.id/office</code> loads. The pendopo in town links to it.','Publish one article. This page ticks the last step when it arrives.'],
   }[k];
   $('su-steps').innerHTML=steps.map((s,n)=>`<li class="${i.last&&n===steps.length-1?'done':''}"><div>${s}</div></li>`).join('');
-  let extra=field(k==='github'?'Payload URL':'BRAIN_TOWN_URL',url,'su-url')+field(k==='github'?'Webhook secret':'BRAIN_TOWN_TOKEN',secretOf(i),'su-sec',true);
+  let extra=field(k==='github'?'Payload URL':'BRAIN_TOWN_URL',url,'su-url')+`<div id="su-sec-wrap">${secHTML(i)}</div>`;
   if(k==='site') extra+=`<label>Feed URL to pull (optional)<input type="text" id="su-feed" value="https://mfardiansyah.id/feed.json"></label>`;
   if(k==='qa') extra+=`<div><span class="small muted">playwright.config.ts</span><pre>reporter: [\n  ['list'],\n  ['./brain-town-reporter.ts', { product: 'sipreport', org: 'sismedika' }],\n],</pre></div>`;
   if(K.task) extra+=`<div class="panel pad" style="box-shadow:none;display:flex;flex-direction:column;gap:8px"><div class="row"><h3 class="grow">Task file for the repo</h3><button type="button" class="primary" data-task="${K.task}">Copy task file</button></div><p class="small muted"><code>${K.task}</code> describes exactly what that repo has to build, with the payload contract and a done checklist.</p><details><summary>Read it here</summary><pre class="md" style="margin-top:8px">${esc(TASKS[K.task]||'')}</pre></details></div>`;
@@ -542,7 +550,26 @@ function setWait(i){ if(i.last){ $('wait-title').textContent='Connected'; $('wai
 $('su-test').onclick=()=>{ if(!su) return; if(LIVE){ liveTest(su); return; } const first=!su.last; if(su.draft){ INTS.push(su); delete su.draft; su.id=su.kind+'-'+(INTS.length); paintIntegrations(); fillFilters(); }
   su.state='ok'; const ev=makeEvent(su,{github:'issue.opened',qa:'qa.run.started',gaos:'task.created',site:'article.published'}[su.kind]); ev.sum='TEST · '+ev.sum; ingest(ev);
   if(first) wait.release(); else wait.add(su.kind); $('su-steps').lastElementChild.classList.add('done'); const [cl,tx]=stateOf(su); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx; setWait(su); toast('Test event sent and accepted'); };
-$('su-extra').addEventListener('click',e=>{ const t=e.target; if(t.dataset.copy) copy($(t.dataset.copy).value,t.dataset.what); if(t.dataset.reveal){ const f=$(t.dataset.reveal); f.type=f.type==='password'?'text':'password'; t.textContent=f.type==='password'?'Show':'Hide'; } if(t.dataset.task) copy(TASKS[t.dataset.task]||'',t.dataset.task); });
+function secRow(state,focus){ const row=$('su-sec-row'); if(!row||!su) return; row.innerHTML=state==='confirm'?secRowConfirm():secRowHidden(su); const b=row.querySelector(focus); if(b) b.focus(); }
+async function secRotate(){ const i=su, row=$('su-sec-row'); if(!i||!row) return;
+  row.querySelectorAll('button').forEach(b=>b.disabled=true); const go=row.querySelector('[data-rotate-go]'); if(go) go.textContent='Rotating…';
+  const token=await rotateToken(i.id);
+  if(su!==i||!$('su-sec-wrap')) { if(token){ i.token=token; const e=INTS.find(x=>x.id===i.id); if(e) e.token=token; toast(i.name+': secret rotated. Open its setup to copy the new one.'); } return; }
+  if(!token){ secRow('hidden','[data-rotate-sec]'); toast('Could not rotate the secret. The old one still works.'); return; }
+  i.token=token; const e=INTS.find(x=>x.id===i.id); if(e) e.token=token;
+  $('su-sec-wrap').innerHTML=secHTML(i); const cb=$('su-sec-wrap').querySelector('[data-testid=su-sec-copy]'); let ok=true;
+  try{ await navigator.clipboard.writeText(token); }catch(_){ ok=false; }
+  if(cb) cb.focus();
+  toast(ok?(i.kind==='github'?'New secret copied. Update it in GitHub.':`New token copied. Update BRAIN_TOWN_TOKEN in ${KIND[i.kind].label}.`):'New secret is ready, but copy was blocked. Press Copy to copy it.'); }
+$('su-extra').addEventListener('keydown',e=>{ if(e.key==='Escape'&&e.target.closest&&e.target.closest('#su-sec-row')&&$('su-sec-row').querySelector('[data-rotate-cancel]:not(:disabled)')){ e.preventDefault(); secRow('hidden','[data-rotate-sec]'); } });
+$('su-extra').addEventListener('click',e=>{ const t=e.target; if(!t.dataset) return;
+  if(t.dataset.rotateSec!==undefined){ secRow('confirm','[data-rotate-cancel]'); return; }
+  if(t.dataset.rotateCancel!==undefined){ secRow('hidden','[data-rotate-sec]'); return; }
+  if(t.dataset.rotateGo!==undefined){ secRotate(); return; }
+  if(t.dataset.copy||t.dataset.reveal){ const id=t.dataset.copy||t.dataset.reveal, f=$(id); if(!f) return; const isSec=id==='su-sec'; if(isSec&&LIVE&&!(su&&su.token)) return;
+    if(t.dataset.copy){ const v=isSec&&LIVE?su.token:f.value; if(!v||v.includes('•')) return; copy(v,t.dataset.what); }
+    else { f.type=f.type==='password'?'text':'password'; t.textContent=f.type==='password'?'Show':'Hide'; } }
+  if(t.dataset.task) copy(TASKS[t.dataset.task]||'',t.dataset.task); });
 
 /* ============================ event log ============================ */
 function fillFilters(){ const s=$('f-int'), v=s.value; s.innerHTML='<option value="">All</option>'+INTS.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join(''); s.value=v; }
@@ -637,11 +664,12 @@ function startStream(){ if(startStream.es) return; const es=new EventSource('/ad
   es.onerror=()=>{ $('sse-pill').className='pill bad'; $('sse-pill').innerHTML='<i></i>reconnecting'; }; }
 async function liveSave(kind,id,body,msg){ const r=await apiCall('PUT','/api/admin/'+(kind==='org'?'orgs/':'products/')+encodeURIComponent(id),body); if(!r.ok){ toast(r.data&&r.data.error||'Could not save'); return; }
   const b=await apiCall('GET','/api/admin/products'); if(b.ok) applyProducts(b.data); paintProducts(); toast(msg); }
-async function liveRotate(id){ const r=await apiCall('POST','/api/admin/integrations/'+encodeURIComponent(id)+'/token'); if(!r.ok){ toast('Could not rotate the secret'); return; }
-  const i=INTS.find(x=>x.id===id); i.token=r.data.token; toast('New secret ready. Copy it now: it is shown once.'); location.hash='#setup-'+id; }
+async function rotateToken(id){ const r=await apiCall('POST','/api/admin/integrations/'+encodeURIComponent(id)+'/token'); return r.ok&&r.data&&r.data.token?r.data.token:null; }
+async function liveRotate(id){ const token=await rotateToken(id); if(!token){ toast('Could not rotate the secret'); return; }
+  const i=INTS.find(x=>x.id===id); i.token=token; toast('New secret ready. Copy it now: it is shown once.'); location.hash='#setup-'+id; }
 async function liveCreate(kind){ const r=await apiCall('POST','/api/admin/integrations',{kind,name:KIND[kind].label}); if(!r.ok){ toast(r.data&&r.data.error||'Could not create the integration'); location.hash='#integrations'; return; }
   const i=mapInt(r.data.integration); i.token=r.data.token; INTS.push(i); paintIntegrations(); fillFilters(); location.replace('#setup-'+i.id); }
-async function liveTest(i){ if(i.kind==='github'){ toast('GitHub webhooks are not implemented yet.'); return; } if(!i.token){ toast('The secret is only shown once. Rotate it on Integrations to send a test event.'); return; }
+async function liveTest(i){ if(i.kind==='github'){ toast('GitHub webhooks are not implemented yet.'); return; } if(!i.token){ toast('The secret is only shown once. Use Rotate and copy above to send a test event.'); return; }
   const at=new Date().toISOString(), id='test-'+Date.now().toString(36), base={id,at};
   const body={gaos:{...base,type:'task.created',product:{key:'demo',name:'Demo',visibility:'public'},task:{id:'T-1',title:'Hello town',kind:'feature',column:'backlog'}},
     qa:{...base,type:'qa.run.started',product:'demo',run:'test-'+id,data:{spec:'smoke.spec.ts',steps:['Open page']}},
