@@ -71,6 +71,10 @@ the site for real, on 127.0.0.1 only:
 - The site's own `backend/db/apply.sh` is never run (it ships to production over ssh); `site-init` builds the same
   statements for the local databases. Specs: `tests/api/stream/integrations/mfardiansyah-id/`.
 
+The site api containers exit with code 2 on `stack down`: the site api installs no signal handler, so the Go runtime
+falls back to `exit(2)` when SIGTERM cannot kill PID 1 (`dieFromSignal`). It is not a panic and is benign; a send cut
+mid-way is retried by the site's minute scan (claimed Notification rows start `pending` with `nextAt = now`).
+
 `scripts/stack.sh down` runs `docker compose -p brain-town-e2e down -v --remove-orphans`, deletes `.stack/` and then
 fails loudly if any container, volume or network of the project is left. **Always run it after a manual session.**
 
