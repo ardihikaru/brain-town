@@ -27,9 +27,11 @@ Without Docker: `python3 -m http.server -d web 8080`, then open `/town/` and `/b
   8081, not published). SSE is unbuffered with a 1 h read timeout. If `api` is down the pages
   still serve and the back-office falls back to sample data.
 - Image: `nginx:1.30.7-alpine3.24`, read-only root filesystem, 64 MB memory cap.
-- `api`: static Go binary on `scratch`, read-only root, 64 MB cap, data in the `api-data` volume
-  (`/data/braintown.json`). It refuses to start without `ADMIN_EMAIL` and `ADMIN_PASSWORD`, or
-  if `/data` is not writable.
+- `api`: static Go binary on `scratch`, read-only root, 64 MB cap. Data lives in ArcadeDB
+  (`ARCADEDB_*`, see `.env.example`). It refuses to start without `ADMIN_EMAIL` and
+  `ADMIN_PASSWORD`, and in `prod` mode without `ARCADEDB_URL`.
+- Locally, `docker compose --profile db up --build` also runs an ArcadeDB container. Production
+  uses the existing ArcadeDB and does not run that service.
 - The edge vhost must forward `/ingest/`, `/events`, `/admin/events` and `/api/` to the same
   upstream and must not buffer `/events` (`proxy_buffering off`).
 - HTML is sent with `Cache-Control: no-cache`, so a redeploy shows at once.

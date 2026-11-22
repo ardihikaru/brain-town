@@ -37,16 +37,29 @@ services:
     restart: unless-stopped
     environment:
       LISTEN_ADDR: ":8081"
-      DATA_FILE: /data/braintown.json
+      ARCADEDB_URL: ${ARCADEDB_URL:-}
+      ARCADEDB_DATABASE: ${ARCADEDB_DATABASE:-braintown}
+      ARCADEDB_USER: ${ARCADEDB_USER:-}
+      ARCADEDB_PASSWORD: ${ARCADEDB_PASSWORD:-}
       BRAIN_TOWN_MODE: ${BRAIN_TOWN_MODE:-demo}
       PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8080}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in the env file}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in the env file}
-    volumes:
-      - api-data:/data
     read_only: true
     mem_limit: 64m
     pids_limit: 64
 
+  # Local/demo ArcadeDB, only with `--profile db`. Production uses the existing ArcadeDB
+  # (set ARCADEDB_URL to it) and does not run this service.
+  arcadedb:
+    profiles: ["db"]
+    image: arcadedata/arcadedb:26.7.2
+    restart: unless-stopped
+    environment:
+      JAVA_OPTS: "-Darcadedb.server.rootPassword=${ARCADEDB_PASSWORD:?set ARCADEDB_PASSWORD (root password for the local ArcadeDB)}"
+    volumes:
+      - arcadedb-data:/home/arcadedb/databases
+    mem_limit: 1g
+
 volumes:
-  api-data:
+  arcadedb-data:

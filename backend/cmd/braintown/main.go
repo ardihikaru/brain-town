@@ -22,10 +22,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	st, err := store.New(cfg.DataFile)
-	if err != nil {
-		log.Fatal(err)
-	}
+	st := openStore(cfg)
 	h := hub.New()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
@@ -48,4 +45,27 @@ func main() {
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		log.Fatal(err)
 	}
+}
+
+// openStore connects to ArcadeDB (retrying while it starts) or falls back to memory.
+func openStore(cfg config.Config) *store.Store {
+	if cfg.ArcadeURL == "" {
+		log.Print("ARCADEDB_URL is empty: events are kept in memory only and are lost on restart")
+		st, _ := store.New(nil)
+		return st
+	}
+	p := store.NewArcade(cfg.ArcadeURL, cfg.ArcadeDB, cfg.ArcadeUser, cfg.ArcadePass)
+	var lastErr error
+	for i := 0; i < 30; i++ {
+		st, err := store.New(p)
+		if err == nil {
+			log.Printf("ArcadeDB ready (%s, database %s)", cfg.ArcadeURL, cfg.ArcadeDB)
+			return st
+		}
+		lastErr = err
+		log.Printf("ArcadeDB not ready (%v), retrying", err)
+		time.Sleep(2 * time.Second)
+	}
+	log.Fatalf("ArcadeDB unavailable: %v", lastErr)
+	return nil
 }
