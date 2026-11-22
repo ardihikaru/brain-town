@@ -67,7 +67,7 @@ label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;ga
 #rail nav a b{font-family:var(--font-mono);font-weight:400;font-size:10.5px;margin-left:auto;opacity:.75}
 #rail .foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:8px;border-top:1px solid var(--rule);font-size:12.5px}
 main{padding:22px 26px 60px;min-width:0}
-.page{display:none;max-width:1120px;flex-direction:column;gap:16px}
+.page{display:none;flex-direction:column;gap:16px} /* fills the working column; no max-width */
 .page.on{display:flex;animation:pagein .32s ease both}
 @keyframes pagein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .head{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end}
@@ -122,6 +122,14 @@ td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
 .scroll{overflow-x:auto}
 tbody tr.click{cursor:pointer} tbody tr.click:hover{background:rgba(31,43,58,.05)}
 td.t{font-family:var(--font-mono);font-size:12px;white-space:nowrap}
+/* Core empty state: any <tbody> with no rows gets one "No data record" row (see syncEmpty). */
+tr.empty td{text-align:center;padding:28px 12px;color:var(--ink-soft);border-bottom:0}
+tr.empty td b{display:block;color:var(--ink);font-weight:500;margin-bottom:2px}
+tr.empty td span{font-size:12px}
+/* Settings: two independent columns, so a short panel never leaves a hole under it. */
+.prefs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.stackf{display:flex;flex-direction:column;gap:12px}
 
 /* ---------- drawer + toast ---------- */
 #drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--panel);border-left:1px solid var(--ink);box-shadow:-6px 0 0 rgba(31,43,58,.08);padding:18px;display:flex;flex-direction:column;gap:12px;transform:translateX(105%);transition:transform .28s ease;z-index:10;overflow:auto}
@@ -180,7 +188,7 @@ body{overflow-x:clip}
   #rail .foot{padding:8px 0;align-items:center;font-size:11px;text-align:center}
   #rail .foot button{padding:5px 4px;font-size:11px}
   main{padding:20px}
-  .two,.setup{grid-template-columns:minmax(0,1fr)}
+  .two,.setup,.prefs{grid-template-columns:minmax(0,1fr)}
 }
 
 /* ---------- phone: top bar, bottom tabs, stacked everything ---------- */
@@ -201,7 +209,7 @@ body{overflow-x:clip}
   h1{font-size:23px}
   .page{gap:13px}
   .head{align-items:flex-start}
-  .two,.setup{grid-template-columns:minmax(0,1fr);gap:13px}
+  .two,.setup,.prefs{grid-template-columns:minmax(0,1fr);gap:13px}
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .tile b{font-size:26px}
   .health,.cards{grid-template-columns:minmax(0,1fr)}
@@ -230,6 +238,7 @@ body{overflow-x:clip}
   #org-body td.lead,#prod-body td.lead{grid-column:1/-1;font-size:16px}
   #org-body td input,#prod-body td input,#prod-body td select{width:100%}
   #org-body td:last-child{grid-column:1/-1}
+  table.stack tr.empty{display:block;padding:0}
   .panel.scroll{overflow-x:visible}
   #drawer{top:auto;left:0;right:0;width:auto;max-height:84%;border-left:0;border-top:1px solid var(--ink);box-shadow:0 -6px 0 rgba(31,43,58,.08);transform:translateY(105%);padding:16px 14px 90px}
   #drawer.on{transform:none}
@@ -331,34 +340,38 @@ body.still #navmark{transition:none}
         <label>Delivery<select id="f-st"><option value="">All</option><option>ok</option><option>rejected</option></select></label>
         <label class="grow">Search<input type="text" id="f-q" placeholder="repo, title, id"></label>
       </div>
-      <div class="panel scroll"><table class="stack"><thead><tr><th>Time</th><th>Integration</th><th>Type</th><th>Summary</th><th>Delivery</th></tr></thead><tbody id="ev-body"></tbody></table></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>Time</th><th>Integration</th><th>Type</th><th>Summary</th><th>Delivery</th></tr></thead><tbody id="ev-body" data-empty="Deliveries appear here as platforms send events. Clear a filter to see more."></tbody></table></div>
     </section>
 
     <!-- PRODUCTS -->
     <section class="page" data-page="products">
       <div class="head"><div class="grow"><h1>Products and visibility</h1><p>The town is public. A hidden org or product still appears, but under its public name and with every title replaced. Visibility is decided here, per org and per product.</p></div></div>
-      <div class="panel scroll"><table class="stack"><thead><tr><th>GitHub org</th><th>Visibility</th><th>Public name in town</th><th>Products</th></tr></thead><tbody id="org-body"></tbody></table></div>
-      <div class="panel scroll"><table class="stack"><thead><tr><th>Product</th><th>Sources</th><th>Org</th><th>Visibility</th><th>Public name in town</th><th>Town building</th></tr></thead><tbody id="prod-body"></tbody></table></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>GitHub org</th><th>Visibility</th><th>Public name in town</th><th>Products</th></tr></thead><tbody id="org-body" data-empty="Orgs appear here after the first event names one."></tbody></table></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>Product</th><th>Sources</th><th>Org</th><th>Visibility</th><th>Public name in town</th><th>Town building</th></tr></thead><tbody id="prod-body" data-empty="Products appear here after the first event names one."></tbody></table></div>
       <div class="panel pad"><h3>What a visitor sees</h3><p class="small muted" style="margin:4px 0 10px">The same event, as stored and as sent on the public stream.</p><div class="two"><pre id="vis-raw"></pre><pre id="vis-pub"></pre></div></div>
     </section>
 
     <!-- SETTINGS -->
     <section class="page" data-page="prefs">
       <div class="head"><div class="grow"><h1>Settings</h1><p>Service, database and account.</p></div></div>
-      <div class="two">
-        <div class="panel pad" style="display:flex;flex-direction:column;gap:12px"><h2>Service</h2>
-          <dl class="kv"><dt>Address</dt><dd>https://town.mfardiansyah.id</dd><dt>Public stream</dt><dd>https://town.mfardiansyah.id/events</dd><dt>Back-office stream</dt><dd>https://town.mfardiansyah.id/admin/events</dd><dt>Heartbeat</dt><dd>every 15 s</dd></dl>
-          <div class="row"><label>Keep events (days)<input type="number" id="keep" value="30" min="1" max="365" style="width:110px"></label>
-            <label>Animation<span class="switch" id="motion"><button type="button" aria-pressed="true" data-v="on">On</button><button type="button" aria-pressed="false" data-v="off">Off</button></span></label></div>
-          <div><button id="save-svc">Save</button></div></div>
-        <div class="panel pad" style="display:flex;flex-direction:column;gap:12px"><div class="row"><h2 class="grow">Database</h2><span class="pill ok"><i></i>connected</span></div>
-          <dl class="kv"><dt>Engine</dt><dd>ArcadeDB (graph)</dd><dt>Database</dt><dd>braintown</dd><dt>Reached over</dt><dd>HTTP API, port 2480</dd></dl>
-          <table><thead><tr><th>Vertex or edge type</th><th>Records</th></tr></thead><tbody id="db-body"></tbody></table></div>
+      <div class="prefs">
+        <div class="col">
+          <div class="panel pad stackf"><h2>Service</h2>
+            <dl class="kv"><dt>Address</dt><dd id="svc-addr">https://town.mfardiansyah.id</dd><dt>Public stream</dt><dd id="svc-pub">https://town.mfardiansyah.id/events</dd><dt>Back-office stream</dt><dd id="svc-adm">https://town.mfardiansyah.id/admin/events</dd><dt>Heartbeat</dt><dd>every 15 s</dd></dl>
+            <div class="row"><label>Keep events (days)<input type="number" id="keep" value="30" min="1" max="3650" style="width:110px"></label>
+              <label>Animation<span class="switch" id="motion"><button type="button" aria-pressed="true" data-v="on">On</button><button type="button" aria-pressed="false" data-v="off">Off</button></span></label></div>
+            <div><button id="save-svc">Save</button></div></div>
+          <form class="panel pad stackf" id="pwform"><h2>Account</h2>
+            <label>Email<input type="email" id="acc-email" value="me@mfardiansyah.id"></label>
+            <div class="row"><label class="grow">New password<input type="password" id="acc-p1" autocomplete="new-password"></label><label class="grow">Repeat it<input type="password" id="acc-p2" autocomplete="new-password"></label></div>
+            <div><button>Update account</button></div></form>
+        </div>
+        <div class="col">
+          <div class="panel pad stackf"><div class="row"><h2 class="grow">Database</h2><span class="pill ok"><i></i>connected</span></div>
+            <dl class="kv"><dt>Engine</dt><dd>ArcadeDB (graph)</dd><dt>Database</dt><dd>braintown</dd><dt>Reached over</dt><dd>HTTP API, port 2480</dd></dl>
+            <table><thead><tr><th>Vertex or edge type</th><th>Records</th></tr></thead><tbody id="db-body" data-empty="The database reported no records."></tbody></table></div>
+        </div>
       </div>
-      <form class="panel pad" id="pwform" style="display:flex;flex-direction:column;gap:12px;max-width:520px"><h2>Account</h2>
-        <label>Email<input type="email" id="acc-email" value="me@mfardiansyah.id"></label>
-        <div class="row"><label class="grow">New password<input type="password" id="acc-p1" autocomplete="new-password"></label><label class="grow">Repeat it<input type="password" id="acc-p2" autocomplete="new-password"></label></div>
-        <div><button>Update account</button></div></form>
     </section>
   </main>
 </div>
@@ -371,6 +384,14 @@ body.still #navmark{transition:none}
 "use strict";
 const TASKS = /*__TASKS__*/{};
 const $=id=>document.getElementById(id), rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+/* Core table component: a <tbody> with no rows shows one "No data record" row, so an empty table
+   never looks broken. Applies to every tbody (the hint comes from data-empty) and stays in sync by
+   itself whenever rows are added or removed, so new tables need no extra code. */
+function syncEmpty(tb){ const real=[...tb.children].some(r=>!r.classList.contains('empty')), ph=tb.querySelector(':scope>tr.empty');
+  if(real){ if(ph) ph.remove(); return; } if(ph) return;
+  const cols=tb.closest('table')?.querySelectorAll('thead th').length||1, tr=document.createElement('tr'); tr.className='empty';
+  tr.innerHTML=`<td colspan="${cols}"><b>No data record</b>${tb.dataset.empty?`<span>${esc(tb.dataset.empty)}</span>`:''}</td>`; tb.append(tr); }
+function watchTables(){ document.querySelectorAll('tbody').forEach(tb=>{ if(tb._w) return; tb._w=1; new MutationObserver(()=>syncEmpty(tb)).observe(tb,{childList:true}); syncEmpty(tb); }); }
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const INK='#1f2b3a', HOST='https://town.mfardiansyah.id';
 const KCOL={github:'#dcae45',qa:'#2f8f6b',gaos:'#6f8fb3',site:'#b06a42'};
@@ -510,7 +531,7 @@ function fillFilters(){ const s=$('f-int'), v=s.value; s.innerHTML='<option valu
 const passes=ev=>(!$('f-int').value||ev.int===$('f-int').value)&&(!$('f-type').value||ev.type.startsWith($('f-type').value))&&(!$('f-st').value||ev.st===$('f-st').value)&&(!$('f-q').value||(ev.sum+ev.id+ev.type).toLowerCase().includes($('f-q').value.toLowerCase()));
 function evRow(ev,isNew){ const tr=document.createElement('tr'); tr.className='click'+(isNew?' new':''); tr.dataset.id=ev.id; const i=INTS.find(x=>x.id===ev.int);
   tr.innerHTML=`<td class="t" data-l="Time">${hhmmss(ev.at)}</td><td data-l="Integration"><span class="kind k-${ev.kind}" style="margin-right:6px"></span>${esc(i?i.name:ev.int)}</td><td class="t" data-l="Type">${esc(ev.type)}</td><td data-l="Summary">${esc(ev.sum)}</td><td data-l="Delivery"><span class="pill ${ev.st==='ok'?'ok':'bad'}"><i></i>${ev.st}</span></td>`; return tr; }
-function paintLog(){ const b=$('ev-body'); b.innerHTML=''; EVENTS.filter(passes).slice(0,80).forEach(ev=>b.append(evRow(ev))); if(!b.children.length) b.innerHTML='<tr><td colspan="5" class="muted">No delivery matches these filters. Clear a filter to see more.</td></tr>'; }
+function paintLog(){ const b=$('ev-body'); b.innerHTML=''; EVENTS.filter(passes).slice(0,80).forEach(ev=>b.append(evRow(ev))); }
 ['f-int','f-type','f-st'].forEach(id=>$(id).onchange=paintLog); $('f-q').oninput=paintLog;
 $('ev-pause').onclick=e=>{ paused=!paused; e.target.setAttribute('aria-pressed',paused); e.target.textContent=paused?'Resume stream':'Pause stream'; $('sse-pill').className='pill '+(paused?'off':'ok'); $('sse-pill').innerHTML='<i></i>'+(paused?'stream paused':'stream connected'); };
 $('ev-body').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-id]'); if(!tr) return; const ev=EVENTS.find(x=>x.id===tr.dataset.id); if(!ev) return; const i=INTS.find(x=>x.id===ev.int);
@@ -529,9 +550,11 @@ document.querySelector('[data-page=products]').addEventListener('click',e=>{ con
 document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(LIVE){ if(a){ const [kind,id]=a.split(':'); liveSave(kind,id,{alias:e.target.value.trim()},'Public name saved'); } if(h) liveSave('prod',h,{hall:e.target.value},h+' now shows at '+e.target.value); return; } if(a){ const [kind,id]=a.split(':'); (kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id)).alias=e.target.value.trim()||'Hidden'; paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
 
 /* ============================ settings ============================ */
-function paintDb(){ const rows=[['Integration (vertex)',INTS.length],['Org (vertex)',ORGS.length],['Product (vertex)',PRODUCTS.length],['Delivery (vertex)',14210+EVENTS.length],['Event (vertex)',13872+EVENTS.filter(e=>e.st==='ok').length],['PRODUCED (Delivery → Event)',13872+EVENTS.filter(e=>e.st==='ok').length],['ABOUT (Event → Product)',12950+EVENTS.filter(e=>e.st==='ok'&&e.kind!=='site').length],['User, Session (vertex)',3]];
+function paintDb(){ if(LIVE){ const c=liveStats, rows=c?[['Integration (vertex)',c.Integrations],['Org (vertex)',c.Orgs],['Product (vertex)',c.Products],['Event (vertex, newest 5,000)',c.Events],['Rejected deliveries',c.Rejected]]:[];
+    $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); return; }
+  const rows=[['Integration (vertex)',INTS.length],['Org (vertex)',ORGS.length],['Product (vertex)',PRODUCTS.length],['Delivery (vertex)',14210+EVENTS.length],['Event (vertex)',13872+EVENTS.filter(e=>e.st==='ok').length],['PRODUCED (Delivery → Event)',13872+EVENTS.filter(e=>e.st==='ok').length],['ABOUT (Event → Product)',12950+EVENTS.filter(e=>e.st==='ok'&&e.kind!=='site').length],['User, Session (vertex)',3]];
   $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); }
-$('save-svc').onclick=()=>toast('Saved. Events are kept '+$('keep').value+' days.');
+$('save-svc').onclick=async()=>{ if(LIVE){ const r=await apiCall('PUT','/api/admin/settings',{retentionDays:+$('keep').value,animation:!document.body.classList.contains('still')}); if(!r.ok) return toast(r.data&&r.data.error||'Could not save'); $('keep').value=r.data.retentionDays; } toast('Saved. Events are kept '+$('keep').value+' days.'); };
 $('motion').onclick=e=>{ const v=e.target.dataset.v; if(!v) return; document.body.classList.toggle('still',v==='off'); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v)); };
 $('pwform').onsubmit=e=>{ e.preventDefault(); if($('acc-p1').value!==$('acc-p2').value) return toast('The two passwords differ. Type the same one twice.'); toast('Account updated'); };
 
@@ -542,10 +565,10 @@ function ingest(ev){ const i=INTS.find(x=>x.id===ev.int); EVENTS.unshift(ev); if
     const dot=$('dot-'+i.id); if(dot){ dot.classList.remove('ping'); void dot.offsetWidth; dot.classList.add('ping'); } }
   else { i.err++; i.lastErr=ev.at; }
   paintTiles(); const tl=$('tail'); tl.prepend(tailRow(ev,true)); while(tl.children.length>14) tl.lastChild.remove();
-  if(passes(ev)){ const b=$('ev-body'); if(b.firstChild&&!b.firstChild.dataset.id) b.innerHTML=''; b.prepend(evRow(ev,true)); while(b.children.length>80) b.lastChild.remove(); } }
+  if(passes(ev)){ const b=$('ev-body'); b.querySelector(':scope>tr.empty')?.remove(); b.prepend(evRow(ev,true)); while(b.children.length>80) b.lastChild.remove(); } }
 function tick(){ if(!paused&&!LIVE&&!$('app').hidden){ const live=INTS.filter(i=>i.state==='ok'); if(live.length) ingest(makeEvent(pick(live))); } setTimeout(tick,rnd(700,2100)); }
 setInterval(()=>{ buckets.shift(); buckets.push(0); },10000);
-setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(i.last); }); drawChart(); paintDb(); },1000);
+setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(i.last); }); drawChart(); paintDb(); if(LIVE&&++statTick%5===0) refreshStats(); },1000);
 const ORDER=['dashboard','integrations','setup','events','products','prefs']; let curPage=null, swapT=0;
 const isStill=()=>document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
 function placeMark(){ const a=document.querySelector('#rail nav a[aria-current=page]'), m=$('navmark'); if(!a){ m.style.width='0'; return; } m.style.width=a.offsetWidth+'px'; m.style.height=a.offsetHeight+'px'; m.style.transform=`translate(${a.offsetLeft}px,${a.offsetTop}px)`; }
@@ -572,7 +595,8 @@ $('logout').onclick=()=>{ if(LIVE){ apiCall('POST','/api/admin/logout'); locatio
 
 /* ============================ live API (used when the back-office service answers) ============================ */
 /* Without the service (static hosting, file://) none of this runs and the sample-data demo works as before. */
-let LIVE=false;
+let LIVE=false, liveStats=null, statTick=0;
+async function refreshStats(){ const r=await apiCall('GET','/api/admin/stats'); if(r.ok){ liveStats=r.data; paintDb(); } }
 async function apiCall(method,path,body){ try{ const r=await fetch(path,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined}); const t=await r.text(); let data=null; try{ data=JSON.parse(t); }catch(_){ return {ok:false,status:r.status===401?401:0,data:null}; } return {ok:r.ok,status:r.status,data}; }catch(_){ return {ok:false,status:0,data:null}; } }
 const ms=t=>t&&!String(t).startsWith('0001')?Date.parse(t):0;
 function mapInt(i){ const last=ms(i.lastEventAt), rej=ms(i.lastRejectedAt); return {id:i.id,kind:i.kind,name:i.name,org:i.org||'',hint:i.tokenHint,state:last?'ok':'waiting',today:i.today||0,err:i.errors||0,last,lastErr:rej}; }
@@ -584,6 +608,8 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   if(!a.ok||!b.ok||!c.ok) throw new Error('api'); INTS.splice(0,INTS.length,...a.data.map(mapInt)); applyProducts(b.data); EVENTS.splice(0,EVENTS.length,...c.data.map(mapEv));
   stats.events=EVENTS.filter(e=>e.st==='ok').length; stats.opened=stats.closed=stats.qaRuns=stats.qaFail=stats.tasks=stats.posts=0;
   EVENTS.forEach(e=>{ if(e.st!=='ok') return; if(e.type==='qa.run.finished'){ stats.qaRuns++; if(e.data.data&&e.data.data.failed) stats.qaFail++; } if(e.kind==='gaos'&&e.type==='task.done') stats.tasks++; if(e.kind==='site') stats.posts++; });
+  const st=await apiCall('GET','/api/admin/settings'); if(st.ok){ $('keep').value=st.data.retentionDays; document.body.classList.toggle('still',!st.data.animation); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='on')===st.data.animation)); }
+  $('svc-addr').textContent=location.origin; $('svc-pub').textContent=location.origin+'/events'; $('svc-adm').textContent=location.origin+'/admin/events'; await refreshStats();
   $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;
   const types=['product.upserted','task.created','task.moved','gate.requested','gate.decided','task.claimed','task.qa','task.done','task.failed','qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit'];
@@ -608,7 +634,7 @@ async function liveTest(i){ if(i.kind==='github'){ toast('GitHub webhooks are no
 
 /* boot */
 for(let n=0;n<26;n++){ const ev=makeEvent(pick(INTS.filter(i=>i.state==='ok'))); ev.at=Date.now()-(26-n)*4200; EVENTS.unshift(ev); }
-$('n-ev').textContent=EVENTS.length; paintTiles(true); EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); fillFilters(); paintIntegrations(); paintHealth(); paintDb(); paintLog();
+$('n-ev').textContent=EVENTS.length; paintTiles(true); EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); fillFilters(); paintIntegrations(); paintHealth(); paintDb(); paintLog(); watchTables();
 let inside=false; try{ inside=sessionStorage.getItem('bt-in')==='1'; }catch(_){}
 (async()=>{ const r=await apiCall('GET','/api/admin/session'); if(r.ok){ LIVE=true; $('who').textContent=r.data.email; try{ await loadLive(); inside=true; }catch(_){ LIVE=false; } } else if(r.status===401){ inside=false; } if(inside) enter(false); })();
 let last=performance.now(); (function frame(now){ const dt=Math.min(.05,(now-last)/1000); last=now; const still=document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
