@@ -1153,7 +1153,7 @@ const React={
   'site.leave'(ev){ const rec=siteRec.get(ev.id); if(rec){ rec.want='leave'; siteRec.delete(ev.id); } },
   'gate.requested'(ev){ const p=hallOf(ev); if(p) pop(p.cx,p.cy,2.9,'design gate: waiting','#b0568a'); },
   'gate.decided'(ev){ const p=hallOf(ev); if(p) pop(p.cx,p.cy,2.9,ev.decision==='rejected'?'gate ✗ rejected':'gate ✓ approved',ev.decision==='rejected'?'#c8472f':'#2f8f6b'); },
-  'task.failed'(ev){ const p=hallOf(ev); if(p) pop(p.cx,p.cy,2.9,ev.reason==='canceled'?'task canceled':'task ✗ failed','#c8472f'); },
+  'task.failed'(ev){ const p=hallOf(ev); if(p) pop(p.cx,p.cy,2.9,ev.reason==='canceled'?'task canceled':'task ✗ failed','#c8472f'); if(ev.number!=null&&ev.org) ghClose(ikey(ev),'not_planned'); },
   'imago.requested'(ev){ st.imagoOpen++; const g=pick(GATES), P0=PERSONA[pick(['artist','business','engineer','student'])], c={arrived:false,done:false}; imgClients.set(ev.id,c);
     const start=(x,y,near)=>{ const a=spawn(x,y,{color:P0.color,hat:P0.hat,carry:'paper',mark:'#b0568a',speed:2.1}); c.a=a; const inn=()=>{ c.arrived=true; a.hidden=true; pop(IMG.cx,IMG.cy,2.7,ev.kind+' request','#b0568a'); if(c.done) after(2.5,()=>imgLeave(c,ev)); }; near?walk(a,[IMG.entry],inn):travel(a,IMG.door,[IMG.entry],inn); };
     if(Math.random()<.35){ const v=spawn(g[0]+.5,g[1]+.5,{kind:'car',model:pick(['sedan','hatch']),color:pick(AMB_COL),speed:2.8}); travel(v,IMG.door,null,()=>{ start(IMG.door[0]+.5,IMG.door[1]+.8,true); after(1.5,()=>travel(v,pick(GATES),null,kill)); }); } else start(g[0]+.5,g[1]+.5,false); },
@@ -1303,9 +1303,10 @@ function drawHallGh(p){ const g=p.gh; if(!g.lan.length&&!g.ban.length) return;
   for(const b of g.ban){ const k=b.die?1-(T-b.die)/.2:1; if(k<=0) continue; const q=P(p.x+p.w+.34,p.y+BANV[b.slot],.95), dr=(1-ease3((T-b.t0)/.22))*6;
     ctx.globalAlpha=k; ctx.fillStyle='#2f6f8f'; ctx.fillRect(q[0]-1.5,q[1]-dr,3,9); ctx.lineWidth=LIGHT; ctx.strokeRect(q[0]-1.5,q[1]-dr,3,9); ctx.fillStyle='#dcae45'; ctx.fillRect(q[0]-1.5,q[1]-dr,3,1); }
   ctx.globalAlpha=1; }
-function drawHallRail(p){ const y=p.y+2.4, x0=p.x-.1, x1=p.x+1.8;
-  seg([x0,y,0],[x1,y,0],LIGHT,'#8d959c'); seg([x0,y+.12,0],[x1,y+.12,0],LIGHT,'#8d959c');
-  for(let i=0;i<5;i++){ const x=x0+.2+i*.38; seg([x,y-.03,0],[x,y+.15,0],LIGHT,'#8d959c'); }
+const CART_BOX=[[-.2,-.14,.04],[.2,-.14,.04],[.2,.14,.04],[-.2,.14,.04]], CART_X=[[0,0,.04],[0,0,.04],[0,0,.04],[0,0,.04]];
+function drawHallRail(p){ const y=p.y+2.4, x0=p.x-.1, x1=p.x+1.8, g=p.gh;
+  const R=g.rail||(g.rail=(()=>{ const a=[[[x0,y,0],[x1,y,0]],[[x0,y+.12,0],[x1,y+.12,0]]]; for(let i=0;i<5;i++){ const x=x0+.2+i*.38; a.push([[x,y-.03,0],[x,y+.15,0]]); } return a; })());
+  for(const r of R) seg(r[0],r[1],LIGHT,'#8d959c');
   const cs=p.gh.carts; if(!cs.length) return; const yc=y+.06, still=calm();
   for(let i=0;i<cs.length;i++){ const c=cs[i], dt=Math.min(.25,Math.max(0,T-c.tt)), tot=c.jobs.total||0; c.tt=T;
     const tg=c.st==='queued'?0:c.st==='running'?.15+.7*(tot?Math.min(1,c.jobs.done/tot):0):c.st==='passed'?1:c.u;
@@ -1314,7 +1315,7 @@ function drawHallRail(p){ const y=p.y+2.4, x0=p.x-.1, x1=p.x+1.8;
     const cols=c._cols||(c._cols=[]); cols.length=n; for(let j=0;j<n;j++){ cols[j]=j<fl?CP.red:j<fl+ok?CP.green:(amber?(amber=false,CP.amber):CP.grey); }
     for(let j=n-1;j>=0;j--){ const bx=cx-.27-j*.14; box(bx-.065,yc-.065,.13,.13,.04,.13,cols[j],LIGHT); }
     box(cx-.17,yc-.11,.34,.22,.04,.14,CP.wagon,LIGHT);
-    if(c.st==='failed'){ ctx.strokeStyle='#c8472f'; poly([[cx-.2,yc-.14,.04],[cx+.2,yc-.14,.04],[cx+.2,yc+.14,.04],[cx-.2,yc+.14,.04]],null,HEAVY); ctx.strokeStyle=INK; }
+    if(c.st==='failed'){ ctx.strokeStyle='#c8472f'; for(let j=0;j<4;j++){ CART_X[j][0]=cx+CART_BOX[j][0]; CART_X[j][1]=yc+CART_BOX[j][1]; } poly(CART_X,null,HEAVY); ctx.strokeStyle=INK; }
     if(tot>6){ const q=P(cx-.27-5*.14-.2,yc,.12); ctx.font='500 7px "IBM Plex Mono"'; ctx.textAlign='center'; ctx.fillStyle=INK; ctx.fillText('+'+(tot-6),q[0],q[1]-3); } } }
 
 /* ---- star lanterns above the org gate ---- */
@@ -1326,14 +1327,14 @@ function drawSky(a){ for(let i=0;i<a.k;i++){ const ag=T-a.t0-i*.35; if(ag<0||ag>
 function skyTick(a){ if(T-a.t0>4+(a.k-1)*.35){ kill(a); GHN.sky=Math.max(0,GHN.sky-a.k); } }
 
 /* ---- Tea House: guests are open discussions ---- */
+function teaSeat(g,cx,cy){ const s=TEA.seats[g.seat], dip=T-g.bow<.6?2*Math.sin(Math.PI*(T-g.bow)/.6):0, q=P(cx+s[0],cy+s[1],.14); q[1]+=dip; miniKid(q,g.col,4); }
 function teaHouse(o){ const {x,y,w,d,cx,cy}=o, RZ=1.1;
   box(x-.1,y-.1,w+.2,d+.2,0,.12,TEAP.base,LIGHT); box(x+.1,y+.1,w-.2,.28,.12,.8,TEAP.wall);
   const x0=x+.08, x1=x+w-.08, y0=y+.08, y1=y+d-.08;
   seg([x0,y0,.12],[x0,y0,RZ],HEAVY,CN_RED); seg([x1,y0,.12],[x1,y0,RZ],HEAVY,CN_RED);
-  const seat=g=>{ const s=TEA.seats[g.seat], dip=T-g.bow<.6?2*Math.sin(Math.PI*(T-g.bow)/.6):0, q=P(cx+s[0],cy+s[1],.14); q[1]+=dip; miniKid(q,g.col,4); };
-  for(const g of TEA.guests) if(g.seat<2) seat(g);
+  for(const g of TEA.guests) if(g.seat<2) teaSeat(g,cx,cy);
   box(cx-.2,cy-.12,.4,.24,.12,.14,TEAP.wood,LIGHT); { const q=P(cx,cy,.28); ctx.beginPath(); ctx.arc(q[0],q[1],1.3,0,7); ctx.fillStyle='#8d959c'; ctx.fill(); ctx.lineWidth=LIGHT; ctx.stroke(); }
-  for(const g of TEA.guests) if(g.seat>=2) seat(g);
+  for(const g of TEA.guests) if(g.seat>=2) teaSeat(g,cx,cy);
   seg([x0,y1,.12],[x0,y1,RZ],HEAVY,CN_RED); seg([x1,y1,.12],[x1,y1,RZ],HEAVY,CN_RED);
   const t=frustum(x,y,w,d,RZ,.22,.3,TEAP.roof,.22); upticks(x,y,w,d,RZ,.22);
   box(t[0],t[1],t[2],t[3],RZ+.22,.14,TEAP.wall); const t2=frustum(t[0],t[1],t[2],t[3],RZ+.36,.32,Math.min(t[2],t[3])/2,TEAP.roof,.08);
@@ -1351,18 +1352,21 @@ function teaLeave(g,answered){ const i=TEA.guests.indexOf(g); if(i<0||g.left) re
   if(!calm()){ const a=spawn(TEA.entry[0],TEA.entry[1],{color:g.col,speed:2}); travel(a,pick(homes),null,kill); } teaNext(); }
 function teaBow(g){ g.bow=T; if(calm()) teaLeave(g,true); else after(.7,()=>teaLeave(g,true)); }
 
+function ghClose(key,reason){ const is=issues.get(key); if(!is||is.closed) return; is.closed=true; is.reason=reason; is.last=T; st.open=Math.max(0,st.open-1); st.closed++;
+  const a=is.person; if(reason==='not_planned'&&a&&!a.dead&&a.state==='queue') ghLeave(a,false); }
 /* ---- the town reacts to GitHub (and, for the shared issue lifecycle, to GAOS and the simulator) ---- */
 Object.assign(React,{
   'issue.opened'(ev){ const org=orgBy[ev.org]; if(!org) return; const key=ikey(ev), is=issues.get(key);
-    if(is){ is.last=T; const a=is.person; if(is.closed&&a&&!a.dead&&(a.state==='queue'||a.state==='arrive')){ is.closed=false; is.reason=null; is.assigned=false; st.open++; } return; }
+    if(is){ is.last=T; const a=is.person; if(is.closed&&a&&!a.dead&&(a.state==='queue'||a.state==='arrive')){ is.closed=false; is.reason=null; is.assigned=false; st.open++; st.closed=Math.max(0,st.closed-1); } return; }
     if(org.ovf.has(key)) return;
     if(org.queue.length+org.arr>=MAXORG||issues.size>=MAXTOWN){ if(org.ovf.size<60){ org.ovf.set(key,{...ev,at:T}); org.over=org.ovf.size; } return; }
     spawnIssue(org,ev); },
   'issue.assigned'(ev){ const key=ikey(ev), is=issues.get(key); if(!is){ const org=orgBy[ev.org], o=org&&org.ovf.get(key); if(o) o._assigned=true; return; } is.assigned=true; is.last=T; },
   'task.done'(ev){ const is=issues.get(ikey(ev)); if(!is) return; is.done=ev.done|0; is.total=ev.total|0; is.last=T; },
   'issue.closed'(ev){ const key=ikey(ev), is=issues.get(key); if(!is){ const org=orgBy[ev.org]; if(org&&org.ovf.delete(key)) org.over=org.ovf.size; return; }
-    if(is.closed) return; is.closed=true; is.reason=ev.reason==='not_planned'?'not_planned':'completed'; is.last=T; st.open=Math.max(0,st.open-1); st.closed++;
-    const a=is.person; if(is.reason==='not_planned'&&a&&!a.dead&&a.state==='queue') ghLeave(a,false); },
+    ghClose(key,ev.reason==='not_planned'?'not_planned':'completed'); },
+  'task.column'(ev){ const key=ikey(ev), is=issues.get(key); if(!is) return; const k=GAOS_STATE[ev.column];
+    if(k==='progress'||k==='review'){ is.assigned=true; is.last=T; } else if(k==='closed') ghClose(key,ev.column==='done'?'completed':'not_planned'); },
   'issue.labeled'(ev){ const is=issues.get(ikey(ev)), a=is&&is.person; if(!a||a.dead||!HEXC.test(ev.color)) return; is.last=T; const r=a.ribbons||(a.ribbons=[]), i=r.indexOf(ev.color); if(i>=0) r.splice(i,1); r.push(ev.color); if(r.length>3) r.shift(); if(!a.hidden) pop(a.x,a.y,.9,null,ev.color); },
   'issue.subissues'(ev){ const is=issues.get(ikey(ev)), a=is&&is.person; if(!a||a.dead) return; is.last=T; const count=Math.max(0,ev.count|0), n=Math.min(count,4);
     if(a.kidWant!==n){ a.kidWant=n; if(a.kids) for(const k of a.kids) kill(k); a.kids=[]; let used=0; for(const x of issues.values()) if(x!==is&&x.person&&x.person.kids) used+=x.person.kids.length;
@@ -1392,7 +1396,7 @@ Object.assign(React,{
   'ref.deleted'(ev){ const p=hallOf(ev); if(!p) return; const tag=ev.refType==='tag', list=tag?p.gh.ban:p.gh.lan; let n=Math.max(1,ev.count|0);
     for(let i=list.length-1;i>=0&&n>0;i--){ if(list[i].die) continue; n--; if(calm()) list.splice(i,1); else list[i].die=T; } },
   'repo.labels'(ev){ const org=orgBy[ev.org], p=hallOf(ev); if(!p) return; const g=p.gh;
-    pop(p.cx,p.cy,2.7,'labels ×'+Math.max(1,ev.count|0),'#d73a4a'); if(calm()) return; if(g.painter&&!g.painter.dead){ g.painter.stay+=3; return; }
+    pop(p.cx,p.cy,2.7,'labels ×'+Math.max(1,ev.count|0),'#d73a4a'); if(calm()) return; if(g.painter&&!g.painter.dead){ g.painter.stay=Math.min(g.painter.stay+3,9); return; }
     const a=spawn(org.gate[0]+.5,org.gate[1]+.5,{color:'#e8d9d4',hat:'cap',carry:'brush',speed:2.2}), spot=[p.x+p.w+.25,p.y+p.d+.2]; a.stay=3; g.painter=a;
     walk(a,[org.gatePt,[spot[0],org.by+3.45],spot],()=>{ a.hold=true; a.t0=T; a.nx=T+.9; a.k=0;
       a.tick=(b)=>{ if(T>=b.nx){ b.nx+=.9; pop(spot[0]+.1,spot[1],.7,null,PAINT[b.k++%4]); }
@@ -1771,7 +1775,8 @@ bus.on(ev=>{ const t=ev.type, now=clockStr();
   else if(ev.gh&&ev.org&&/^(ci|repo|ref|discussion)\./.test(t)){ ghRepoStore(ev,t,now); }
   else if(ev.org && /^(issue|task|pr|gate)\./.test(t)){ if(ev.number==null) return; const key=ev.org+'/'+ev.repo+'#'+ev.number; let is=GH.issues.get(key);
     if(!is&&GH_UPDATE_ONLY.has(t)) return;
-    if(!is){ is={key,org:ev.org,repo:ev.repo,number:ev.number,title:ev.title||'',label:ev.label||'bug',productName:ev.productName,state:'queued',openedAt:now,tasks:[],checks:{},seq:++GH.seq,ribbons:[],comments:0}; GH.issues.set(key,is); if(t==='issue.opened'&&ev.labels) is.ribbons=ev.labels.slice(0,3); }
+    if(!is){ is={key,org:ev.org,repo:ev.repo,number:ev.number,title:ev.title||'',label:ev.label||'bug',productName:ev.productName,state:'queued',openedAt:now,tasks:[],checks:{},seq:++GH.seq,ribbons:[],comments:0}; GH.issues.set(key,is); if(t==='issue.opened'&&ev.labels) is.ribbons=ev.labels.slice(0,3);
+      { const open=[...GH.issues.values()].filter(x=>x.org===ev.org&&x.state!=='closed'); if(open.length>60){ open.sort((a,b)=>a.seq-b.seq); for(let i=0;i<open.length-60;i++) GH.issues.delete(open[i].key); } } }
     else if(t==='issue.opened'&&is.state==='closed'){ Object.assign(is,{title:ev.title||is.title,state:'queued',openedAt:now,closedAt:null,fail:null,reason:null,merged:false,prClosed:false,pr:null,checks:{},tasks:[],review:null,sub:null,comments:0,ribbons:(ev.labels||[]).slice(0,3),seq:++GH.seq}); }
     if(ev.productName) is.productName=ev.productName;
     if(t==='issue.assigned'){ is.state='progress'; is.agent=ev.agent||('agent-'+ev.repo); is.startedAt=now; }
