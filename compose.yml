@@ -58,7 +58,8 @@ services:
     image: arcadedata/arcadedb:26.7.2
     restart: unless-stopped
     environment:
-      JAVA_OPTS: "-Darcadedb.server.rootPassword=${ARCADEDB_PASSWORD:?set ARCADEDB_PASSWORD (root password for the local ArcadeDB)}"
+      # Only used with --profile db: set ARCADEDB_PASSWORD (the root password), or the server will not start.
+      JAVA_OPTS: "-Darcadedb.server.rootPassword=${ARCADEDB_PASSWORD:-}"
     volumes:
       - arcadedb-data:/home/arcadedb/databases
     mem_limit: 1g
