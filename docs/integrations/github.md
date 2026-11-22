@@ -38,7 +38,7 @@ Mandatory events are `issues` and `pull_request`. Create the hooks with the `gh`
 and never written to a file):
 
 ```bash
-read -rs -p 'Webhook secret: ' SECRET; echo
+printf 'Webhook secret: '; read -rs SECRET; echo
 URL='https://town.example/ingest/github/<id>'
 for r in repo-a repo-b; do
   gh api "repos/<owner>/$r/hooks" -X POST -f name=web -f "config[url]=$URL" -f config[content_type]=json \
