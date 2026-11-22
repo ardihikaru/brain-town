@@ -7,7 +7,7 @@
    One branch and one worktree per task. `<type>` is a Conventional Commit type (`feat`, `fix`, `chore`, `docs`).
 2. Commit with Conventional Commits and push the branch.
 3. **Open the PR** with `gh pr create`, using `.github/PULL_REQUEST_TEMPLATE.md`: fill every
-   section in its own order. Task manager link: ask the user if unknown, never invent one.
+   section in its own order. This product has no task-manager field; do not add one or ask for a task code.
    Cross-repo dependencies: say "Tidak ada" when none.
 4. **Delete the worktree once the PR is created**: `git worktree remove <path>` (the branch
    stays on the remote). Confirm with `git worktree list`.
