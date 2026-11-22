@@ -277,7 +277,7 @@ body.still #navmark{transition:none}
 
 <div id="login">
   <canvas id="logincv" aria-hidden="true"></canvas>
-  <form class="panel pad" id="loginform">
+  <form class="panel pad" id="loginform" data-testid="login-form">
     <svg class="bt-mark bt-login" viewBox="0 0 64 64" width="48" height="48" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#1f2b3a"/><path d="M5 41l34 17 20-10-34-17z" fill="#f6f7f1" fill-opacity=".06"/><g stroke="#f6f7f1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M11 41l28 14V39L11 25z" fill="#3a4452"/><path d="M39 55l14-7V32l-7-6.5-7 13.5z" fill="#2c3846"/><path d="M8 26l32 16 8-15.5-32-16z" fill="#c8472f"/></g><path d="M14 31.5l5 2.5v7l-5-2.5zM22 35.5l5 2.5v7l-5-2.5z" fill="#1f2b3a"/><path class="bt-win" d="M27.5 35.75l10 5v12l-10-5z" fill="#ffd66b" fill-opacity=".25"/><g stroke="#f6f7f1" stroke-width="1.5" stroke-linejoin="round"><path class="bt-win" d="M30 39.5l5 2.5v7l-5-2.5z" fill="#ffd66b"/><path class="bt-spark" d="M51 5.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7z" fill="#ffd66b"/></g></svg>
     <div><div class="eyebrow">town.mfardiansyah.id</div><h1>Brain Town back-office</h1></div>
     <p class="muted">Sign in to connect platforms and watch the event stream. This is a static preview: any email and password opens the gate.</p>
@@ -513,7 +513,7 @@ $('icards').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.ta
 /* ============================ setup ============================ */
 let su=null, wait=null;
 const secretOf=i=>LIVE?(i.token||'bt_live_••••••••••••••••••••'+(i.hint||'')):'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
-function field(label,val,id,mask){ return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}">${mask?`<button type="button" data-reveal="${id}">Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}">Copy</button></div></div>`; }
+function field(label,val,id,mask){ return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}" data-testid="${id}">${mask?`<button type="button" data-reveal="${id}">Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}">Copy</button></div></div>`; }
 function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true}; }
   su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
   $('su-title').textContent=i.name; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;

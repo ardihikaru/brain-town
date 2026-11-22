@@ -12,5 +12,6 @@ Shared Claude Code configuration for this repo.
   `backend-engineer` (Sonnet 5.5).
 - `skills/` — Emil Kowalski's design-engineering and motion skills, vendored verbatim (MIT).
   Source, pinned commit and re-sync steps: `skills/UPSTREAM.md`.
+- `rules/e2e-automation.md` — E2E/perf suite in `e2e/`: golden rules, local stack only, always shut it down.
 
 Top-level guides: `../CLAUDE.md`, `../AGENTS.md`.

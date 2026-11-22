@@ -35,6 +35,9 @@ Without Docker: `python3 -m http.server -d web 8080`, then open `/town/` and `/b
 - The edge vhost must forward `/ingest/`, `/events`, `/admin/events` and `/api/` to the same
   upstream and must not buffer `/events` (`proxy_buffering off`).
 - HTML is sent with `Cache-Control: no-cache`, so a redeploy shows at once.
+- Brand assets are served from `/brand/`, plus `/favicon.ico` and `/apple-touch-icon.png`, with a
+  one-week cache. The link-preview tags in the HTML are rewritten to the requested host, so the
+  edge must forward `Host` and `X-Forwarded-Proto`.
 - TLS and the public hostname belong to the reverse proxy in front.
 
 `compose.yml` runs one project per environment, each with its own env file:
