@@ -513,12 +513,12 @@ $('icards').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.ta
 
 /* ============================ setup ============================ */
 let su=null, wait=null;
-const secretOf=i=>LIVE?(i.token||'bt_live_••••••••••••••••••••'+(i.hint||'')):'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
+const secretOf=i=>LIVE?(i.token||''):'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
 function field(label,val,id,mask){ const sec=id==='su-sec', tt=n=>sec?` data-testid="${id}-${n}"`:'';
   return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}" data-testid="${id}">${mask?`<button type="button" data-reveal="${id}"${tt('show')}>Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}"${tt('copy')}>Copy</button></div></div>`; }
 const secLabel=i=>i.kind==='github'?'Webhook secret':'BRAIN_TOWN_TOKEN';
-const secRowHidden=i=>`<span class="small muted sec-note" data-testid="su-sec-hidden" style="flex:1;align-self:center">Hidden. Shown once when created.${i.hint?' Ends in '+esc(i.hint)+'.':''}</span><button type="button" data-rotate-sec data-testid="su-sec-rotate">Rotate and copy</button>`;
-const secRowConfirm=()=>`<span class="small muted sec-note" style="flex:1;align-self:center">The current secret stops working right away.</span><button type="button" class="primary" data-rotate-go data-testid="su-sec-rotate-confirm">Rotate now</button><button type="button" data-rotate-cancel data-testid="su-sec-rotate-cancel">Cancel</button>`;
+const secRowHidden=i=>`<span class="small muted sec-note" data-testid="su-sec-hidden">Hidden. Shown once when created.${i.hint?' Ends in '+esc(i.hint)+'.':''}</span><button type="button" data-rotate-sec data-testid="su-sec-rotate">Rotate and copy</button>`;
+const secRowConfirm=()=>`<span class="small muted sec-note" id="su-sec-warn">The current secret stops working right away.</span><button type="button" class="primary" aria-describedby="su-sec-warn" data-rotate-go data-testid="su-sec-rotate-confirm">Rotate now</button><button type="button" aria-describedby="su-sec-warn" data-rotate-cancel data-testid="su-sec-rotate-cancel">Cancel</button>`;
 function secHTML(i){ const label=secLabel(i);
   if(LIVE&&!i.token) return `<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row">${secRowHidden(i)}</div></div>`;
   return field(label,secretOf(i),'su-sec',true); }
@@ -554,7 +554,7 @@ function secRow(state,focus){ const row=$('su-sec-row'); if(!row||!su) return; r
 async function secRotate(){ const i=su, row=$('su-sec-row'); if(!i||!row) return;
   row.querySelectorAll('button').forEach(b=>b.disabled=true); const go=row.querySelector('[data-rotate-go]'); if(go) go.textContent='Rotating…';
   const token=await rotateToken(i.id);
-  if(su!==i||!$('su-sec-wrap')) { if(token) i.token=token; return; }
+  if(su!==i||!$('su-sec-wrap')) { if(token){ i.token=token; const e=INTS.find(x=>x.id===i.id); if(e) e.token=token; toast(i.name+': secret rotated. Open its setup to copy the new one.'); } return; }
   if(!token){ secRow('hidden','[data-rotate-sec]'); toast('Could not rotate the secret. The old one still works.'); return; }
   i.token=token; const e=INTS.find(x=>x.id===i.id); if(e) e.token=token;
   $('su-sec-wrap').innerHTML=secHTML(i); const cb=$('su-sec-wrap').querySelector('[data-testid=su-sec-copy]'); let ok=true;
