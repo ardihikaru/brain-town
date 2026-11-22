@@ -40,6 +40,7 @@ test.describe('backoffice · one-time secret', () => {
       await expect(backoffice.setup.rotateButton).toBeVisible();
       await expect(backoffice.setup.token).toHaveCount(0);
       await expect(backoffice.setup.copyButton).toHaveCount(0);
+      await expect(backoffice.setup.maskedText).toHaveCount(0);
 
       await test.step('a reload keeps it hidden', async () => {
         await backoffice.page.reload();
@@ -66,6 +67,26 @@ test.describe('backoffice · one-time secret', () => {
       await expect(backoffice.setup.token).toHaveValue(copied);
       await expectStatus(await ingestApi.send(gaos.ingestPath, buildGaosTask(), { token: gaos.token }), 401);
       await expectStatus(await ingestApi.send(gaos.ingestPath, buildGaosTask(), { token: copied }), 202);
+    },
+  );
+
+  test(
+    'Cancel on the rotate confirm restores the hidden state and keeps the old token working (TC-BO-014)',
+    { tag: [Tag.regression] },
+    async ({ backoffice, ingestApi, integration }) => {
+      const gaos = await integration('gaos');
+      await backoffice.setup.open(gaos.id);
+
+      await backoffice.setup.rotateButton.click();
+      await expect(backoffice.setup.rotateWarning).toBeVisible();
+      await expect(backoffice.setup.rotateConfirm).toBeVisible();
+      await backoffice.setup.rotateCancel.click();
+
+      await expect(backoffice.setup.hiddenNote).toBeVisible();
+      await expect(backoffice.setup.rotateButton).toBeVisible();
+      await expect(backoffice.setup.rotateConfirm).toHaveCount(0);
+      await expect(backoffice.setup.token).toHaveCount(0);
+      await expectStatus(await ingestApi.send(gaos.ingestPath, buildGaosTask(), { token: gaos.token }), 202);
     },
   );
 });
