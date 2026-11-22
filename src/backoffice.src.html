@@ -356,7 +356,8 @@ body.still #gh-pop-scrim,body.still #gh-pop-scrim.on{transition:opacity 150ms ea
 /* ---------- GitHub owners: owner page, create form ---------- */
 .ev-miss{color:#8a6516}
 #gh-create[hidden]{display:none}
-#gh-create label.panel:has(input:checked){border-width:2px}
+#gh-create label.panel{box-shadow:none}
+#gh-create label.panel:has(input:checked){box-shadow:inset 0 0 0 1px var(--ink)}
 #gh-create:not([hidden]){animation:ghform 160ms var(--ease-out) both}
 @keyframes ghform{from{opacity:0;transform:translateY(4px)}}
 @media (prefers-reduced-motion:reduce){ #gh-create:not([hidden]){animation:none} }
@@ -542,7 +543,7 @@ const PRODUCTS=[
   {key:'statusmag',org:'mf-media',src:'GitHub, GAOS',vis:'public',alias:'statusmag',hall:'Magazine House'},
   {key:'brain-notes',org:'mf-dev',src:'GitHub',vis:'public',alias:'brain-notes',hall:'GitHub Valley hall'},
   {key:'dotfiles',org:'mf-dev',src:'GitHub',vis:'hidden',alias:'Workbench',hall:'GitHub Valley hall'},
-  {key:'homelab',org:'mf-dev',src:'GitHub',vis:'hidden',alias:'Product E',hall:'GitHub Valley hall'},
+  {key:'homelab',org:'mf-dev',src:'GitHub',vis:'hidden',alias:'Product I',hall:'GitHub Valley hall'},
 ];
 const HALLS=['GitHub Valley hall','Video Generator','Magazine House','Article Bureau','Imago','LinkedIn Hall'];
 /* sample repos of an organization, built from its products (no GH_* constants here: they are defined later) */
@@ -554,8 +555,8 @@ const INTS=[
   {id:'gh-mf-media',kind:'github',name:'GitHub · mf-media',org:'mf-media',ownerType:'',state:'ok',today:97,err:0,last:Date.now()-21000,events:['issues','issue_comment','check_run','push','star','create','discussion'],repos:demoRepos('mf-media')},
   {id:'gh-mf-dev',kind:'github',name:'GitHub · mf-dev',org:'mf-dev',ownerType:'user',state:'ok',today:43,err:1,last:Date.now()-12000,events:[],repos:[
     demoDev('brain-notes',false,['issues','pull_request','issue_comment','push','star'],21,0,Date.now()-12000,0,'public','brain-notes',false,'brain-notes','brain-notes'),
-    demoDev('dotfiles',true,['issues','pull_request','push'],9,0,Date.now()-180000,0,'hidden','Workbench',true,'Product D','dotfiles'),
-    demoDev('homelab',true,['issues','push'],13,1,Date.now()-480000,Date.now()-300000,'hidden','Product E',false,'Product E','homelab'),
+    demoDev('dotfiles',true,['issues','pull_request','push'],9,0,Date.now()-180000,0,'hidden','Workbench',true,'Product H','dotfiles'),
+    demoDev('homelab',true,['issues','push'],13,1,Date.now()-480000,Date.now()-300000,'hidden','Product I',false,'Product I','homelab'),
     demoDev('scratchpad',false,['issues','pull_request'],0,0,Date.now()-1200000,0,'public','',false,'','')]},
   {id:'qa-main',kind:'qa',name:'QA tool',state:'ok',today:324,err:0,last:Date.now()-2000},
   {id:'gaos-main',kind:'gaos',name:'GAOS',state:'ok',today:186,err:2,last:Date.now()-6000},
@@ -656,13 +657,13 @@ function paintIntegrations(){ $('n-int').textContent=INTS.length; placeMark();
   $('igroups').innerHTML=Object.keys(KIND).map(k=>{ const list=INTS.filter(i=>i.kind===k); if(!list.length) return ''; const n=list.length, unit=k==='github'?'owner':'integration';
     return `<section data-testid="igroup-${k}" aria-labelledby="ig-${k}"><div class="row"><span class="kind k-${k}"></span><h2 id="ig-${k}">${KIND[k].label}</h2><span class="small muted">${n} ${unit}${n===1?'':'s'}</span></div><div class="cards" style="margin-top:10px">${list.map(k==='github'?ownerCard:plainCard).join('')}</div></section>`; }).join(''); }
 /* "Add an integration" is rendered once: the create form lives in it and must survive every repaint of the list */
-function renderAdd(){ const radio=(v,t,d)=>`<label class="panel pad row" style="box-shadow:none;flex-direction:row;color:var(--ink);font-size:14px;cursor:pointer"><input type="radio" name="ot" value="${v}" data-testid="gh-owner-type-${v}"><span class="grow"><b style="font-weight:600">${t}</b><span class="small muted" style="display:block">${d}</span></span></label>`;
+function renderAdd(){ const radio=(v,t,d)=>`<label class="panel pad row" style="flex-direction:row;color:var(--ink);font-size:14px;cursor:pointer"><input type="radio" name="ot" value="${v}" data-testid="gh-owner-type-${v}"><span class="grow"><b style="font-weight:600">${t}</b><span class="small muted" style="display:block">${d}</span></span></label>`;
   $('iadd').innerHTML=`<div class="panel icard add"><h2>Add an integration</h2><p class="small muted">Pick a platform to open its tutorial.</p><div class="row"><button type="button" data-testid="gh-create-open" aria-expanded="false" aria-controls="gh-create"><span class="kind k-github" style="margin-right:6px"></span>GitHub</button>${Object.keys(KIND).filter(k=>k!=='github').map(k=>`<a href="#setup-new-${k}"><button tabindex="-1"><span class="kind k-${k}" style="margin-right:6px"></span>${KIND[k].label}</button></a>`).join('')}</div>
     <form id="gh-create" data-testid="gh-create-form" class="stackf" novalidate hidden>
-      <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"><legend class="eyebrow">Who owns the repos?</legend>
+      <fieldset aria-describedby="gh-owner-err" style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"><legend class="eyebrow">Who owns the repos?</legend>
         ${radio('user','Personal account','GitHub has no account-wide webhook, so each repo gets its own. All of them share one URL and secret.')}
         ${radio('organization','Organization','One webhook on the organization covers every repo, including new ones.')}</fieldset>
-      <label>GitHub owner<input type="text" id="gh-owner" data-testid="gh-owner-name" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-username | your-org" aria-describedby="gh-owner-help gh-owner-err"></label>
+      <label>GitHub owner<input type="text" id="gh-owner" data-testid="gh-owner-name" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-username or your-org" aria-describedby="gh-owner-help gh-owner-err"></label>
       <p class="small muted" id="gh-owner-help">As in github.com/<b>owner</b>. Shown as “GitHub · <span id="gh-owner-prev">owner</span>”.</p>
       <p class="small" id="gh-owner-err" data-testid="gh-owner-error" role="alert" style="color:var(--bad)" hidden></p>
       <div class="row"><button class="primary" data-testid="gh-create-submit">Connect owner</button><button type="button" class="quiet" data-testid="gh-create-cancel">Cancel</button></div></form></div>`; }
@@ -672,7 +673,7 @@ const ghOwnerClean=v=>v.trim().replace(/^@/,'').replace(/^https?:\/\/(?:www\.)?g
 function ghCreateErr(html,el){ const e=$('gh-owner-err'); e.innerHTML=html; e.hidden=false; if(el){ if(el.id==='gh-owner') el.setAttribute('aria-invalid','true'); el.focus(); } }
 function ghCreateClearErr(){ $('gh-owner-err').hidden=true; $('gh-owner-err').textContent=''; $('gh-owner').removeAttribute('aria-invalid'); document.querySelectorAll('#gh-create input[type=radio]').forEach(r=>r.removeAttribute('aria-invalid')); }
 function openGhCreate(){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f||!b) return; f.hidden=false; b.setAttribute('aria-expanded','true'); f.querySelector('input[type=radio]').focus({preventScroll:true}); f.closest('.icard').scrollIntoView({block:'nearest',behavior:isStill()?'auto':'smooth'}); }
-function closeGhCreate(refocus){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f) return; f.reset(); ghCreateClearErr(); $('gh-owner').placeholder='your-username | your-org'; $('gh-owner-prev').textContent='owner'; f.hidden=true; b.setAttribute('aria-expanded','false'); const s=f.querySelector('[data-testid=gh-create-submit]'); s.disabled=false; s.removeAttribute('aria-busy'); s.textContent='Connect owner'; if(refocus) b.focus(); }
+function closeGhCreate(refocus){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f) return; f.reset(); ghCreateClearErr(); $('gh-owner').placeholder='your-username or your-org'; $('gh-owner-prev').textContent='owner'; f.hidden=true; b.setAttribute('aria-expanded','false'); const s=f.querySelector('[data-testid=gh-create-submit]'); s.disabled=false; s.removeAttribute('aria-busy'); s.textContent='Connect owner'; if(refocus) b.focus(); }
 async function ghCreateSubmit(){ const f=$('gh-create'), sel=f.querySelector('input[name=ot]:checked'), owner=ghOwnerClean($('gh-owner').value), field=$('gh-owner');
   if(!sel) return ghCreateErr('Choose personal account or organization.',f.querySelector('input[type=radio]'));
   if(!owner) return ghCreateErr('Enter the GitHub owner name.',field);
@@ -691,7 +692,7 @@ $('iadd').addEventListener('submit',e=>{ e.preventDefault(); ghCreateClearErr();
 $('iadd').addEventListener('input',e=>{ if(e.target.id!=='gh-owner') return; ghCreateClearErr(); $('gh-owner-prev').textContent=ghOwnerClean(e.target.value)||'owner'; });
 $('iadd').addEventListener('change',e=>{ if(e.target.name!=='ot') return; ghCreateClearErr(); $('gh-owner').placeholder=e.target.value==='user'?'your-username':'your-org'; });
 $('iadd').addEventListener('keydown',e=>{ if(e.key==='Escape'&&e.target.closest('#gh-create')){ e.preventDefault(); closeGhCreate(true); } });
-$('igroups').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.target.dataset.rotate; if(p&&LIVE){ toast('Pause is not available yet. Rotate the secret to cut a sender off.'); return; } if(p){ const i=INTS.find(x=>x.id===p); i.state=i.state==='paused'?(lastOf(i)?'ok':'waiting'):'paused'; paintIntegrations(); paintHealth(); toast(i.name+(i.state==='paused'?' paused':' resumed')); } if(r&&LIVE){ liveRotate(r); return; } if(r) toast('New secret generated. Update it on the platform side.'); });
+$('igroups').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.target.dataset.rotate; if(p&&LIVE){ toast('Pause is not available yet. Rotate the secret to cut a sender off.'); return; } if(p){ const i=INTS.find(x=>x.id===p); i.state=i.state==='paused'?(lastOf(i)?'ok':'waiting'):'paused'; paintIntegrations(); paintHealth(); toast(i.name+(i.state==='paused'?' paused':' resumed')); } if(r&&LIVE){ liveRotate(r); return; } if(r){ const ri=INTS.find(x=>x.id===r); toast(ri&&ownerKind(ri)==='user'?'New secret generated. Update it in every repo’s webhook.':'New secret generated. Update it on the platform side.'); } });
 
 /* ============================ setup ============================ */
 let su=null, wait=null;
@@ -973,8 +974,9 @@ async function refetchOwner(id,o={}){ const r=await apiCall('GET','/api/admin/in
   if(r.ok&&Array.isArray(r.data)){ const row=r.data.find(x=>x.id===id), cur=INTS.find(x=>x.id===id); if(row&&cur) Object.assign(cur,mapInt(row)); }
   if(own&&own.id===id&&curPage==='owner'){ paintOwnerHead(); paintOwnerTable(o); } paintIntegrations(); paintHealth(); }
 function ownLive(i){ const wait=2000-(Date.now()-ownAt); if(wait>0){ if(!ownT) ownT=setTimeout(()=>{ ownT=0; if(own===i&&curPage==='owner') ownLive(i); },wait); return; } ownAt=Date.now(); refetchOwner(i.id); }
-function ghScript(i,raw){ const names=(raw||'').split(/\s+/).filter(t=>/^[A-Za-z0-9._-]{1,100}$/.test(t)), repos=names.length?names:['your-repo'], owner=ownerName(i).replace(/[^A-Za-z0-9._-]/g,'')||'owner', url=ownUrl(i).replace(/[^A-Za-z0-9._~:\/-]/g,''), ev=GH_EVENTS.map(e=>`-f "events[]=${e.id}"`).join(' ');
-  return `# Brain Town: add the webhook to each repo of ${owner}\nread -rs -p "Brain Town webhook secret: " BT_SECRET; echo\nfor repo in ${repos.join(' ')}; do\n  gh api --method POST "repos/${owner}/$repo/hooks" \\\n    -f name=web -F active=true \\\n    -f "config[url]=${url}" -f "config[content_type]=json" \\\n    -f "config[secret]=$BT_SECRET" \\\n    ${ev} \\\n    >/dev/null && echo "added: $repo" || echo "skipped: $repo"\ndone\nunset BT_SECRET`; }
+const ghNames=raw=>(raw||'').split(/\s+/).map(t=>t.replace(/^https?:\/\/(www\.)?github\.com\//i,'').replace(/\/+$/,'').split('/').pop()).filter(t=>/^[A-Za-z0-9._-]{1,100}$/.test(t));
+function ghScript(i,raw){ const names=ghNames(raw), repos=names.length?names:['your-repo'], owner=ownerName(i).replace(/[^A-Za-z0-9._-]/g,'')||'owner', url=ownUrl(i).replace(/[^A-Za-z0-9._~:\/-]/g,''), ev=GH_EVENTS.map(e=>`-f "events[]=${e.id}"`).join(' ');
+  return `# Brain Town: add the webhook to each repo of ${owner}\nprintf 'Brain Town webhook secret: '; read -rs BT_SECRET; echo\nfor repo in ${repos.join(' ')}; do\n  gh api --method POST "repos/${owner}/$repo/hooks" \\\n    -f name=web -F active=true \\\n    -f "config[url]=${url}" -f "config[content_type]=json" \\\n    -f "config[secret]=$BT_SECRET" \\\n    ${ev} \\\n    >/dev/null && echo "added: $repo" || echo "skipped: $repo"\ndone\nunset BT_SECRET`; }
 function ownAddHTML(i){ const k=ownerKind(i), o=esc(ownerName(i)), id=esc(i.id);
   if(k==='user') return `<h2>Add a repo</h2><p class="small muted">GitHub has no webhook for a whole personal account, so each repo needs its own. This script adds one to every repo you list, with the payload URL above. It asks for the secret without showing it; copy the secret above first. Needs the GitHub CLI, signed in as ${o}.</p>
     <label>Repos to add (separated by spaces)<input type="text" data-testid="add-repo-names" placeholder="repo-one repo-two" autocomplete="off" spellcheck="false"></label>
@@ -997,7 +999,7 @@ $('own-hook').addEventListener('click',e=>{ const t=e.target.closest('button'); 
   else if(t.dataset.copy){ const f=$(t.dataset.copy); if(f&&f.value) copy(f.value,t.dataset.what); } });
 $('own-add').addEventListener('input',e=>{ if(e.target.dataset.testid==='add-repo-names'&&own) $('own-script').textContent=ghScript(own,e.target.value); });
 $('own-add').addEventListener('click',e=>{ const t=e.target.closest('button'); if(!t||!own) return; const tid=t.dataset.testid;
-  if(tid==='add-repo-copy') copy($('own-script').textContent,'Script');
+  if(tid==='add-repo-copy'){ if(!ghNames(document.querySelector('[data-testid=add-repo-names]').value).length) toast('Add at least one repo name first.'); else copy($('own-script').textContent,'Script'); }
   if(tid==='add-repo-demo-ping'&&!LIVE){ let n=1; while(own.repos.some(r=>r.name==='demo-repo-'+n)) n++; const now=Date.now();
     own.repos.push({name:'demo-repo-'+n,private:false,events:[...GH_DEMO,'pull_request'],last:now,lastErr:0,today:0,rejected:0,product:'',vis:'public',alias:'',aliasCustom:false,defaultAlias:''}); own.repos.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0);
     if(own.state==='waiting') own.state='ok'; own.last=Math.max(own.last||0,now); paintOwnerHead(); paintOwnerTable({force:true}); paintIntegrations(); paintHealth(); toast(`Ping simulated: demo-repo-${n} joined (demo)`); } });
@@ -1006,11 +1008,11 @@ $('own-body').addEventListener('click',async e=>{ const b=e.target.closest('butt
   const i=own, tr=b.closest('tr'), r=ownRepo(tr); if(!r) return; const v=b.dataset.vis.split(':')[2], tid=b.dataset.testid, msg=r.name+' is now '+v+' in the town';
   tr.setAttribute('aria-busy','true'); tr.querySelectorAll('.switch button').forEach(x=>x.disabled=true); ownBusy++;
   try{ if(LIVE){ const ok=await liveSave('prod',r.product,{visibility:v},msg); if(ok) await refetchOwner(i.id,{force:true,focus:tid,row:r.name}); }
-    else { r.vis=v; if(v==='hidden'){ if(r.defaultAlias===r.name) r.defaultAlias='Product '+String.fromCharCode(65+PRODUCTS.findIndex(x=>x.key===r.product)); r.alias=r.defaultAlias; r.aliasCustom=false; } else { r.alias=r.name; r.aliasCustom=false; } const p=PRODUCTS.find(x=>x.key===r.product); if(p){ p.vis=v; p.alias=v==='public'?p.key:r.alias; } paintProducts(); toast(msg); } }
+    else { r.vis=v; if(v==='hidden'){ if(r.defaultAlias===r.name) r.defaultAlias='Product '+String.fromCharCode(65+PRODUCTS.findIndex(x=>x.key===r.product)); r.alias=r.defaultAlias; r.aliasCustom=false; } else { r.alias=r.name; r.defaultAlias=r.name; r.aliasCustom=false; } const p=PRODUCTS.find(x=>x.key===r.product); if(p){ p.vis=v; p.alias=v==='public'?p.key:r.alias; } paintProducts(); toast(msg); } }
   finally{ ownBusy--; if(own===i) paintOwnerTable({force:true,focus:tid,row:r.name}); } });
 $('own-body').addEventListener('focusin',e=>{ if(e.target.matches('input[data-repo-alias]')) e.target.dataset.prev=e.target.value; });
-$('own-body').addEventListener('keydown',e=>{ const t=e.target; if(!t.matches||!t.matches('input[data-repo-alias]')) return; if(e.key==='Enter'){ e.preventDefault(); t.blur(); } else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); t.value=t.dataset.prev||''; t.blur(); } });
-$('own-body').addEventListener('change',async e=>{ const t=e.target; if(!t.matches||!t.matches('input[data-repo-alias]')||!own) return;
+$('own-body').addEventListener('keydown',e=>{ const t=e.target; if(!t.matches||!t.matches('input[data-repo-alias]')) return; if(e.key==='Enter'){ e.preventDefault(); t.dispatchEvent(new Event('change',{bubbles:true})); } else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); t.value=t.dataset.prev||''; } });
+$('own-body').addEventListener('change',async e=>{ const t=e.target; if(!t.matches||!t.matches('input[data-repo-alias]')||!own||t.readOnly) return;
   const i=own, tr=t.closest('tr'), r=ownRepo(tr); if(!r) return; const v=t.value.trim(), prev=t.dataset.prev||'';
   if((v===''&&!r.aliasCustom)||(v===r.alias&&r.aliasCustom)){ t.value=prev; return; }
   const reset=v==='', name=r.name; t.readOnly=true; t.setAttribute('aria-busy','true'); ownBusy++; let ok=true;
@@ -1033,9 +1035,9 @@ $('ev-body').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-id
 $('dr-x').onclick=()=>$('drawer').classList.remove('on'); addEventListener('keydown',e=>{ if(e.key==='Escape'){ $('drawer').classList.remove('on'); if(ghp.open) ghPopClose(true); } });
 
 /* ============================ products ============================ */
-const visSwitch=(kind,id,v,o={})=>`<span class="switch"${o.tid?` role="group" aria-label="Visibility of ${esc(o.label)}" data-testid="${o.tid}"`:''}>`+['public','hidden'].map(x=>`<button type="button" data-vis="${kind}:${id}:${x}" aria-pressed="${v===x}"${o.tid?` data-testid="${o.tid}-${x}"`:''}${o.off?` disabled aria-describedby="${o.desc}"`:''}>${x==='public'?'Public':'Hidden'}</button>`).join('')+'</span>';
+const visSwitch=(kind,id,v,o={})=>`<span class="switch"${o.tid?` role="group" aria-label="Visibility of ${esc(o.label)}" data-testid="${o.tid}"`:''}>`+['public','hidden'].map(x=>`<button type="button" data-vis="${kind}:${esc(id)}:${x}" aria-pressed="${v===x}"${o.tid?` data-testid="${o.tid}-${x}"`:''}${o.off?` disabled aria-describedby="${o.desc}"`:''}>${x==='public'?'Public':'Hidden'}</button>`).join('')+'</span>';
 function demoSyncRepos(){ for(const i of INTS) for(const r of i.repos||[]){ const p=r.product&&PRODUCTS.find(x=>x.key===r.product); if(!p) continue; r.vis=p.vis; r.alias=p.alias;
-    if(p.vis==='hidden'&&r.defaultAlias===r.name&&/^Product [A-Z]$/.test(p.alias)) r.defaultAlias=p.alias; r.aliasCustom=p.vis==='hidden'&&p.alias!==r.defaultAlias; } }
+    if(p.vis==='public') r.defaultAlias=r.name; if(p.vis==='hidden'&&r.defaultAlias===r.name&&/^Product [A-Z]$/.test(p.alias)) r.defaultAlias=p.alias; r.aliasCustom=p.vis==='hidden'&&p.alias!==r.defaultAlias; } }
 function paintProducts(){
   $('org-body').innerHTML=ORGS.map(o=>`<tr><td class="lead"><b style="font-weight:600">${o.id}</b></td><td data-l="Visibility">${visSwitch('org',o.id,o.vis)}</td><td data-l="Public name"><input type="text" id="oa-${o.id}" data-alias="org:${o.id}" value="${esc(o.alias)}" aria-label="Public name for ${o.id}" ${o.vis==='public'?'disabled':''}></td><td class="small muted" data-l="Products">${PRODUCTS.filter(p=>p.org===o.id).map(p=>p.key).join(', ')}</td></tr>`).join('');
   $('prod-body').innerHTML=PRODUCTS.map(p=>{ const o=ORGS.find(o=>o.id===p.org), forced=!!o&&o.vis==='hidden'; return `<tr><td class="lead"><b style="font-weight:600">${p.key}</b></td><td class="small" data-l="Sources">${p.src}</td><td class="small" data-l="Org">${p.org?esc(p.org):'<span class="muted">—</span>'}</td><td data-l="Visibility">${forced?'<span class="pill off">hidden by its org</span>':visSwitch('prod',p.key,p.vis)}</td><td data-l="Public name"><input type="text" id="pa-${p.key}" data-alias="prod:${p.key}" value="${esc(p.alias)}" aria-label="Public name for ${p.key}" ${!forced&&p.vis==='public'?'disabled':''}></td><td data-l="Town building"><select id="ph-${p.key}" data-hall="${p.key}" aria-label="Town building for ${p.key}">${HALLS.map(h=>`<option ${h===p.hall?'selected':''}>${h}</option>`).join('')}</select></td></tr>`; }).join('');
