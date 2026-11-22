@@ -13,8 +13,9 @@ are binding.
 - `docs/` — architecture, deployment, integration contracts (`docs/integrations/*.md`).
 - `deploy/` — nginx image, site config, edge vhost reference (live edge config is on `clino`).
 - `.claude/agents/` — lead-engineer, frontend-designer (Opus 5.5); frontend-engineer, backend-engineer,
-  e2e-engineer (Sonnet 5.5); e2e-runner (Haiku 5.5, runs E2E/stress tests only).
-  `.claude/skills/` — Emil Kowalski design/motion skills (vendored, see `UPSTREAM.md`).
+  e2e-engineer, integration-tester (Sonnet 5.5); e2e-runner (Haiku 5.5, runs E2E/stress tests only).
+  `.claude/skills/` — Emil Kowalski design/motion skills (vendored, see `UPSTREAM.md`), plus own skill
+  `mfardiansyah-id-integration` (local both-sides check and the read-only production check).
 - `backend/` — Go back-office service (ingest, admin API, SSE).
 - `e2e/` — E2E (Playwright) and performance (k6) suite against the local stack only. Rules: `e2e/AGENTS.md`
   and `.claude/rules/e2e-automation.md`.
