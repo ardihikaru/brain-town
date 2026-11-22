@@ -22,7 +22,10 @@ import (
 // testPW is random per run so no password literal lives in the repo.
 var testPW = func() string { b := make([]byte, 12); _, _ = rand.Read(b); return hex.EncodeToString(b) }()
 
+var testKey = func() []byte { b := make([]byte, 32); _, _ = rand.Read(b); return b }()
+
 type env struct {
+	st  *store.Store
 	t   *testing.T
 	srv *httptest.Server
 	cl  *http.Client
@@ -38,10 +41,10 @@ func newEnvLimits(t *testing.T, rate, burst float64) *env {
 	h := hub.New()
 	mux := http.NewServeMux()
 	mux.Handle("POST /ingest/{kind}/{id}", ingest.New(st, h, rate, burst))
-	admin.New(st, h, config.Config{AdminEmail: "a@x.id", AdminPassword: testPW, PublicURL: "http://x"}).Routes(mux)
+	admin.New(st, h, config.Config{AdminEmail: "a@x.id", AdminPassword: testPW, PublicURL: "http://x", SecretKey: testKey}).Routes(mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	return &env{t, srv, srv.Client()}
+	return &env{st, t, srv, srv.Client()}
 }
 
 func (e *env) do(method, path, token, body string, hdr ...string) (int, map[string]any, []byte) {
