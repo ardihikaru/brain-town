@@ -4,7 +4,6 @@ import { IntegrationListSchema, TOKEN_PATTERN } from '@api/rest/admin/admin.sche
 import { AcceptedSchema } from '@api/rest/ingest/ingest.schemas';
 import { env } from '@config/env';
 import { buildGaosTask } from '@data/factories/gaos.factory';
-import { KnownBug } from '@utils/known-bugs';
 import { Tag } from '@utils/tags';
 
 test.describe('backoffice · integrations', () => {
@@ -14,7 +13,6 @@ test.describe('backoffice · integrations', () => {
       tag: [Tag.smoke],
     },
     async ({ backoffice, page, adminApi, ingestApi, integration, cleanup }) => {
-      test.fail(true, KnownBug.backofficeProductWithoutOrg);
       const existing = await integration('gaos');
       await expectStatus(await ingestApi.send(existing.ingestPath, buildGaosTask(), { token: existing.token }), 202);
       await backoffice.integrations.goto();

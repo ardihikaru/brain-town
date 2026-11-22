@@ -2,7 +2,6 @@ import { test, expect } from '@fixtures';
 import { expectStatus } from '@api/core/assertions';
 import { credentials } from '@config/targets';
 import { buildGaosTask } from '@data/factories/gaos.factory';
-import { KnownBug } from '@utils/known-bugs';
 import { Tag } from '@utils/tags';
 
 test.describe('backoffice · sign in', () => {
@@ -14,7 +13,6 @@ test.describe('backoffice · sign in', () => {
       tag: [Tag.smoke],
     },
     async ({ backoffice, ingestApi, integration }) => {
-      test.fail(true, KnownBug.backofficeProductWithoutOrg);
       const gaos = await integration('gaos');
       await expectStatus(await ingestApi.send(gaos.ingestPath, buildGaosTask(), { token: gaos.token }), 202);
       await backoffice.login.goto();
