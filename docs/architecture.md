@@ -39,8 +39,9 @@ animation detail (who a visitor looks like, the route they take, how long they s
 ```
 
 - **Town page.** A single HTML file: canvas renderer, road-graph pathfinding (BFS on the tile
-  grid), agents, a clock, and an **event bus** (`bus.emit(event)`). A built-in simulator
-  emits events until `brainTown.connect(url)` switches to an SSE stream.
+  grid), agents, a clock, and an **event bus** (`bus.emit(event)`). On load it opens
+  `/events` (SSE) and converts the public envelopes into bus events (`fromPublic`); a built-in
+  simulator runs only as a static demo when the stream is unreachable or with `?sim=1`.
 - **Back-office.** A single HTML file for integrations (ingest URL + token per platform, with
   the setup guide embedded), products and visibility, an event log, health and settings. v1
   uses sample data.

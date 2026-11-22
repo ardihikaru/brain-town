@@ -76,18 +76,25 @@ docker compose up --build             # http://127.0.0.1:8080
 
 ### Feeding it real events
 
-The town listens to one event bus. To switch from the simulator to a Server-Sent Events
-stream, run this in the browser console, or in a script tag after the page loads:
+The town listens to one event bus. On load it opens `/events` (SSE) on its own origin; when
+the stream opens the simulator stops and the pill reads "live SSE". If `/events` is unreachable,
+or the URL has `?sim=1`, the built-in simulator plays a static demo. To read another stream,
+run this in the browser console:
 
 ```js
 brainTown.connect('https://town.mfardiansyah.id/events')
 ```
 
-Each SSE message is one JSON event such as:
+Each SSE message is a named event (`event: task.moved`) whose data is the stored event with the
+public (masked) emitter envelope in `payload`. The town converts it into its own bus events
+(`fromPublic` in the town script), mapping GAOS tasks to issues, QA `product` to a repo and
+unknown products to a free hall:
 
 ```json
-{ "id": "post-shipping-reports", "type": "article.published", "at": "2026-11-21T09:14:03Z",
-  "data": { "title": "Shipping reports as images", "url": "https://mfardiansyah.id/blog/shipping-reports", "to": "blog" } }
+{ "seq": 12, "id": "post-shipping-reports", "type": "article.published", "source": "site",
+  "at": "2026-11-21T09:14:03Z",
+  "payload": { "id": "post-shipping-reports", "type": "article.published", "at": "2026-11-21T09:14:03Z",
+    "data": { "title": "Shipping reports as images", "url": "https://mfardiansyah.id/blog/shipping-reports", "to": "blog" } } }
 ```
 
 The full list of event types is documented at the top of the town's script (the `EVENT BUS`
@@ -183,7 +190,7 @@ Step-by-step, including redeploys: [`docs/deployment.md`](docs/deployment.md).
 - [x] Back-office backed by the real API (login, integrations, tokens, products, event log).
       Still sample data: Settings (retention, account), Pause, GitHub webhooks.
 - [ ] Feed puller for sites that only expose JSON Feed / RSS.
-- [ ] Prod town connects to `/events` by default; the demo keeps the simulator.
+- [x] Prod town connects to `/events` by default; the demo keeps the simulator (`?sim=1`).
 - [ ] Screenshots and a short screen recording in the docs.
 
 ## Contributing
