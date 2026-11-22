@@ -62,7 +62,8 @@ The GitHub payload is **never stored**. Brain Town stores a small envelope inste
 messages, review text, user logins, emails and avatars never reach the database or any stream.
 
 - **Private repos** (`repository.private: true`) are reported as `hidden`, so a new product is created hidden and its
-  org/product names are replaced by aliases on `/events`. After that, the back-office visibility wins (same rule as GAOS).
+  name is replaced by an alias on `/events`. The org name stays unless the org itself is hidden in the back-office
+  (same rule as GAOS). After that, the back-office visibility wins.
 - For hidden events, `visibility.View` removes `task.title` and the `data` fields `title`, `url`, `ref`, `label`,
   `branch`, `workflow`, `check` (plus the existing sensitive fields). Colours and counts stay.
 - **Bots.** Deliveries whose `sender.type` is `Bot` or whose login ends in `[bot]` are skipped (`202 skipped`, not
@@ -100,7 +101,7 @@ messages, review text, user logins, emails and avatars never reach the database 
 | `issues` assigned | `issue.assigned` | | | the person walks into the product hall to be worked on |
 | `issues` edited, when the body's task-list count changed | `task.done` | `done`, `total` (counted from `- [x]` / `- [ ]`) | | progress pips over the person |
 | `issues` closed | `issue.closed` | `reason` (`completed`, `not_planned`) | | the person leaves |
-| `issues` labeled | `issue.labeled` | `color` (`#rrggbb`), `label` (name) | G | coloured ribbon on the person |
+| `issues` labeled | `issue.labeled` | `count`, `color` (`#rrggbb`), `label` (name), the last label in the window | G | coloured ribbon on the person |
 | `sub_issues` (sub_issue_added/removed, parent_issue_added/removed) | `issue.subissues` | `count`, `done` (from the parent's `sub_issues_summary`) | G | **family**: the parent issue walks with up to 4 kids, `+n` badge beyond |
 | `pull_request` opened, reopened, ready_for_review | `pr.opened` | `pr` (number), `issue` (first `Fixes/Closes/Resolves #n` in the body, else omitted), `draft` | | scroll carried into the hall |
 | `pull_request` closed, merged | `pr.merged` | `pr`, `issue` | | scroll stamped, issue person heads out |
@@ -130,7 +131,9 @@ Grouped events are merged on the server so a burst becomes one town event:
 
 - **Key:** integration + repo + subject + town type. The subject is the issue/PR/discussion number, the run id, the
   branch, the ref type, or nothing (repo-level).
-- **Window:** 15 s from the first delivery for that key. When the window closes, one event is stored and published with
+- **Window:** 15 s from the first delivery for that key. CI job state (status, job totals) is kept per run across
+  windows (bounded, 1,000 runs, 1 h idle), so a long run's later rollups and a lone `workflow_run completed` carry the
+  right job counts. Each job id is counted once. When the window closes, one event is stored and published with
   the summed `count` (or the latest state, for `ci.run` and `issue.subissues`).
 - **Dedupe:** every delivery id is claimed when it arrives (`409` on a repeat), grouped or not.
 - **Bounds:** at most 1,000 open rollups; when full, the oldest is flushed at once. Open rollups are flushed on shutdown.
