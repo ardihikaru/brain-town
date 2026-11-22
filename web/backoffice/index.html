@@ -67,7 +67,7 @@ label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;ga
 #rail nav a b{font-family:var(--font-mono);font-weight:400;font-size:10.5px;margin-left:auto;opacity:.75}
 #rail .foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:8px;border-top:1px solid var(--rule);font-size:12.5px}
 main{padding:22px 26px 60px;min-width:0}
-.page{display:none;max-width:1120px;flex-direction:column;gap:16px}
+.page{display:none;flex-direction:column;gap:16px} /* fills the working column; no max-width */
 .page.on{display:flex;animation:pagein .32s ease both}
 @keyframes pagein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 .head{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end}
@@ -122,6 +122,14 @@ td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
 .scroll{overflow-x:auto}
 tbody tr.click{cursor:pointer} tbody tr.click:hover{background:rgba(31,43,58,.05)}
 td.t{font-family:var(--font-mono);font-size:12px;white-space:nowrap}
+/* Core empty state: any <tbody> with no rows gets one "No data record" row (see syncEmpty). */
+tr.empty td{text-align:center;padding:28px 12px;color:var(--ink-soft);border-bottom:0}
+tr.empty td b{display:block;color:var(--ink);font-weight:500;margin-bottom:2px}
+tr.empty td span{font-size:12px}
+/* Settings: two independent columns, so a short panel never leaves a hole under it. */
+.prefs{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.stackf{display:flex;flex-direction:column;gap:12px}
 
 /* ---------- drawer + toast ---------- */
 #drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--panel);border-left:1px solid var(--ink);box-shadow:-6px 0 0 rgba(31,43,58,.08);padding:18px;display:flex;flex-direction:column;gap:12px;transform:translateX(105%);transition:transform .28s ease;z-index:10;overflow:auto}
@@ -180,7 +188,7 @@ body{overflow-x:clip}
   #rail .foot{padding:8px 0;align-items:center;font-size:11px;text-align:center}
   #rail .foot button{padding:5px 4px;font-size:11px}
   main{padding:20px}
-  .two,.setup{grid-template-columns:minmax(0,1fr)}
+  .two,.setup,.prefs{grid-template-columns:minmax(0,1fr)}
 }
 
 /* ---------- phone: top bar, bottom tabs, stacked everything ---------- */
@@ -201,7 +209,7 @@ body{overflow-x:clip}
   h1{font-size:23px}
   .page{gap:13px}
   .head{align-items:flex-start}
-  .two,.setup{grid-template-columns:minmax(0,1fr);gap:13px}
+  .two,.setup,.prefs{grid-template-columns:minmax(0,1fr);gap:13px}
   .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .tile b{font-size:26px}
   .health,.cards{grid-template-columns:minmax(0,1fr)}
@@ -230,6 +238,7 @@ body{overflow-x:clip}
   #org-body td.lead,#prod-body td.lead{grid-column:1/-1;font-size:16px}
   #org-body td input,#prod-body td input,#prod-body td select{width:100%}
   #org-body td:last-child{grid-column:1/-1}
+  table.stack tr.empty{display:block;padding:0}
   .panel.scroll{overflow-x:visible}
   #drawer{top:auto;left:0;right:0;width:auto;max-height:84%;border-left:0;border-top:1px solid var(--ink);box-shadow:0 -6px 0 rgba(31,43,58,.08);transform:translateY(105%);padding:16px 14px 90px}
   #drawer.on{transform:none}
@@ -331,34 +340,38 @@ body.still #navmark{transition:none}
         <label>Delivery<select id="f-st"><option value="">All</option><option>ok</option><option>rejected</option></select></label>
         <label class="grow">Search<input type="text" id="f-q" placeholder="repo, title, id"></label>
       </div>
-      <div class="panel scroll"><table class="stack"><thead><tr><th>Time</th><th>Integration</th><th>Type</th><th>Summary</th><th>Delivery</th></tr></thead><tbody id="ev-body"></tbody></table></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>Time</th><th>Integration</th><th>Type</th><th>Summary</th><th>Delivery</th></tr></thead><tbody id="ev-body" data-empty="Deliveries appear here as platforms send events. Clear a filter to see more."></tbody></table></div>
     </section>
 
     <!-- PRODUCTS -->
     <section class="page" data-page="products">
       <div class="head"><div class="grow"><h1>Products and visibility</h1><p>The town is public. A hidden org or product still appears, but under its public name and with every title replaced. Visibility is decided here, per org and per product.</p></div></div>
-      <div class="panel scroll"><table class="stack"><thead><tr><th>GitHub org</th><th>Visibility</th><th>Public name in town</th><th>Products</th></tr></thead><tbody id="org-body"></tbody></table></div>
-      <div class="panel scroll"><table class="stack"><thead><tr><th>Product</th><th>Sources</th><th>Org</th><th>Visibility</th><th>Public name in town</th><th>Town building</th></tr></thead><tbody id="prod-body"></tbody></table></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>GitHub org</th><th>Visibility</th><th>Public name in town</th><th>Products</th></tr></thead><tbody id="org-body" data-empty="Orgs appear here after the first event names one."></tbody></table></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>Product</th><th>Sources</th><th>Org</th><th>Visibility</th><th>Public name in town</th><th>Town building</th></tr></thead><tbody id="prod-body" data-empty="Products appear here after the first event names one."></tbody></table></div>
       <div class="panel pad"><h3>What a visitor sees</h3><p class="small muted" style="margin:4px 0 10px">The same event, as stored and as sent on the public stream.</p><div class="two"><pre id="vis-raw"></pre><pre id="vis-pub"></pre></div></div>
     </section>
 
     <!-- SETTINGS -->
     <section class="page" data-page="prefs">
       <div class="head"><div class="grow"><h1>Settings</h1><p>Service, database and account.</p></div></div>
-      <div class="two">
-        <div class="panel pad" style="display:flex;flex-direction:column;gap:12px"><h2>Service</h2>
-          <dl class="kv"><dt>Address</dt><dd>https://town.mfardiansyah.id</dd><dt>Public stream</dt><dd>https://town.mfardiansyah.id/events</dd><dt>Back-office stream</dt><dd>https://town.mfardiansyah.id/admin/events</dd><dt>Heartbeat</dt><dd>every 15 s</dd></dl>
-          <div class="row"><label>Keep events (days)<input type="number" id="keep" value="30" min="1" max="365" style="width:110px"></label>
-            <label>Animation<span class="switch" id="motion"><button type="button" aria-pressed="true" data-v="on">On</button><button type="button" aria-pressed="false" data-v="off">Off</button></span></label></div>
-          <div><button id="save-svc">Save</button></div></div>
-        <div class="panel pad" style="display:flex;flex-direction:column;gap:12px"><div class="row"><h2 class="grow">Database</h2><span class="pill ok"><i></i>connected</span></div>
-          <dl class="kv"><dt>Engine</dt><dd>ArcadeDB (graph)</dd><dt>Database</dt><dd>braintown</dd><dt>Reached over</dt><dd>HTTP API, port 2480</dd></dl>
-          <table><thead><tr><th>Vertex or edge type</th><th>Records</th></tr></thead><tbody id="db-body"></tbody></table></div>
+      <div class="prefs">
+        <div class="col">
+          <div class="panel pad stackf"><h2>Service</h2>
+            <dl class="kv"><dt>Address</dt><dd id="svc-addr">https://town.mfardiansyah.id</dd><dt>Public stream</dt><dd id="svc-pub">https://town.mfardiansyah.id/events</dd><dt>Back-office stream</dt><dd id="svc-adm">https://town.mfardiansyah.id/admin/events</dd><dt>Heartbeat</dt><dd>every 15 s</dd></dl>
+            <div class="row"><label>Keep events (days)<input type="number" id="keep" value="30" min="1" max="3650" style="width:110px"></label>
+              <label>Animation<span class="switch" id="motion"><button type="button" aria-pressed="true" data-v="on">On</button><button type="button" aria-pressed="false" data-v="off">Off</button></span></label></div>
+            <div><button id="save-svc">Save</button></div></div>
+          <form class="panel pad stackf" id="pwform"><h2>Account</h2>
+            <label>Email<input type="email" id="acc-email" value="me@mfardiansyah.id"></label>
+            <div class="row"><label class="grow">New password<input type="password" id="acc-p1" autocomplete="new-password"></label><label class="grow">Repeat it<input type="password" id="acc-p2" autocomplete="new-password"></label></div>
+            <div><button>Update account</button></div></form>
+        </div>
+        <div class="col">
+          <div class="panel pad stackf"><div class="row"><h2 class="grow">Database</h2><span class="pill ok"><i></i>connected</span></div>
+            <dl class="kv"><dt>Engine</dt><dd>ArcadeDB (graph)</dd><dt>Database</dt><dd>braintown</dd><dt>Reached over</dt><dd>HTTP API, port 2480</dd></dl>
+            <table><thead><tr><th>Vertex or edge type</th><th>Records</th></tr></thead><tbody id="db-body" data-empty="The database reported no records."></tbody></table></div>
+        </div>
       </div>
-      <form class="panel pad" id="pwform" style="display:flex;flex-direction:column;gap:12px;max-width:520px"><h2>Account</h2>
-        <label>Email<input type="email" id="acc-email" value="me@mfardiansyah.id"></label>
-        <div class="row"><label class="grow">New password<input type="password" id="acc-p1" autocomplete="new-password"></label><label class="grow">Repeat it<input type="password" id="acc-p2" autocomplete="new-password"></label></div>
-        <div><button>Update account</button></div></form>
     </section>
   </main>
 </div>
@@ -371,6 +384,14 @@ body.still #navmark{transition:none}
 "use strict";
 const TASKS = {"brain-town-integration-gaos.md": "# Task: send GAOS events to Brain Town\n\nRepo: `ardihikaru/gaos` \u00b7 Receiver: `https://town.mfardiansyah.id`\n\nBrain Town is a public, animated town that shows work as it happens. Each GAOS product becomes a hall in the town and each task becomes a person who queues, waits at the design gate, gets worked on by an agent, and leaves when done. GAOS only has to tell Brain Town when something changes. Brain Town never calls GAOS back.\n\nThis file was written without access to the GAOS source. Where a name below differs from the real GAOS model (column names, task kinds, agent ids), keep the GAOS name and map it in the `data` fields.\n\n## What to build\n\nAn outbound event emitter: when a product or task changes state, GAOS sends one HTTP POST to Brain Town.\n\n### Configuration\n\n| Setting | Example | Notes |\n| --- | --- | --- |\n| `BRAIN_TOWN_ENABLED` | `true` | Off by default. When off, nothing is sent. |\n| `BRAIN_TOWN_URL` | `https://town.mfardiansyah.id/ingest/gaos/<integration-id>` | Copied from the Brain Town back-office, Integrations, GAOS. |\n| `BRAIN_TOWN_TOKEN` | `bt_live_\u2026` | Sent as `Authorization: Bearer <token>`. Keep it out of logs. |\n\n### When to send\n\n| GAOS moment | `type` |\n| --- | --- |\n| Product created, renamed, or its visibility changed | `product.upserted` |\n| Task created | `task.created` |\n| Task moved to another kanban column | `task.moved` |\n| Design gate review requested for a task | `gate.requested` |\n| Design gate decided | `gate.decided` |\n| An agent claims a task | `task.claimed` |\n| A QA result is attached to a task | `task.qa` |\n| Task finished | `task.done` |\n| Task failed or was cancelled | `task.failed` |\n\n### Request\n\n```http\nPOST /ingest/gaos/<integration-id>\nAuthorization: Bearer <token>\nContent-Type: application/json\nIdempotency-Key: <event id>\n```\n\n```json\n{\n  \"id\": \"01JD3X9T2M8Q4W6Z7K5B\",\n  \"type\": \"task.moved\",\n  \"at\": \"2026-11-21T09:14:03Z\",\n  \"product\": { \"key\": \"article2video\", \"name\": \"Article to Video\", \"visibility\": \"public\" },\n  \"task\": { \"id\": \"T-204\", \"title\": \"Add caption timing\", \"kind\": \"feature\", \"column\": \"in_progress\" },\n  \"data\": { \"from\": \"ready\", \"to\": \"in_progress\", \"agent\": \"agent-7\" }\n}\n```\n\nField rules:\n\n- `id`: unique per event and stable across retries. A ULID or UUID is fine.\n- `at`: UTC, RFC 3339.\n- `product.key`: stable slug. Brain Town keys its hall on it.\n- `product.visibility`: `public` or `hidden`. For `hidden`, Brain Town shows an alias and never shows task titles. Still send the real values; hiding happens on the Brain Town side.\n- `task` is omitted for `product.upserted`.\n- `data` per type: `task.moved` has `from`, `to`; `gate.decided` has `decision` (`approved` or `rejected`); `task.claimed` has `agent`; `task.qa` has `passed`, `failed`, `total`; `task.failed` has `reason`.\n\n### Delivery rules\n\n- Send after the state change is committed, from a background worker. A slow or failing Brain Town must never slow down or fail a GAOS task.\n- Timeout 3 seconds. Retry up to 3 times with backoff (1 s, 5 s, 30 s) on network errors, `429` and `5xx`. Do not retry other `4xx`.\n- Keep order per task: do not send `task.done` before `task.claimed` for the same task.\n- Log one line per failed delivery with the event id and status code.\n\n## Responses from Brain Town\n\n| Status | Meaning |\n| --- | --- |\n| `202` | Accepted. |\n| `401` | Token missing or wrong. |\n| `409` | This `Idempotency-Key` was already accepted. Treat as success. |\n| `422` | Body failed validation. The response names the field. |\n| `429` | Slow down and retry. |\n\n## Done when\n\n- [ ] With `BRAIN_TOWN_ENABLED=false`, no request leaves GAOS.\n- [ ] Creating a task, moving it across every column, passing the design gate and finishing it produces the matching events, in order.\n- [ ] Stopping Brain Town for a minute does not block or fail any GAOS operation.\n- [ ] A retried event carries the same `id`.\n- [ ] The token never appears in logs or error messages.\n- [ ] A short section in the GAOS README explains the three settings.\n\n## Try it by hand\n\n```bash\ncurl -X POST \"$BRAIN_TOWN_URL\" \\\n  -H \"Authorization: Bearer $BRAIN_TOWN_TOKEN\" -H \"Content-Type: application/json\" \\\n  -H \"Idempotency-Key: test-001\" \\\n  -d '{\"id\":\"test-001\",\"type\":\"task.created\",\"at\":\"2026-11-21T09:00:00Z\",\"product\":{\"key\":\"demo\",\"name\":\"Demo\",\"visibility\":\"public\"},\"task\":{\"id\":\"T-1\",\"title\":\"Hello town\",\"kind\":\"feature\",\"column\":\"backlog\"}}'\n```\n\nA person should appear at the Demo hall in the town, and the delivery shows in the back-office event log.\n", "brain-town-integration-mfardiansyah-id.md": "# Task: connect mfardiansyah.id to Brain Town\n\nRepo: the mfardiansyah.id site \u00b7 Receiver: `https://town.mfardiansyah.id`\n\nBrain Town shows the site as a pendopo. When an article or illustration is published, a courier walks to it. The site has to tell Brain Town about new content. Two ways are supported; build both, in this order.\n\n## Part 1: a feed Brain Town can pull\n\nNeeds no secret and works even if Part 2 is never built.\n\n- Expose `https://mfardiansyah.id/feed.json` (JSON Feed 1.1) or an RSS/Atom feed listing the latest 20 published items, newest first.\n- Each item needs: a stable `id`, `url`, `title`, `date_published`, and a tag or field that says whether it is an `article` or an `illustration`.\n- Brain Town checks the feed every 5 minutes and emits one event per new `id`.\n\n## Part 2: a publish hook that pushes\n\nMakes the courier appear within a second of publishing.\n\n### Configuration\n\n| Setting | Example | Notes |\n| --- | --- | --- |\n| `BRAIN_TOWN_URL` | `https://town.mfardiansyah.id/ingest/site/<integration-id>` | From the Brain Town back-office, Integrations, mfardiansyah.id. |\n| `BRAIN_TOWN_TOKEN` | `bt_live_\u2026` | Sent as `Authorization: Bearer <token>`. Keep it in the deploy secrets. |\n\n### When to send\n\n| Moment | `type` |\n| --- | --- |\n| An article goes live | `article.published` |\n| An illustration goes live | `illustration.published` |\n\nSend once per item, after the page is reachable. If the site is statically built, do it as the last deploy step, for items whose `id` was not in the previous build.\n\n```json\n{\n  \"id\": \"post-shipping-reports-as-images\",\n  \"type\": \"article.published\",\n  \"at\": \"2026-11-21T09:14:03Z\",\n  \"data\": { \"title\": \"Shipping reports as images\", \"url\": \"https://mfardiansyah.id/blog/shipping-reports\", \"to\": \"blog\" }\n}\n```\n\n### Rules\n\n- A failed call must not fail the publish or the deploy: 3 second timeout, log and continue.\n- Use the same `id` as the feed, so an item seen by both push and pull is counted once.\n- Send public content only. Drafts and scheduled items are not sent.\n\n## Part 3: a visit beacon\n\nBrain Town turns each visit into a person who travels into the town, so the site reports page views of the home page and blog articles.\n\n- On each page view of `/` or `/blog/...`, the server (or an edge function) sends one `site.visit` event. Do it server-side, so no token ever reaches the browser.\n- Send only two facts: which page, and the visitor's country as a two-letter code taken from the request (for example the CDN's country header). Never send the IP address, user agent, cookies or any identifier of the person.\n- `id` is a random value per page view. It must not be derived from the visitor.\n- Skip bots and the site owner's own visits where that is easy to detect.\n- This is best effort: 2 second timeout, no retries. A lost visit only means one fewer person in the town.\n\n```json\n{\n  \"id\": \"b7f3c2e1-9a40-4d0e-8f65-2c1d7a9e0b11\",\n  \"type\": \"site.visit\",\n  \"at\": \"2026-11-22T00:14:03Z\",\n  \"data\": { \"page\": \"blog\", \"country\": \"JP\", \"title\": \"Shipping reports as images\" }\n}\n```\n\n`page` is `home` or `blog`. `title` is optional and only for blog articles. Brain Town invents everything else for the animation (who the visitor is, how they travel, how long they stay), so nothing more is needed from the site.\n\n## Part 4: the office page\n\nThe town's pendopo links to `https://mfardiansyah.id/office`. Make sure that page exists and returns `200`.\n\n## Done when\n\n- [ ] The feed URL returns the latest 20 items with the fields above.\n- [ ] Publishing a test article produces exactly one `article.published`, with the same `id` the feed shows.\n- [ ] A deploy with Brain Town unreachable still succeeds.\n- [ ] Opening the home page and one blog article each produce one `site.visit` with the right `page` and a two-letter `country`.\n- [ ] The `site.visit` body contains no IP address and nothing that identifies the person.\n- [ ] `/office` loads.\n\n## Try it by hand\n\n```bash\ncurl -X POST \"$BRAIN_TOWN_URL\" \\\n  -H \"Authorization: Bearer $BRAIN_TOWN_TOKEN\" -H \"Content-Type: application/json\" \\\n  -d '{\"id\":\"test-post-1\",\"type\":\"article.published\",\"at\":\"2026-11-21T09:00:00Z\",\"data\":{\"title\":\"Hello town\",\"url\":\"https://mfardiansyah.id/blog/hello\",\"to\":\"blog\"}}'\n```\n\nA courier should walk to the mfardiansyah.id pendopo in the town.\n", "brain-town-integration-qa-tool.md": "# Task: report Playwright runs to Brain Town\n\nRepo: the QA tool (Playwright end-to-end tests) \u00b7 Receiver: `https://town.mfardiansyah.id`\n\nBrain Town shows each product's automated test run as a QA bot walking through its steps in the QA Lab. The QA tool has to post each run as it happens. Brain Town never calls the QA tool back.\n\n## What to build\n\nA custom Playwright reporter, `brain-town-reporter.ts`, added next to the existing reporters.\n\n### Configuration\n\n| Setting | Example | Notes |\n| --- | --- | --- |\n| `BRAIN_TOWN_URL` | `https://town.mfardiansyah.id/ingest/qa/<integration-id>` | From the Brain Town back-office, Integrations, QA tool. |\n| `BRAIN_TOWN_TOKEN` | `bt_live_\u2026` | Sent as `Authorization: Bearer <token>`. Store as a CI secret. |\n| reporter option `product` | `sipreport` | The product key this test project covers. |\n| reporter option `org` | `sismedika` | Optional. The GitHub org the product belongs to. |\n\nIf `BRAIN_TOWN_URL` is not set, the reporter does nothing.\n\n```ts\n// playwright.config.ts\nreporter: [\n  ['list'],\n  ['./brain-town-reporter.ts', { product: 'sipreport', org: 'sismedika' }],\n],\n```\n\n### Events\n\nOne run is one spec file executed once.\n\n| Reporter hook | `type` | `data` |\n| --- | --- | --- |\n| `onTestBegin` (first test of a spec) | `qa.run.started` | `spec`, `steps` (titles, when known) |\n| `onStepEnd` for steps with category `test.step` | `qa.step` | `index`, `step`, `status` (`passed` or `failed`), `duration_ms` |\n| `onTestEnd` (last test of a spec) | `qa.run.finished` | `spec`, `passed`, `failed`, `total`, `duration_ms` |\n\n```json\n{\n  \"id\": \"run-1763715243-3\",\n  \"type\": \"qa.step\",\n  \"at\": \"2026-11-21T09:14:03Z\",\n  \"product\": \"sipreport\",\n  \"org\": \"sismedika\",\n  \"run\": \"run-1763715243\",\n  \"data\": { \"index\": 2, \"step\": \"Sign in\", \"status\": \"passed\", \"duration_ms\": 840 }\n}\n```\n\nOnly steps written as `await test.step('Sign in', async () => { \u2026 })` are reported, so the names shown in the town are the names in the spec. Wrap the main actions of each spec in `test.step`.\n\n### Rules\n\n- Never fail or slow a test run because Brain Town is unreachable: 2 second timeout, swallow errors, no retries inside the test process.\n- `onEnd` must wait for the last request so the final event is not lost when the process exits.\n- Do not send page content, screenshots, credentials or error stacks. A failed step sends its title and status only.\n- `run` is the same value for every event of one spec execution.\n\n## Done when\n\n- [ ] Running one spec locally produces `qa.run.started`, one `qa.step` per `test.step`, then `qa.run.finished`.\n- [ ] A failing step produces `status: \"failed\"` and `failed: 1` in the final event.\n- [ ] With `BRAIN_TOWN_URL` unset, no request is made and test output is unchanged.\n- [ ] With Brain Town unreachable, the run takes no more than 2 seconds longer in total.\n- [ ] CI passes the two settings as secrets.\n\n## Try it by hand\n\n```bash\ncurl -X POST \"$BRAIN_TOWN_URL\" \\\n  -H \"Authorization: Bearer $BRAIN_TOWN_TOKEN\" -H \"Content-Type: application/json\" \\\n  -d '{\"id\":\"t-1\",\"type\":\"qa.run.started\",\"at\":\"2026-11-21T09:00:00Z\",\"product\":\"sipreport\",\"run\":\"t\",\"data\":{\"spec\":\"login.spec.ts\",\"steps\":[\"Open page\",\"Sign in\",\"Check result\"]}}'\n```\n\nThe QA bot for that product should start walking in the QA Lab.\n"};
 const $=id=>document.getElementById(id), rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+/* Core table component: a <tbody> with no rows shows one "No data record" row, so an empty table
+   never looks broken. Applies to every tbody (the hint comes from data-empty) and stays in sync by
+   itself whenever rows are added or removed, so new tables need no extra code. */
+function syncEmpty(tb){ const real=[...tb.children].some(r=>!r.classList.contains('empty')), ph=tb.querySelector(':scope>tr.empty');
+  if(real){ if(ph) ph.remove(); return; } if(ph) return;
+  const cols=tb.closest('table')?.querySelectorAll('thead th').length||1, tr=document.createElement('tr'); tr.className='empty';
+  tr.innerHTML=`<td colspan="${cols}"><b>No data record</b>${tb.dataset.empty?`<span>${esc(tb.dataset.empty)}</span>`:''}</td>`; tb.append(tr); }
+function watchTables(){ document.querySelectorAll('tbody').forEach(tb=>{ if(tb._w) return; tb._w=1; new MutationObserver(()=>syncEmpty(tb)).observe(tb,{childList:true}); syncEmpty(tb); }); }
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const INK='#1f2b3a', HOST='https://town.mfardiansyah.id';
 const KCOL={github:'#dcae45',qa:'#2f8f6b',gaos:'#6f8fb3',site:'#b06a42'};
@@ -510,7 +531,7 @@ function fillFilters(){ const s=$('f-int'), v=s.value; s.innerHTML='<option valu
 const passes=ev=>(!$('f-int').value||ev.int===$('f-int').value)&&(!$('f-type').value||ev.type.startsWith($('f-type').value))&&(!$('f-st').value||ev.st===$('f-st').value)&&(!$('f-q').value||(ev.sum+ev.id+ev.type).toLowerCase().includes($('f-q').value.toLowerCase()));
 function evRow(ev,isNew){ const tr=document.createElement('tr'); tr.className='click'+(isNew?' new':''); tr.dataset.id=ev.id; const i=INTS.find(x=>x.id===ev.int);
   tr.innerHTML=`<td class="t" data-l="Time">${hhmmss(ev.at)}</td><td data-l="Integration"><span class="kind k-${ev.kind}" style="margin-right:6px"></span>${esc(i?i.name:ev.int)}</td><td class="t" data-l="Type">${esc(ev.type)}</td><td data-l="Summary">${esc(ev.sum)}</td><td data-l="Delivery"><span class="pill ${ev.st==='ok'?'ok':'bad'}"><i></i>${ev.st}</span></td>`; return tr; }
-function paintLog(){ const b=$('ev-body'); b.innerHTML=''; EVENTS.filter(passes).slice(0,80).forEach(ev=>b.append(evRow(ev))); if(!b.children.length) b.innerHTML='<tr><td colspan="5" class="muted">No delivery matches these filters. Clear a filter to see more.</td></tr>'; }
+function paintLog(){ const b=$('ev-body'); b.innerHTML=''; EVENTS.filter(passes).slice(0,80).forEach(ev=>b.append(evRow(ev))); }
 ['f-int','f-type','f-st'].forEach(id=>$(id).onchange=paintLog); $('f-q').oninput=paintLog;
 $('ev-pause').onclick=e=>{ paused=!paused; e.target.setAttribute('aria-pressed',paused); e.target.textContent=paused?'Resume stream':'Pause stream'; $('sse-pill').className='pill '+(paused?'off':'ok'); $('sse-pill').innerHTML='<i></i>'+(paused?'stream paused':'stream connected'); };
 $('ev-body').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-id]'); if(!tr) return; const ev=EVENTS.find(x=>x.id===tr.dataset.id); if(!ev) return; const i=INTS.find(x=>x.id===ev.int);
@@ -529,9 +550,11 @@ document.querySelector('[data-page=products]').addEventListener('click',e=>{ con
 document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(LIVE){ if(a){ const [kind,id]=a.split(':'); liveSave(kind,id,{alias:e.target.value.trim()},'Public name saved'); } if(h) liveSave('prod',h,{hall:e.target.value},h+' now shows at '+e.target.value); return; } if(a){ const [kind,id]=a.split(':'); (kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id)).alias=e.target.value.trim()||'Hidden'; paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
 
 /* ============================ settings ============================ */
-function paintDb(){ const rows=[['Integration (vertex)',INTS.length],['Org (vertex)',ORGS.length],['Product (vertex)',PRODUCTS.length],['Delivery (vertex)',14210+EVENTS.length],['Event (vertex)',13872+EVENTS.filter(e=>e.st==='ok').length],['PRODUCED (Delivery → Event)',13872+EVENTS.filter(e=>e.st==='ok').length],['ABOUT (Event → Product)',12950+EVENTS.filter(e=>e.st==='ok'&&e.kind!=='site').length],['User, Session (vertex)',3]];
+function paintDb(){ if(LIVE){ const c=liveStats, rows=c?[['Integration (vertex)',c.Integrations],['Org (vertex)',c.Orgs],['Product (vertex)',c.Products],['Event (vertex, newest 5,000)',c.Events],['Rejected deliveries',c.Rejected]]:[];
+    $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); return; }
+  const rows=[['Integration (vertex)',INTS.length],['Org (vertex)',ORGS.length],['Product (vertex)',PRODUCTS.length],['Delivery (vertex)',14210+EVENTS.length],['Event (vertex)',13872+EVENTS.filter(e=>e.st==='ok').length],['PRODUCED (Delivery → Event)',13872+EVENTS.filter(e=>e.st==='ok').length],['ABOUT (Event → Product)',12950+EVENTS.filter(e=>e.st==='ok'&&e.kind!=='site').length],['User, Session (vertex)',3]];
   $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); }
-$('save-svc').onclick=()=>toast('Saved. Events are kept '+$('keep').value+' days.');
+$('save-svc').onclick=async()=>{ if(LIVE){ const r=await apiCall('PUT','/api/admin/settings',{retentionDays:+$('keep').value,animation:!document.body.classList.contains('still')}); if(!r.ok) return toast(r.data&&r.data.error||'Could not save'); $('keep').value=r.data.retentionDays; } toast('Saved. Events are kept '+$('keep').value+' days.'); };
 $('motion').onclick=e=>{ const v=e.target.dataset.v; if(!v) return; document.body.classList.toggle('still',v==='off'); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v)); };
 $('pwform').onsubmit=e=>{ e.preventDefault(); if($('acc-p1').value!==$('acc-p2').value) return toast('The two passwords differ. Type the same one twice.'); toast('Account updated'); };
 
@@ -542,10 +565,10 @@ function ingest(ev){ const i=INTS.find(x=>x.id===ev.int); EVENTS.unshift(ev); if
     const dot=$('dot-'+i.id); if(dot){ dot.classList.remove('ping'); void dot.offsetWidth; dot.classList.add('ping'); } }
   else { i.err++; i.lastErr=ev.at; }
   paintTiles(); const tl=$('tail'); tl.prepend(tailRow(ev,true)); while(tl.children.length>14) tl.lastChild.remove();
-  if(passes(ev)){ const b=$('ev-body'); if(b.firstChild&&!b.firstChild.dataset.id) b.innerHTML=''; b.prepend(evRow(ev,true)); while(b.children.length>80) b.lastChild.remove(); } }
+  if(passes(ev)){ const b=$('ev-body'); b.querySelector(':scope>tr.empty')?.remove(); b.prepend(evRow(ev,true)); while(b.children.length>80) b.lastChild.remove(); } }
 function tick(){ if(!paused&&!LIVE&&!$('app').hidden){ const live=INTS.filter(i=>i.state==='ok'); if(live.length) ingest(makeEvent(pick(live))); } setTimeout(tick,rnd(700,2100)); }
 setInterval(()=>{ buckets.shift(); buckets.push(0); },10000);
-setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(i.last); }); drawChart(); paintDb(); },1000);
+setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(i.last); }); drawChart(); paintDb(); if(LIVE&&++statTick%5===0) refreshStats(); },1000);
 const ORDER=['dashboard','integrations','setup','events','products','prefs']; let curPage=null, swapT=0;
 const isStill=()=>document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
 function placeMark(){ const a=document.querySelector('#rail nav a[aria-current=page]'), m=$('navmark'); if(!a){ m.style.width='0'; return; } m.style.width=a.offsetWidth+'px'; m.style.height=a.offsetHeight+'px'; m.style.transform=`translate(${a.offsetLeft}px,${a.offsetTop}px)`; }
@@ -572,7 +595,8 @@ $('logout').onclick=()=>{ if(LIVE){ apiCall('POST','/api/admin/logout'); locatio
 
 /* ============================ live API (used when the back-office service answers) ============================ */
 /* Without the service (static hosting, file://) none of this runs and the sample-data demo works as before. */
-let LIVE=false;
+let LIVE=false, liveStats=null, statTick=0;
+async function refreshStats(){ const r=await apiCall('GET','/api/admin/stats'); if(r.ok){ liveStats=r.data; paintDb(); } }
 async function apiCall(method,path,body){ try{ const r=await fetch(path,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined}); const t=await r.text(); let data=null; try{ data=JSON.parse(t); }catch(_){ return {ok:false,status:r.status===401?401:0,data:null}; } return {ok:r.ok,status:r.status,data}; }catch(_){ return {ok:false,status:0,data:null}; } }
 const ms=t=>t&&!String(t).startsWith('0001')?Date.parse(t):0;
 function mapInt(i){ const last=ms(i.lastEventAt), rej=ms(i.lastRejectedAt); return {id:i.id,kind:i.kind,name:i.name,org:i.org||'',hint:i.tokenHint,state:last?'ok':'waiting',today:i.today||0,err:i.errors||0,last,lastErr:rej}; }
@@ -584,6 +608,8 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   if(!a.ok||!b.ok||!c.ok) throw new Error('api'); INTS.splice(0,INTS.length,...a.data.map(mapInt)); applyProducts(b.data); EVENTS.splice(0,EVENTS.length,...c.data.map(mapEv));
   stats.events=EVENTS.filter(e=>e.st==='ok').length; stats.opened=stats.closed=stats.qaRuns=stats.qaFail=stats.tasks=stats.posts=0;
   EVENTS.forEach(e=>{ if(e.st!=='ok') return; if(e.type==='qa.run.finished'){ stats.qaRuns++; if(e.data.data&&e.data.data.failed) stats.qaFail++; } if(e.kind==='gaos'&&e.type==='task.done') stats.tasks++; if(e.kind==='site') stats.posts++; });
+  const st=await apiCall('GET','/api/admin/settings'); if(st.ok){ $('keep').value=st.data.retentionDays; document.body.classList.toggle('still',!st.data.animation); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='on')===st.data.animation)); }
+  $('svc-addr').textContent=location.origin; $('svc-pub').textContent=location.origin+'/events'; $('svc-adm').textContent=location.origin+'/admin/events'; await refreshStats();
   $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;
   const types=['product.upserted','task.created','task.moved','gate.requested','gate.decided','task.claimed','task.qa','task.done','task.failed','qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit'];
@@ -608,7 +634,7 @@ async function liveTest(i){ if(i.kind==='github'){ toast('GitHub webhooks are no
 
 /* boot */
 for(let n=0;n<26;n++){ const ev=makeEvent(pick(INTS.filter(i=>i.state==='ok'))); ev.at=Date.now()-(26-n)*4200; EVENTS.unshift(ev); }
-$('n-ev').textContent=EVENTS.length; paintTiles(true); EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); fillFilters(); paintIntegrations(); paintHealth(); paintDb(); paintLog();
+$('n-ev').textContent=EVENTS.length; paintTiles(true); EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); fillFilters(); paintIntegrations(); paintHealth(); paintDb(); paintLog(); watchTables();
 let inside=false; try{ inside=sessionStorage.getItem('bt-in')==='1'; }catch(_){}
 (async()=>{ const r=await apiCall('GET','/api/admin/session'); if(r.ok){ LIVE=true; $('who').textContent=r.data.email; try{ await loadLive(); inside=true; }catch(_){ LIVE=false; } } else if(r.status===401){ inside=false; } if(inside) enter(false); })();
 let last=performance.now(); (function frame(now){ const dt=Math.min(.05,(now-last)/1000); last=now; const still=document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
