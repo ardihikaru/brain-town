@@ -320,8 +320,8 @@ body.still #navmark{transition:none}
 #gh-pop-scrim{position:fixed;inset:0;background:rgba(31,43,58,.28);z-index:11;opacity:0;transition:opacity 200ms ease}
 #gh-pop-scrim.on{opacity:1;transition-duration:300ms}
 @media (max-width:600px){
-  .ghpop{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:80dvh;overflow:auto;overscroll-behavior:contain;border:0;border-top:1px solid var(--ink);border-radius:0;box-shadow:0 -6px 0 rgba(31,43,58,.08);padding:0 0 calc(14px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform 200ms var(--ease-drawer),opacity 200ms var(--ease-drawer),visibility 0s 200ms}
-  .ghpop.on{transform:none;transition:transform 300ms var(--ease-drawer),opacity 300ms var(--ease-drawer),visibility 0s}
+  .ghpop{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:80dvh;overflow:auto;overscroll-behavior:contain;border:0;border-top:1px solid var(--ink);border-radius:0;box-shadow:0 -6px 0 rgba(31,43,58,.08);padding:0 0 calc(14px + env(safe-area-inset-bottom));opacity:1;transform:translateY(100%);transition:transform 200ms var(--ease-drawer),visibility 0s 200ms}
+  .ghpop.on{transform:none;transition:transform 300ms var(--ease-drawer),visibility 0s}
   .ghpop-grab{display:block;position:absolute;top:6px;left:50%;width:36px;height:4px;margin-left:-18px;background:var(--rule);border-radius:2px}
   .ghpop-dl{grid-template-columns:minmax(0,1fr);gap:2px}
   .ghpop-dl dt{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:8px}
@@ -757,7 +757,7 @@ let ghMode='recommended';
 function ghTiles(i){ const ev=i.events||[]; if(!ev.length) return (ghMode==='all'?[...new Set(GH_EVENTS.map(e=>e.fig))]:['person','scroll','cart']).map(fig=>({fig,ghost:false}));
   const real=[...new Set(GH_EVENTS.filter(e=>ghHas(ev,e.id)).map(e=>e.fig))], ghost=[...new Set(GH_EVENTS.filter(e=>ghState(e.id,ev)==='missing').map(e=>e.fig))].filter(f=>!real.includes(f));
   return real.map(fig=>({fig,ghost:false})).concat(ghost.map(fig=>({fig,ghost:true}))); }
-function ghTileEl(t){ const f=document.createElement('figure'); f.className='ghtile'; f.dataset.key=t.fig+(t.ghost?':g':''); f.dataset.testid='gh-tile-'+t.fig; f.setAttribute('data-testid','gh-tile-'+t.fig); f.dataset.ghost=String(t.ghost);
+function ghTileEl(t){ const f=document.createElement('figure'); f.className='ghtile'; f.dataset.key=t.fig+(t.ghost?':g':''); f.setAttribute('data-testid','gh-tile-'+t.fig); f.dataset.ghost=String(t.ghost);
   f.innerHTML=ghFig(t.fig,72,54,true)+`<figcaption>${GH_CAP[t.fig]}${t.ghost?' · missing':''}</figcaption>`; return f; }
 function ghPreviewInit(i){ ghMode='recommended'; const p=$('gh-preview'); p.hidden=false; const neutral=!(i.events&&i.events.length);
   p.innerHTML=`<div class="row"><h3 class="grow">Preview in town</h3>${neutral?'<span class="switch" id="gh-preview-mode"><button type="button" aria-pressed="true" data-mode="recommended" data-testid="gh-preview-rec">Recommended</button><button type="button" aria-pressed="false" data-mode="all" data-testid="gh-preview-all">Everything</button></span>':''}</div><p class="small muted" id="gh-preview-note"></p><div class="ghtiles" id="gh-tiles"></div>`; ghPreviewPaint(false); }
@@ -770,10 +770,10 @@ function ghPreviewPaint(animate){ const i=su, p=$('gh-preview'); if(!i||!p||p.hi
   const old=new Map([...box.children].map(c=>[c.dataset.key,c])), fresh=[], nodes=ghTiles(i).map(t=>{ let el=old.get(t.fig+(t.ghost?':g':'')); if(!el){ el=ghTileEl(t); fresh.push(el); } return el; });
   box.replaceChildren(...nodes);
   if(animate&&!isStill()) fresh.forEach((el,n)=>el.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:200,delay:Math.min(n,8)*30,easing:'cubic-bezier(.23,1,.32,1)',fill:'backwards'})); }
-$('gh-preview').addEventListener('click',e=>{ const b=e.target.closest('[data-mode]'); if(!b||b.dataset.mode===ghMode) return; ghMode=b.dataset.mode; ghPreviewPaint(true); });
+$('gh-preview').addEventListener('click',e=>{ const b=e.target.closest('#gh-preview-mode button[data-mode]'); if(!b||b.dataset.mode===ghMode) return; ghMode=b.dataset.mode; ghPreviewPaint(true); });
 
 /* everything on the page that depends on the integration's events */
-function ghRepaint(animate){ const i=su; if(!i||i.kind!=='github'||!$('gh-events')) return; ghPaint(animate); ghPreviewPaint(animate);
+function ghRepaint(animate){ const i=su; if(!i||i.kind!=='github'||!$('gh-events')) return; ghPaint(animate); ghPreviewPaint(animate); if(ghp.open&&ghp.chip&&ghp.chip.isConnected) ghFillPop(ghp.chip.dataset.ev);
   $('su-steps').lastElementChild.classList.toggle('done',!!((i.events&&i.events.length)||i.last)); const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx; setWait(i); }
 
 /* popover (bottom sheet on phones) */
@@ -798,8 +798,9 @@ function ghPopClose(refocus){ if(!ghp.open) return; ghp.open=false; const pop=$(
   const done=()=>{ if(ghp.open) return; pop.hidden=true; sc.hidden=true; }; clearTimeout(ghp.t);
   if(isStill()) done(); else ghp.t=setTimeout(done,420);
   if(refocus&&chip) chip.focus(); }
-$('gh-pop').addEventListener('transitionend',e=>{ if(e.target===$('gh-pop')&&e.propertyName==='opacity'&&!ghp.open){ clearTimeout(ghp.t); $('gh-pop').hidden=true; $('gh-pop-scrim').hidden=true; } });
+$('gh-pop').addEventListener('transitionend',e=>{ if(e.target===$('gh-pop')&&(e.propertyName==='opacity'||e.propertyName==='transform')&&!ghp.open){ clearTimeout(ghp.t); $('gh-pop').hidden=true; $('gh-pop-scrim').hidden=true; } });
 $('gh-pop-close').onclick=()=>ghPopClose(true);
+$('gh-pop-close').addEventListener('keydown',e=>{ if(e.key!=='Tab'||ghMobile()||!ghp.open||!ghp.chip) return; const chips=[...document.querySelectorAll('#su-steps .ghc')], k=chips.indexOf(ghp.chip), cur=ghp.chip; e.preventDefault(); ghPopClose(false); const t=e.shiftKey?cur:chips[k+1]||cur; t.focus(); });
 $('gh-pop-scrim').addEventListener('click',()=>ghPopClose(true));
 $('gh-pop').addEventListener('focusout',e=>{ const n=e.relatedTarget; if(!ghp.open||ghMobile()||!n||$('gh-pop').contains(n)||n===ghp.chip) return; ghPopClose(false); });
 document.addEventListener('pointerdown',e=>{ if(ghp.open&&!ghMobile()&&!e.target.closest('#gh-pop,.ghc')) ghPopClose(false); });
@@ -813,10 +814,11 @@ function ghAfter(i,ping){ if(su!==i||curPage!=='setup'||!$('gh-events')) return;
 async function ghRefetch(i,ping){ const wait=2000-(Date.now()-(ghFetchAt[i.id]||0)); if(!ping&&wait>0){ if(!ghFetchT[i.id]) ghFetchT[i.id]=setTimeout(()=>{ ghFetchT[i.id]=0; ghRefetch(i,false); },wait); return; }
   ghFetchAt[i.id]=Date.now(); const r=await apiCall('GET','/api/admin/integrations'); if(!r.ok||!Array.isArray(r.data)) return; const m=r.data.find(x=>x.id===i.id); if(!m) return;
   const evs=m.events||[]; if(!ping&&evs.join()===(i.events||[]).join()) return; i.events=evs; ghAfter(i,ping); }
-function ghLive(e,i){ if(e.st!=='ok') return; if(e.type!=='ping'){ ghRefetch(i,false); return; }
+function ghLive(e,i){ if(e.st!=='ok') return; if(e.type!=='ping'&&(su!==i||curPage!=='setup')) return; if(e.type!=='ping'){ ghRefetch(i,false); return; }
   const evs=e.data&&e.data.data&&e.data.data.events; if(Array.isArray(evs)){ i.events=evs.slice(); ghAfter(i,true); } else ghRefetch(i,true); }
 
 /* github secret: never in the DOM before Show or Copy */
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') ghSecClear(); });
 const GH_PH='whsec_•••••••••••••••• (hidden)'; let ghSecT=0;
 const ghSecHTML=label=>`<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row"><input type="text" readonly value="" placeholder="${GH_PH}" id="su-sec" data-testid="su-sec" aria-label="Webhook secret, hidden"><button type="button" data-gh-show aria-pressed="false" data-testid="su-sec-show">Show</button><button type="button" data-gh-copy data-testid="su-sec-copy">Copy</button></div></div>`;
 function ghSecClear(){ clearTimeout(ghSecT); const f=$('su-sec'), b=document.querySelector('[data-gh-show]'); if(!f||!b) return; f.value=''; f.placeholder=GH_PH; f.setAttribute('aria-label','Webhook secret, hidden'); b.textContent='Show'; b.setAttribute('aria-pressed','false'); b.removeAttribute('aria-busy'); b.disabled=false; }
@@ -827,12 +829,13 @@ function ghSecFail(st){ if(st===503){ const row=$('su-sec-row'); if(!row||!su) r
 async function ghSecShow(b){ if(b.getAttribute('aria-pressed')==='true'){ ghSecClear(); return; }
   const i=su; b.setAttribute('aria-busy','true'); b.disabled=true; b.textContent='Loading…';
   try{ const s=await ghFetchSecret(), f=$('su-sec'); if(su!==i||!f||!b.isConnected) return; f.value=s; f.setAttribute('aria-label','Webhook secret'); b.textContent='Hide'; b.setAttribute('aria-pressed','true'); b.removeAttribute('aria-busy'); b.disabled=false; b.focus(); clearTimeout(ghSecT); ghSecT=setTimeout(ghSecClear,60000); }
-  catch(st){ if(su!==i||!b.isConnected) return; b.textContent='Show'; b.removeAttribute('aria-busy'); b.disabled=false; ghSecFail(typeof st==='number'?st:0); } }
+  catch(st){ if(su!==i||!b.isConnected) return; b.textContent='Show'; b.removeAttribute('aria-busy'); b.disabled=false; ghSecFail(typeof st==='number'?st:0); if(st!==503&&b.isConnected) b.focus(); } }
 async function ghSecCopy(){ const f=$('su-sec'); if(f&&f.value&&!f.value.includes('•')){ copy(f.value,'Webhook secret'); return; } let err=0;
-  try{ if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){ const p=ghFetchSecret().then(s=>new Blob([s],{type:'text/plain'}),e=>{ err=e; throw e; }); await navigator.clipboard.write([new ClipboardItem({'text/plain':p})]); }
-    else { const s=await ghFetchSecret(); await navigator.clipboard.writeText(s); }
+  let got=null;
+  try{ if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){ const p=ghFetchSecret().then(s=>{ got=s; return new Blob([s],{type:'text/plain'}); },e=>{ err=e; throw e; }); await navigator.clipboard.write([new ClipboardItem({'text/plain':p})]); }
+    else { const s=await ghFetchSecret(); got=s; await navigator.clipboard.writeText(s); }
     toast('Webhook secret copied'); }
-  catch(e){ ghSecFail(typeof err==='number'&&err?err:0); } }
+  catch(e){ if(got!==null){ const f2=$('su-sec'), b=document.querySelector('[data-gh-show]'); if(f2&&b&&b.isConnected){ f2.value=got; f2.setAttribute('aria-label','Webhook secret'); b.textContent='Hide'; b.setAttribute('aria-pressed','true'); clearTimeout(ghSecT); ghSecT=setTimeout(ghSecClear,60000); f2.focus(); f2.select(); } toast('Copy was blocked. Select the text and copy it by hand.'); } else ghSecFail(typeof err==='number'&&err?err:0); } }
 
 /* ============================ event log ============================ */
 function fillFilters(){ const s=$('f-int'), v=s.value; s.innerHTML='<option value="">All</option>'+INTS.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join(''); s.value=v; }
@@ -884,7 +887,7 @@ function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'das
   const pages=[...document.querySelectorAll('.page')], next=pages.find(p=>p.dataset.page===page), prev=curPage&&pages.find(p=>p.dataset.page===curPage);
   const dir=!prev?1:(Math.sign(ORDER.indexOf(page)-ORDER.indexOf(curPage))||1), dx=(dir*26)+'px';
   document.querySelectorAll('#rail nav a').forEach(a=>{ const on=a.getAttribute('href')==='#'+(page==='setup'?'integrations':page); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); placeMark();
-  $('drawer').classList.remove('on'); ghPopClose(false); clearTimeout(swapT);
+  $('drawer').classList.remove('on'); ghPopClose(false); ghSecClear(); clearTimeout(swapT);
   const swap=()=>{ pages.forEach(p=>p.classList.remove('on','leave','enter')); next.style.setProperty('--dx',dx); next.classList.add('on'); void next.offsetWidth; next.classList.add('enter'); curPage=page;
     if(page==='setup') openSetup(h.slice(6)); if(page==='integrations') paintIntegrations(); if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
     window.scrollTo(0,0); swapT=setTimeout(()=>next.classList.remove('enter'),1100); };
@@ -925,7 +928,7 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;
   const types=['product.upserted','task.created','task.moved','gate.requested','gate.decided','task.claimed','task.qa','task.done','task.failed','qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit','ping','issue.opened','issue.assigned','issue.closed','issue.labeled','issue.subissues','pr.opened','pr.merged','pr.closed','pr.reviewed','issue.commented','pr.checks','ci.run','repo.pushed','ref.created','ref.deleted','repo.labels','discussion.opened','discussion.answered','discussion.commented','repo.starred'];
-  const on=m=>{ if(paused||!m.data) return; const e=mapEv(JSON.parse(m.data)); const i=INTS.find(x=>x.id===e.int); if(!i||EVENTS.some(x=>x.id===e.id&&x.int===e.int)) return; if(i.state==='waiting') i.state='ok'; ingest(e); if(e.kind==='github') ghLive(e,i); paintIntegrations(); paintHealth(); };
+  const on=m=>{ if(paused||!m.data) return; const e=mapEv(JSON.parse(m.data)); const i=INTS.find(x=>x.id===e.int); if(!i||EVENTS.some(x=>x.id===e.id&&x.int===e.int)) return; if(i.state==='waiting') i.state='ok'; const first=!i.last; ingest(e); if(e.kind==='github'&&su===i&&curPage==='setup'&&e.st==='ok'){ first?wait.release():wait.add(i.kind); setWait(i); } if(e.kind==='github') ghLive(e,i); paintIntegrations(); paintHealth(); };
   types.forEach(t=>es.addEventListener(t,on)); es.addEventListener('message',on);
   es.onopen=()=>{ $('sse-pill').className='pill ok'; $('sse-pill').innerHTML='<i></i>stream connected'; };
   es.onerror=()=>{ $('sse-pill').className='pill bad'; $('sse-pill').innerHTML='<i></i>reconnecting'; }; }
