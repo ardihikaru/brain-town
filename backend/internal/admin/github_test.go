@@ -118,3 +118,21 @@ func TestIngestHandlerRejectsGithubBearer(t *testing.T) {
 		t.Error("empty bearer must not match a github integration")
 	}
 }
+
+// Reachable only by constructing the admin with no key: in non-prod the process makes an ephemeral key and in prod
+// startup fails without one (config.loadSecretKey), so a running server never serves this 503 itself.
+func TestGithubCreateWithoutKeyIs503(t *testing.T) {
+	st, _ := store.New(nil)
+	mux := http.NewServeMux()
+	admin.New(st, hub.New(), config.Config{AdminEmail: "a@x.id", AdminPassword: testPW, PublicURL: "http://x"}).Routes(mux)
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+	e := &env{st, t, srv, srv.Client()}
+	e.login()
+	if c, _, _ := e.do("POST", "/api/admin/integrations", "", `{"kind":"github","name":"GitHub"}`); c != 503 {
+		t.Errorf("want 503, got %d", c)
+	}
+	if len(st.Integrations()) != 0 {
+		t.Error("an integration was created without a key")
+	}
+}

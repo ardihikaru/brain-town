@@ -332,7 +332,7 @@ func TestCIRunKeepsLatestState(t *testing.T) {
 			last = ev
 		}
 	}
-	if d := last.Raw["data"].(M); d["status"] != "failed" || fmt.Sprint(d["jobs"]) != "map[done:1 failed:1 total:1]" {
+	if d := last.Raw["data"].(M); d["status"] != "failed" || fmt.Sprint(d["jobs"]) != "map[done:2 failed:1 total:2]" {
 		t.Errorf("final state: %v", d)
 	}
 	// A late job event cannot reopen a finished run inside one window.

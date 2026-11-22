@@ -336,9 +336,35 @@ func (st *Store) SetEvents(id string, events []string) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if i, ok := st.s.Integrations[id]; ok {
+		if len(events) > MaxIntegrationEvents {
+			events = events[:MaxIntegrationEvents]
+		}
 		i.Events = append([]string{}, events...)
 		st.qIntegration(i)
 	}
+}
+
+// MaxIntegrationEvents caps the events list kept on an integration.
+const MaxIntegrationEvents = 64
+
+// AddEvent records an X-GitHub-Event seen with a valid signature. It persists only when the list changes.
+func (st *Store) AddEvent(id, event string) {
+	if event == "" || event == "ping" || len(event) > 64 {
+		return
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i, ok := st.s.Integrations[id]
+	if !ok || len(i.Events) >= MaxIntegrationEvents {
+		return
+	}
+	for _, e := range i.Events {
+		if e == event {
+			return
+		}
+	}
+	i.Events = append(append([]string{}, i.Events...), event)
+	st.qIntegration(i)
 }
 
 // AdoptOrg sets the integration's org when it has none yet and reports the org now in effect.

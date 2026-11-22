@@ -365,3 +365,157 @@ func TestRateLimit(t *testing.T) {
 }
 
 func hubNew() *hub.Hub { return hub.New() }
+
+func TestEventsFromDeliveries(t *testing.T) {
+	e := newEnv(t, "")
+	evs := func() []string { i, _ := e.st.GetIntegration(e.id); return i.Events }
+	e.ok("ping", M{"hook": M{"events": []any{"issues", "push"}}})
+	e.send("star", "s1", M{"zen": "x"}) // ignored by the town, still proves the subscription
+	e.ok("issues", M{"action": "opened", "issue": issue(1, "t", nil), "repository": repo("hall", false)})
+	e.ok("issues", M{"action": "closed", "issue": issue(1, "t", nil), "repository": repo("hall", false)})
+	if got := fmt.Sprint(evs()); got != "[issues push star]" {
+		t.Errorf("events = %s", got)
+	}
+	// Duplicate delivery (409) still counts; a bad signature does not.
+	if c, _ := e.send("fork", "dup", M{"repository": repo("hall", false)}); c != 202 {
+		t.Fatal(c)
+	}
+	e.send("watch", "bad", M{}, hdr("X-Hub-Signature-256", "sha256=00"))
+	if got := fmt.Sprint(evs()); got != "[issues push star fork]" {
+		t.Errorf("events = %s", got)
+	}
+	// A new ping replaces the list, later deliveries add again.
+	e.ok("ping", M{"hook": M{"events": []any{"check_run"}}})
+	if got := fmt.Sprint(evs()); got != "[check_run]" {
+		t.Errorf("after ping: %s", got)
+	}
+	e.send("release", "r1", M{"action": "published"})
+	if got := fmt.Sprint(evs()); got != "[check_run release]" {
+		t.Errorf("after delivery: %s", got)
+	}
+	for n := 0; n < 80; n++ {
+		e.send(fmt.Sprintf("custom_%d", n), fmt.Sprintf("c%d", n), M{})
+	}
+	if n := len(evs()); n != store.MaxIntegrationEvents {
+		t.Errorf("cap: %d", n)
+	}
+}
+
+func TestPingPublishedLive(t *testing.T) {
+	e := newEnv(t, "")
+	ch, cancel := e.hub.Subscribe()
+	defer cancel()
+	e.ok("ping", M{"hook": M{"events": []any{"issues"}}})
+	select {
+	case ev := <-ch:
+		d, _ := ev.Raw["data"].(M)
+		if ev.Type != "ping" || ev.Delivery != store.OK || fmt.Sprint(d["events"]) != "[issues]" {
+			t.Errorf("published: %+v", ev)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("ping was not published on the hub")
+	}
+	if got := e.events("ping"); len(got) != 1 {
+		t.Errorf("stored pings: %d", len(got))
+	}
+}
+
+// ciJob sends one workflow_job delivery for run 900; ciRun a workflow_run one.
+func (e *env) ciJob(id int, action, concl string) {
+	e.n++
+	e.ok("workflow_job", M{"action": action, "workflow_job": M{"id": id, "run_id": 900, "workflow_name": "CI", "conclusion": concl}, "repository": repo("hall", false)})
+}
+
+func (e *env) ciRun(action, concl string) {
+	e.ok("workflow_run", M{"action": action, "workflow_run": M{"id": 900, "name": "CI", "conclusion": concl, "pull_requests": []any{M{"number": 4}}}, "repository": repo("hall", false)})
+}
+
+func (e *env) window() { e.clk.Advance(16 * time.Second); e.co.FlushDue() }
+
+func (e *env) lastCI() map[string]any {
+	var last store.Event
+	for _, ev := range e.events("ci.run") {
+		if ev.Seq > last.Seq {
+			last = ev
+		}
+	}
+	return last.Raw["data"].(M)
+}
+
+func TestCIStateSpansThreeWindows(t *testing.T) {
+	e := newEnv(t, "")
+	e.ciRun("requested", "")
+	e.ciJob(1, "queued", "")
+	e.ciJob(2, "queued", "")
+	e.ciJob(1, "queued", "") // redelivery of the same state does not double count
+	e.window()
+	if d := e.lastCI(); fmt.Sprint(d["jobs"]) != "map[done:0 failed:0 total:2]" || d["status"] != "queued" {
+		t.Errorf("window 1: %v", d)
+	}
+	e.ciJob(1, "in_progress", "")
+	e.ciJob(1, "completed", "success")
+	e.window()
+	if d := e.lastCI(); fmt.Sprint(d["jobs"]) != "map[done:1 failed:0 total:2]" || d["status"] != "running" || d["workflow"] != "CI" || d["pr"] != 4 {
+		t.Errorf("window 2: %v", d)
+	}
+	e.ciJob(2, "in_progress", "")
+	e.ciJob(2, "completed", "failure")
+	e.window()
+	if d := e.lastCI(); fmt.Sprint(d["jobs"]) != "map[done:2 failed:1 total:2]" || d["status"] != "failed" {
+		t.Errorf("window 3: %v", d)
+	}
+	if n := len(e.events("ci.run")); n != 3 {
+		t.Errorf("want 3 ci.run events, got %d", n)
+	}
+}
+
+func TestLoneCompletedKeepsCounts(t *testing.T) {
+	e := newEnv(t, "")
+	e.ciJob(1, "completed", "success")
+	e.ciJob(2, "completed", "success")
+	e.window()
+	e.ciRun("completed", "success") // alone in its window
+	e.window()
+	d := e.lastCI()
+	if fmt.Sprint(d["jobs"]) != "map[done:2 failed:0 total:2]" || d["status"] != "passed" || d["workflow"] != "CI" || d["pr"] != 4 {
+		t.Errorf("lone completed: %v", d)
+	}
+}
+
+func TestRunCacheIsBounded(t *testing.T) {
+	e := newEnv(t, "")
+	for n := 0; n < MaxRuns+50; n++ {
+		e.clk.Advance(time.Millisecond)
+		e.co.Add(base{Integration: e.id, Repo: "r", Delivery: fmt.Sprint(n), At: e.clk.Now()},
+			contrib{Type: "ci.run", Grouped: true, Subject: fmt.Sprint(n), Data: map[string]any{"run": n}, JobID: "j", JobStatus: "queued"})
+	}
+	if n := e.co.Runs(); n != MaxRuns {
+		t.Errorf("runs = %d, want %d", n, MaxRuns)
+	}
+	// The oldest runs were evicted, the newest are kept.
+	e.co.mu.Lock()
+	_, oldest := e.co.runs[e.id+"\x00r\x00"+"0"]
+	_, newest := e.co.runs[e.id+"\x00r\x00"+fmt.Sprint(MaxRuns+49)]
+	e.co.mu.Unlock()
+	if oldest || !newest {
+		t.Errorf("eviction order wrong: oldest kept=%v newest kept=%v", oldest, newest)
+	}
+	// Idle entries expire after an hour.
+	e.co.FlushAll()
+	e.clk.Advance(RunTTL + time.Minute)
+	e.co.FlushDue()
+	if n := e.co.Runs(); n != 0 {
+		t.Errorf("after TTL: %d", n)
+	}
+	// Job ids per run are bounded.
+	for j := 0; j < MaxJobsPerRun+40; j++ {
+		e.co.Add(base{Integration: e.id, Repo: "r", Delivery: "x", At: e.clk.Now()},
+			contrib{Type: "ci.run", Grouped: true, Subject: "big", Data: map[string]any{"run": 1}, JobID: fmt.Sprint(j), JobStatus: "passed"})
+	}
+	e.co.mu.Lock()
+	n := len(e.co.runs[e.id+"\x00r\x00big"].jobs)
+	e.co.mu.Unlock()
+	if n != MaxJobsPerRun {
+		t.Errorf("jobs per run = %d", n)
+	}
+}

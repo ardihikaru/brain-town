@@ -1,6 +1,8 @@
 package store
 
 import (
+	"context"
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -54,5 +56,38 @@ func TestBuildScriptPersistsGithubFields(t *testing.T) {
 	}
 	if p["p0_se"] != "sealed" || p["p0_ev"] != `["issues"]` {
 		t.Errorf("params: %v", p)
+	}
+}
+
+type nopPersister struct{}
+
+func (nopPersister) Init(context.Context) error             { return nil }
+func (nopPersister) Load(context.Context) (Snapshot, error) { return Snapshot{}, nil }
+func (nopPersister) Apply(context.Context, []Op) error      { return nil }
+
+func TestAddEventDedupeCapAndPersistOnChange(t *testing.T) {
+	st, err := New(nopPersister{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := st.CreateSecretIntegration("github", "GH", "", "sealed", "wxyz")
+	st.mu.Lock()
+	st.ops = nil
+	st.mu.Unlock()
+	st.AddEvent(i.ID, "issues")
+	st.AddEvent(i.ID, "issues")
+	st.AddEvent(i.ID, "ping")
+	st.AddEvent(i.ID, "")
+	if len(st.ops) != 1 {
+		t.Errorf("want 1 persisted change, got %d", len(st.ops))
+	}
+	if got, _ := st.GetIntegration(i.ID); !reflect.DeepEqual(got.Events, []string{"issues"}) {
+		t.Errorf("events: %v", got.Events)
+	}
+	for n := 0; n < 100; n++ {
+		st.AddEvent(i.ID, fmt.Sprintf("e%d", n))
+	}
+	if got, _ := st.GetIntegration(i.ID); len(got.Events) != MaxIntegrationEvents {
+		t.Errorf("cap: %d", len(got.Events))
 	}
 }

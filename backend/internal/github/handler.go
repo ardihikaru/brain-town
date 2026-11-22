@@ -87,6 +87,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 429, "slow down", "")
 		return
 	}
+	if event != "ping" {
+		h.St.AddEvent(iid, event) // a valid signature proves the event is delivered, so it is subscribed
+	}
 	if !known[event] {
 		reply(w, 202, ignored, "")
 		return

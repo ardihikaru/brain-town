@@ -23,12 +23,28 @@ type base struct {
 
 type rollup struct {
 	base
-	typ       string
-	task      map[string]any
-	data      map[string]any
-	jobs      map[string]string // ci.run: job id -> queued|running|passed|failed
-	runStatus string            // ci.run: from workflow_run
-	opened    time.Time         // coalescer clock when the window started
+	typ    string
+	task   map[string]any
+	data   map[string]any
+	run    *runState // ci.run: the per-run state shared across windows
+	opened time.Time // coalescer clock when the window started
+}
+
+const (
+	// MaxRuns bounds the per-run CI state cache; entries unseen for RunTTL are dropped.
+	MaxRuns = 1000
+	RunTTL  = time.Hour
+	// MaxJobsPerRun bounds the job ids remembered for one run; further new jobs are not counted.
+	MaxJobsPerRun = 256
+)
+
+// runState is what the town knows about one CI run across rollup windows.
+type runState struct {
+	status   string            // from workflow_run: queued|running|passed|failed ("" until seen)
+	jobs     map[string]string // job id -> queued|running|passed|failed (idempotent per id)
+	pr       any
+	workflow string
+	seen     time.Time
 }
 
 // Coalescer merges grouped deliveries for one window and flushes each rollup as one stored event.
@@ -43,6 +59,7 @@ type Coalescer struct {
 
 	mu   sync.Mutex
 	open map[string]*rollup
+	runs map[string]*runState
 }
 
 func NewCoalescer(st *store.Store, h *hub.Hub, window time.Duration, max int, now func() time.Time) *Coalescer {
@@ -55,7 +72,7 @@ func NewCoalescer(st *store.Store, h *hub.Hub, window time.Duration, max int, no
 	if now == nil {
 		now = time.Now
 	}
-	return &Coalescer{St: st, Hub: h, Window: window, Max: max, Now: now, Tick: time.Second, open: map[string]*rollup{}}
+	return &Coalescer{St: st, Hub: h, Window: window, Max: max, Now: now, Tick: time.Second, open: map[string]*rollup{}, runs: map[string]*runState{}}
 }
 
 // Add merges one delivery into its rollup, opening it when needed. Nothing here waits for the database.
@@ -68,8 +85,11 @@ func (c *Coalescer) Add(b base, ct contrib) {
 		if len(c.open) >= c.Max {
 			evict = c.takeOldest()
 		}
-		r = &rollup{base: b, typ: ct.Type, data: map[string]any{}, jobs: map[string]string{}, opened: c.Now()}
+		r = &rollup{base: b, typ: ct.Type, data: map[string]any{}, opened: c.Now()}
 		c.open[key] = r
+	}
+	if ct.Type == "ci.run" {
+		r.run = c.runFor(b.Integration + "\x00" + b.Repo + "\x00" + ct.Subject)
 	}
 	r.Hidden = r.Hidden || b.Hidden
 	r.merge(ct)
@@ -78,6 +98,43 @@ func (c *Coalescer) Add(b base, ct contrib) {
 		c.emit(evict)
 	}
 }
+
+// runFor returns the cached state of a run, creating it (and evicting) as needed. Caller holds c.mu.
+func (c *Coalescer) runFor(key string) *runState {
+	now := c.Now()
+	if rs, ok := c.runs[key]; ok {
+		rs.seen = now
+		return rs
+	}
+	if len(c.runs) >= MaxRuns {
+		c.expireRuns(now)
+	}
+	if len(c.runs) >= MaxRuns {
+		oldest, ok := "", false
+		var ot time.Time
+		for k, rs := range c.runs {
+			if !ok || rs.seen.Before(ot) {
+				oldest, ot, ok = k, rs.seen, true
+			}
+		}
+		delete(c.runs, oldest)
+	}
+	rs := &runState{jobs: map[string]string{}, seen: now}
+	c.runs[key] = rs
+	return rs
+}
+
+// expireRuns drops runs not seen for RunTTL. Caller holds c.mu.
+func (c *Coalescer) expireRuns(now time.Time) {
+	for k, rs := range c.runs {
+		if now.Sub(rs.seen) >= RunTTL {
+			delete(c.runs, k)
+		}
+	}
+}
+
+// Runs reports the number of cached CI runs.
+func (c *Coalescer) Runs() int { c.mu.Lock(); defer c.mu.Unlock(); return len(c.runs) }
 
 func (c *Coalescer) takeOldest() *rollup {
 	var ok string
@@ -99,6 +156,7 @@ func (c *Coalescer) FlushDue() {
 	now := c.Now()
 	var due []*rollup
 	c.mu.Lock()
+	c.expireRuns(now)
 	for k, r := range c.open {
 		if now.Sub(r.opened) >= c.Window {
 			due = append(due, r)
@@ -156,18 +214,39 @@ func (r *rollup) merge(ct contrib) {
 	if ct.Task != nil {
 		r.task = ct.Task
 	}
-	if ct.JobID != "" {
-		r.jobs[ct.JobID] = ct.JobStatus
+	rs := r.run
+	if rs == nil {
+		return
 	}
-	if ct.RunStatus != "" && r.runStatus != "passed" && r.runStatus != "failed" {
-		r.runStatus = ct.RunStatus
+	if w, _ := ct.Data["workflow"].(string); w != "" {
+		rs.workflow = w
+	}
+	if pr, ok := ct.Data["pr"]; ok {
+		rs.pr = pr
+	}
+	if ct.JobID != "" {
+		if _, known := rs.jobs[ct.JobID]; known || len(rs.jobs) < MaxJobsPerRun {
+			rs.jobs[ct.JobID] = ct.JobStatus
+		}
+	}
+	if ct.RunStatus != "" && rs.status != "passed" && rs.status != "failed" {
+		rs.status = ct.RunStatus
 	}
 }
 
-// ciState derives the run status and job counts from what the rollup saw.
-func (r *rollup) ciState() {
-	total, done, failed, running := len(r.jobs), 0, 0, 0
-	for _, s := range r.jobs {
+// ciState derives the run status and job counts from the whole run seen so far, not only this window.
+func (c *Coalescer) ciState(r *rollup) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	rs := r.run
+	if rs.workflow != "" {
+		r.data["workflow"] = rs.workflow
+	}
+	if rs.pr != nil {
+		r.data["pr"] = rs.pr
+	}
+	total, done, failed, running := len(rs.jobs), 0, 0, 0
+	for _, s := range rs.jobs {
 		switch s {
 		case "passed":
 			done++
@@ -178,7 +257,7 @@ func (r *rollup) ciState() {
 			running++
 		}
 	}
-	status := r.runStatus
+	status := rs.status
 	if status != "passed" && status != "failed" {
 		switch {
 		case total > 0 && done == total && failed > 0:
@@ -215,8 +294,8 @@ func envelope(id, typ, org, repo string, hidden bool, at time.Time, task, data m
 }
 
 func (c *Coalescer) emit(r *rollup) {
-	if r.typ == "ci.run" {
-		r.ciState()
+	if r.typ == "ci.run" && r.run != nil {
+		c.ciState(r)
 	}
 	id := "gh-roll-" + r.Delivery
 	vis := ""
