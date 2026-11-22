@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" role="img" aria-label="Brain Town">
+  <rect width="16" height="16" rx="3.5" fill="#f6f7f1"/>
+  <path d="M3 10.5l7 3.5V9L3 5.5z" fill="#1f2b3a"/>
+  <path d="M10 14l4-2V7l-2-1.5L10 9z" fill="#647282"/>
+  <path d="M2 6l8 4 2.5-5-8-4z" fill="#6f8fb3"/>
+</svg>

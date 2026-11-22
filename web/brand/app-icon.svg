@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Brain Town">
+  <title>Brain Town: app icon (full bleed, the OS applies the corner mask)</title>
+  <rect width="64" height="64" fill="#f6f7f1"/>
+  <g transform="translate(4.5 4.5) scale(.86)">
+  <path d="M5 41l34 17 20-10-34-17z" fill="#1f2b3a" fill-opacity=".08"/>
+  <g stroke="#1f2b3a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M11 41l28 14V39L11 25z" fill="#fbfcf8"/>
+    <path d="M39 55l14-7V32l-7-6.5-7 13.5z" fill="#dee1df"/>
+    <path d="M8 26l32 16 8-15.5-32-16z" fill="#c8472f"/>
+  </g>
+  <path d="M14 31.5l5 2.5v7l-5-2.5zM22 35.5l5 2.5v7l-5-2.5z" fill="#1f2b3a"/>
+  <g stroke="#1f2b3a" stroke-width="1.5" stroke-linejoin="round">
+    <path class="bt-win" d="M30 39.5l5 2.5v7l-5-2.5z" fill="#ffd66b"/>
+    <path class="bt-spark" d="M51 5.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7z" fill="#ffd66b"/>
+  </g>
+  </g>
+</svg>

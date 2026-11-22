@@ -72,3 +72,11 @@ per-platform contracts are in [`integrations/`](integrations/).
 4. **Public content only.** Drafts, private repos and hidden products stay out unless made
    visible in the back-office.
 5. **No personal data.** Visits carry a page and a two-letter country code, nothing else.
+
+## Brand
+
+The mark (the Lit hall) has three treatments, one per surface: Day for the live town, Demo for
+the simulated town and Night for the back-office. The town page shows Demo until the `/events`
+stream opens, then switches its tab icon and header mark to Day. Sources, rasters and usage rules
+are in [`web/brand/`](../web/brand/README.md); nginx serves them from `/brand/`, plus
+`/favicon.ico` and `/apple-touch-icon.png` at the root.

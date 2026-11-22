@@ -4,6 +4,20 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Brain Town</title>
+<meta name="theme-color" content="#e9ede8">
+<meta name="description" content="A town inside my head. Every walker is one of my agents carrying a piece of work.">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3.5' fill='%23f6f7f1'/%3E%3Cpath d='M3 10.5l7 3.5V9L3 5.5z' fill='%231f2b3a'/%3E%3Cpath d='M10 14l4-2V7l-2-1.5L10 9z' fill='%23647282'/%3E%3Cpath d='M2 6l8 4 2.5-5-8-4z' fill='%236f8fb3'/%3E%3C/svg%3E" data-day="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3.5' fill='%23f6f7f1'/%3E%3Cpath d='M3 10.5l7 3.5V9L3 5.5z' fill='%231f2b3a'/%3E%3Cpath d='M10 14l4-2V7l-2-1.5L10 9z' fill='%23647282'/%3E%3Cpath d='M2 6l8 4 2.5-5-8-4z' fill='%23c8472f'/%3E%3Cpath d='M5 8l3 1.5v2.5l-3-1.5z' fill='%23ffd66b'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Brain Town">
+<meta property="og:title" content="Brain Town">
+<meta property="og:description" content="A town inside my head. Every walker is one of my agents carrying a piece of work.">
+<meta property="og:url" content="https://town.mfardiansyah.id/">
+<meta property="og:image" content="https://town.mfardiansyah.id/brand/og.png">
+<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Brain Town: an isometric ink hall with one lit window">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://town.mfardiansyah.id/brand/og.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -35,7 +49,7 @@ button[aria-pressed="true"]{background:var(--ink);color:var(--ground)}
 button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 #head{top:16px;left:16px;padding:12px 14px;max-width:min(430px,calc(100% - 32px))}
-#head h1{font-family:var(--font-display);font-weight:700;font-size:26px;line-height:1;margin:0;letter-spacing:-.01em}
+#head h1{font-family:var(--font-display);font-weight:700;font-size:26px;line-height:1;margin:0;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
 #head p{margin:5px 0 10px;color:var(--ink-soft);font-size:13px;line-height:1.4}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 #clock{font-family:var(--font-mono);font-size:12px;font-variant-numeric:tabular-nums;margin-right:4px}
@@ -85,7 +99,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #head-toggle{position:absolute;top:10px;right:10px;font-size:11.5px;padding:2px 8px}
 #head.min{padding:5px}
 #head.min>*:not(#head-toggle){display:none}
-#head.min #head-toggle{position:static;border:0;font-family:var(--font-display);font-weight:700;font-size:14px;padding:4px 8px}
+#head.min #head-toggle{position:static;border:0;font-family:var(--font-display);font-weight:700;font-size:14px;padding:4px 8px;display:inline-flex;align-items:center;gap:7px}
+.bt-mark{flex:none;display:block}
+.bt-mark .bt-live{transition:opacity 200ms ease}
+.bt-mark[data-mode="demo"] .bt-live{opacity:0}
+#head-toggle .bt-mini{display:none}
+#head.min #head-toggle .bt-mini{display:block}
 #card-actions{margin-top:10px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 #card-link{color:var(--ink);font-size:13px;font-weight:500;text-underline-offset:3px;overflow-wrap:anywhere}
 #card-open{background:var(--ink);color:var(--ground);font-size:13px;padding:5px 11px}
@@ -161,7 +180,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   #detail{inset:8px}
 
   #head{padding:10px 12px}
-  #head h1{font-size:21px}
+  #head h1{font-size:21px;gap:8px}
+  #head h1 .bt-mark{width:24px;height:24px}
   #head p{display:none}
   .stats{grid-template-columns:repeat(3,auto);gap:2px 12px}
   #feed{top:auto;bottom:112px;right:16px;left:16px;width:auto;max-height:34%}
@@ -177,8 +197,28 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <canvas id="town" aria-label="Isometric ink drawing of Brain Town with agents walking between districts"></canvas>
 
 <section class="panel" id="head">
-  <button id="head-toggle" aria-expanded="true">Hide</button>
-  <h1>Brain Town</h1>
+  <button id="head-toggle" aria-expanded="true"><svg class="bt-mark bt-mini" data-mode="demo" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">
+    <path d="M3 10.5l7 3.5V9L3 5.5z" fill="#1f2b3a"/>
+    <path d="M10 14l4-2V7l-2-1.5L10 9z" fill="#647282"/>
+    <path d="M2 6l8 4 2.5-5-8-4z" fill="#6f8fb3"/>
+    <path class="bt-live" d="M2 6l8 4 2.5-5-8-4z" fill="#c8472f"/>
+    <path class="bt-live" d="M5 8l3 1.5v2.5l-3-1.5z" fill="#ffd66b"/>
+  </svg><span>Hide</span></button>
+  <h1><svg class="bt-mark" data-mode="demo" viewBox="4 4 56 56" width="32" height="32" aria-hidden="true" focusable="false">
+    <path d="M5 41l34 17 20-10-34-17z" fill="#1f2b3a" fill-opacity=".08"/>
+    <g stroke="#1f2b3a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+      <path d="M11 41l28 14V39L11 25z" fill="#fbfcf8"/>
+      <path d="M39 55l14-7V32l-7-6.5-7 13.5z" fill="#dee1df"/>
+      <path d="M8 26l32 16 8-15.5-32-16z" fill="#6f8fb3"/>
+      <path class="bt-live" d="M8 26l32 16 8-15.5-32-16z" fill="#c8472f"/>
+    </g>
+    <path d="M14 31.5l5 2.5v7l-5-2.5zM22 35.5l5 2.5v7l-5-2.5zM30 39.5l5 2.5v7l-5-2.5z" fill="#1f2b3a"/>
+    <g stroke="#1f2b3a" stroke-width="1.5" stroke-linejoin="round">
+      <path class="bt-live" d="M30 39.5l5 2.5v7l-5-2.5z" fill="#ffd66b"/>
+      <path d="M51 5.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7z" fill="#fbfcf8"/>
+      <path class="bt-live" d="M51 5.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7z" fill="#ffd66b"/>
+    </g>
+  </svg>Brain Town</h1>
   <p>A town inside my head. Every walker is one of my agents carrying a piece of work.</p>
   <div class="row">
     <span id="clock">Day 1 · 07:00</span>
@@ -1194,7 +1234,14 @@ const Sim={ vis:0, active:0,
    itself and resends Last-Event-ID, so the server can replay what was missed. */
 const LIVE_TYPES=['product.upserted','task.created','task.moved','task.claimed','task.qa','task.done','task.failed','gate.requested','gate.decided',
   'qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit'];
-const modeEl=document.getElementById('mode'), setMode=t=>{ modeEl.innerHTML='<i></i>'+t; };
+const modeEl=document.getElementById('mode');
+let btMode='demo';
+function setBrand(m){ if(m===btMode) return; btMode=m;
+  document.querySelectorAll('.bt-mark[data-mode]').forEach(s=>{ s.dataset.mode=m; });
+  const old=document.querySelector('link[rel="icon"]'); if(!old) return;
+  if(!old.dataset.demo) old.dataset.demo=old.getAttribute('href');
+  const l=old.cloneNode(); l.href=m==='day'?old.dataset.day:old.dataset.demo; old.replaceWith(l); }
+const setMode=t=>{ modeEl.innerHTML='<i></i>'+t; if(t==='live SSE') setBrand('day'); else if(t==='simulated') setBrand('demo'); };
 function connectLive(url,onFail){ let opened=false, es;
   try{ es=new EventSource(url); }catch(_){ if(onFail) onFail(); return null; }
   const onMsg=e=>{ let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
@@ -1346,7 +1393,7 @@ function showCard(b){ sel=b; $('card').classList.add('on'); $('card-where').text
   if(b.detail){ O.textContent=b.detail.label; O.onclick=b.detail.open; O.style.display=''; } else O.style.display='none';
   $('card-actions').style.display=(b.link||b.detail)?'':'none'; }
 const headEl=$('head'), headBtn=$('head-toggle');
-function setHead(min){ headEl.classList.toggle('min',min); headBtn.textContent=min?'Brain Town':'Hide'; headBtn.setAttribute('aria-expanded',!min); headBtn.title=min?'Show the title panel':'Hide the title panel'; try{ localStorage.setItem('bt-head',min?'1':'0'); }catch(_){} }
+function setHead(min){ headEl.classList.toggle('min',min); headBtn.querySelector('span').textContent=min?'Brain Town':'Hide'; headBtn.setAttribute('aria-expanded',!min); headBtn.title=min?'Show the title panel':'Hide the title panel'; try{ localStorage.setItem('bt-head',min?'1':'0'); }catch(_){} }
 headBtn.onclick=()=>setHead(!headEl.classList.contains('min'));
 try{ if(localStorage.getItem('bt-head')==='1') setHead(true); }catch(_){}
 $('card-x').onclick=()=>{ sel=null; $('card').classList.remove('on'); };
