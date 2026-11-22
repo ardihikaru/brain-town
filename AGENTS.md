@@ -16,7 +16,12 @@ Role briefs are in `.claude/agents/`, design/motion skills in `.claude/skills/*/
 markdown, Emil Kowalski, MIT). Full rule: `.claude/rules/agents-and-models.md`.
 - Analysis, planning, design and review run on the strongest reasoning model (Claude: Opus 5.5).
   Roles: lead engineer (coordinates all coding, including parallel workers), frontend designer.
-- Coding runs on a Sonnet-class model (Claude: Sonnet 5.5). Roles: frontend engineer, backend engineer.
+- Coding runs on a Sonnet-class model (Claude: Sonnet 5.5). Roles: frontend engineer, backend engineer,
+  E2E engineer (all E2E automation and stress-test code is written on this tier, never higher).
+- Running the E2E suite or stress tests only (no code changes) runs on the smallest fast model
+  (Claude: Haiku 5.5). Role: E2E runner. It always shuts the local stack down afterwards.
+- The lead engineer and the E2E agents work both ways: the lead assigns E2E units and runs; the E2E
+  agents report app bugs, needed app hooks and approval-gated e2e changes back to the lead.
 - Frontend work always follows designer spec → engineer → designer review. Project rules beat skill
   advice: no frameworks or npm libraries; CSS/WAAPI/vanilla JS; respect `prefers-reduced-motion`.
 - Parallel work: one branch and worktree per unit under `.claude/worktrees/`, reviewed by the lead.

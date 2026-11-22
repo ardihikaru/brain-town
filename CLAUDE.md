@@ -13,8 +13,9 @@ are binding.
 - `docs/` — architecture, deployment, integration contracts (`docs/integrations/*.md`).
 - `deploy/` — nginx image, site config, edge vhost reference (live edge config is on `clino`).
 - `backend/` — Go back-office service (ingest, admin API, SSE). Added in a later PR.
-- `.claude/agents/` — lead-engineer, frontend-designer (Opus 5.5); frontend-engineer, backend-engineer
-  (Sonnet 5.5). `.claude/skills/` — Emil Kowalski design/motion skills (vendored, see `UPSTREAM.md`).
+- `.claude/agents/` — lead-engineer, frontend-designer (Opus 5.5); frontend-engineer, backend-engineer,
+  e2e-engineer (Sonnet 5.5); e2e-runner (Haiku 5.5, runs E2E/stress tests only).
+  `.claude/skills/` — Emil Kowalski design/motion skills (vendored, see `UPSTREAM.md`).
 
 ## Ground rules
 - Frontend stays **no build step**: single HTML files, inline CSS/JS, no framework or bundler.
