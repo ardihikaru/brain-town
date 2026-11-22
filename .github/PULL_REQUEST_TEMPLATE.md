@@ -10,9 +10,6 @@
 ## Screenshots
 <!-- For visual changes; otherwise "N/A" -->
 
-## Task manager
-- [ ] Task manager: <!-- code / link -->
-
 ## Cross-repo dependencies
 <!-- GAOS / QA tool / mfardiansyah.id changes needed; "Tidak ada" if none -->
 
