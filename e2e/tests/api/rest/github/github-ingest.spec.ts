@@ -7,6 +7,7 @@ import {
   GithubIgnoredSchema,
   GithubSkippedSchema,
 } from '@api/rest/github/github.schemas';
+import { githubFormBody } from '@api/rest/github/github.client';
 import { setupGithub } from '@api/rest/github/github.setup';
 import {
   buildGithubScope,
@@ -145,18 +146,62 @@ test.describe('ingest · github webhook', () => {
   );
 
   test(
-    'a form-encoded delivery is refused (415) (TC-ING-054)',
+    'a signed form-encoded delivery is accepted (202) and stored like a JSON one (TC-ING-054)',
+    { tag: [Tag.smoke] },
+    async ({ apiContextFor, adminApi, cleanup }) => {
+      const { github, target } = await setupGithub({ apiContextFor, adminApi, cleanup });
+      const scope = buildGithubScope();
+      const issue = buildIssue();
+      const delivery = uniqueId('delivery');
+
+      const response = await github.send(
+        target.ingestPath,
+        'issues',
+        githubFormBody(buildIssuesEvent(scope, 'opened', issue)),
+        { secret: target.secret, delivery, contentType: 'application/x-www-form-urlencoded' },
+      );
+
+      await expectJson(response, GithubAcceptedSchema, 202);
+      const events = await expectJson(await adminApi.events({ integration: target.id }), AdminEventListSchema);
+      expect(events.map((e) => e.type)).toEqual(['issue.opened']);
+      expect(events.map((e) => e.id)).toEqual([`gh-${delivery}`]);
+      expect(GithubEnvelopeSchema.parse(events[0]?.raw)).toMatchObject({
+        org: scope.org,
+        product: { key: scope.repo },
+        task: { id: String(issue.number), title: issue.title, kind: 'issue' },
+      });
+    },
+  );
+
+  test(
+    'a signed form-encoded delivery without a payload field is refused (422, field payload) (TC-ING-064)',
     { tag: [Tag.regression] },
     async ({ apiContextFor, adminApi, cleanup }) => {
       const { github, target } = await setupGithub({ apiContextFor, adminApi, cleanup });
-      const json = JSON.stringify(buildIssuesEvent(buildGithubScope(), 'opened'));
 
-      // Signed correctly: the signature is checked before the content type.
-      const response = await github.send(target.ingestPath, 'issues', `payload=${encodeURIComponent(json)}`, {
+      const response = await github.send(target.ingestPath, 'issues', `other=${uniqueId('value')}`, {
         secret: target.secret,
         delivery: uniqueId('delivery'),
         contentType: 'application/x-www-form-urlencoded',
       });
+
+      await expectError(response, 422, 'payload');
+    },
+  );
+
+  test(
+    'a signed delivery of another content type is refused (415) (TC-ING-065)',
+    { tag: [Tag.regression] },
+    async ({ apiContextFor, adminApi, cleanup }) => {
+      const { github, target } = await setupGithub({ apiContextFor, adminApi, cleanup });
+
+      // Signed correctly: the signature is checked before the content type.
+      const response = await github.send(
+        target.ingestPath,
+        'issues',
+        JSON.stringify(buildIssuesEvent(buildGithubScope(), 'opened')),
+        { secret: target.secret, delivery: uniqueId('delivery'), contentType: 'text/plain' },
+      );
 
       await expectError(response, 415);
     },

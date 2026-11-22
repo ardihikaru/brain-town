@@ -11,6 +11,7 @@ import (
 	"io"
 	"mime"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -89,8 +90,23 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 401, "signature missing or wrong", "")
 		return
 	}
-	if mt, _, err := mime.ParseMediaType(r.Header.Get("Content-Type")); err != nil || mt != "application/json" {
-		reply(w, 415, "Content-Type must be application/json", "")
+	// The signature covers the raw body; only then pick the JSON by media type. GitHub's default content type is
+	// form-encoded, with the JSON URL-encoded in one "payload" field.
+	mt, _, _ := mime.ParseMediaType(r.Header.Get("Content-Type"))
+	switch mt {
+	case "application/json":
+	case "application/x-www-form-urlencoded":
+		form, err := url.ParseQuery(string(body))
+		payload := form.Get("payload")
+		if err != nil || payload == "" {
+			h.reject(iid, event, 422, "form body has no payload field")
+			reply(w, 422, "form body has no payload field", "payload")
+			return
+		}
+		body = []byte(payload)
+	default:
+		h.reject(iid, event, 415, "Content-Type must be application/json or application/x-www-form-urlencoded")
+		reply(w, 415, "Content-Type must be application/json or application/x-www-form-urlencoded", "")
 		return
 	}
 	if event == "" {

@@ -12,13 +12,18 @@ export interface GithubSendOptions {
   signature?: string;
   /** Sends no X-Hub-Signature-256 header at all. */
   unsigned?: boolean;
-  /** Defaults to application/json; GitHub's other choice is application/x-www-form-urlencoded (415). */
+  /** Defaults to application/json; GitHub's default is application/x-www-form-urlencoded (see `githubFormBody`); other types are 415. */
   contentType?: string;
 }
 
 /** "sha256=" + hex HMAC-SHA256 of the raw body, as GitHub computes X-Hub-Signature-256. */
 export function signGithubBody(secret: string, rawBody: string): string {
   return `sha256=${createHmac('sha256', secret).update(rawBody).digest('hex')}`;
+}
+
+/** GitHub's form-encoded delivery: the event JSON in the `payload` field. Sign this exact string. */
+export function githubFormBody(event: unknown): string {
+  return `payload=${encodeURIComponent(JSON.stringify(event))}`;
 }
 
 /**
@@ -30,7 +35,7 @@ export class GithubClient extends BaseApiClient {
     super(request, restServices.ingest.baseURL);
   }
 
-  /** `body` is JSON-encoded unless it is already a string (used for the form-encoded 415 case). */
+  /** `body` is JSON-encoded unless it is already a string (form-encoded and text/plain cases). */
   send(path: string, event: string, body: unknown, options: GithubSendOptions): Promise<APIResponse> {
     const raw = typeof body === 'string' ? body : JSON.stringify(body);
     const headers: Record<string, string> = {

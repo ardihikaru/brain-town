@@ -11,6 +11,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -215,8 +216,21 @@ func TestBadKeyIs503(t *testing.T) {
 func TestContentTypeBodyAndHeaders(t *testing.T) {
 	e := newEnv(t, "")
 	p := M{"action": "opened", "issue": issue(1, "t", nil), "repository": repo("r", false)}
-	if c, _ := e.send("issues", "a", p, hdr("Content-Type", "application/x-www-form-urlencoded")); c != 415 {
-		t.Errorf("form: want 415 got %d", c)
+	form := func(v url.Values) []byte { return []byte(v.Encode()) }
+	pj, _ := json.Marshal(p)
+	fh := hdr("Content-Type", "application/x-www-form-urlencoded")
+	if c, m := e.send("issues", "f1", form(url.Values{"payload": {string(pj)}}), fh); c != 202 {
+		t.Errorf("form: want 202 got %d %v", c, m)
+	}
+	if got := e.events("issue.opened"); len(got) != 1 {
+		t.Errorf("form delivery mapped to %d issue.opened events, want 1", len(got))
+	}
+	if c, m := e.send("issues", "f2", form(url.Values{"other": {"x"}}), fh); c != 422 || m["field"] != "payload" {
+		t.Errorf("form without payload: %d %v", c, m)
+	}
+	before := len(e.rejected())
+	if c, _ := e.send("issues", "f3", p, hdr("Content-Type", "text/plain")); c != 415 || len(e.rejected()) != before+1 {
+		t.Errorf("text/plain: want 415 and one more rejection, got %d, rejected %d->%d", c, before, len(e.rejected()))
 	}
 	if c, _ := e.send("issues", "a", p, hdr("Content-Type", "application/json; charset=utf-8")); c != 202 {
 		t.Errorf("json with charset: want 202 got %d", c)
