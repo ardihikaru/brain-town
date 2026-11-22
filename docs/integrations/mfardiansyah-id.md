@@ -103,6 +103,12 @@ A courier should walk to the mfardiansyah.id pendopo in the town.
 
 Set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the site's https JSON Feed 1.1; Brain Town pulls the latest 20 items every 5 minutes as `article.published` with `id` = item id, so a push with the same id is deduplicated.
 
+## Automated check
+
+The both-sides behaviour (feed contract, publish push, push+pull dedupe, visit beacon and its skips, Brain Town down,
+`/office`) is covered by the E2E suite against the real site: `e2e/tests/api/stream/integrations/mfardiansyah-id/`
+(`cd e2e && npm run test:local -- tests/api/stream/integrations`).
+
 ## As built (mfardiansyah.id v0.54.3, PR #157)
 - **Feed:** `https://mfardiansyah.id/feed.json`, the latest 20 live English notes. Item `id` is `post-<slug>`, the same as the push `id`, so the two paths dedupe. `_kind` is always `article`; there are no illustrations on this site.
 - **Push:** `article.published` is sent once per note (also for scheduled notes when their time passes) with `data{title,url,to:"blog"}`. Indonesian twins are not announced.

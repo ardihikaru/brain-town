@@ -87,9 +87,17 @@ Watch deliveries with `GET /api/admin/events?integration=<id>` (fields `delivery
 - Item 8 on v0.54.3: after the pull delivered an id, the site's retry got 409 and kept retrying until
   `failed`. Fixed in v0.54.4 (409 = delivered). Re-run on the fixed build: the retry hit 409, the site's
   `Notification` row (`dedupeKey braintown:<slug>`) became `sent` after one attempt, one event per id.
-- Automating this as a Playwright spec needs approval-gated e2e wiring (a site URL in `e2e/config/env.ts`,
-  an https front for the push in `e2e/compose.e2e.yml`, cert names in `e2e/scripts/stack.sh`). Not done;
-  ask the user first.
+- **Automated now:** the both-sides behaviour runs as a Playwright suite against the e2e stack, which starts the
+  site's real api and web image (compose profile `site`, see `e2e/README.md`). Specs:
+  `e2e/tests/api/stream/integrations/mfardiansyah-id/`; run with
+  `cd e2e && npm run test:local -- tests/api/stream/integrations` (catalog epic INTG,
+  `e2e/docs/test-catalog/integrations.md`). It covers items 1, 2, 3, 5, 6, 7, 9 and the push-plus-pull dedupe of item 8
+  (one event per id from the push and from the real site feed). Visits get a country from a generated GeoIP file
+  (worker N is visitor `203.0.113.N`). The stack finds the site repo through `SITE_REPO_DIR` / `SITE_REF` (default:
+  sibling `mfardiansyah.id`, `main`); without it the site specs skip.
+  Still manual: the site's retry getting 409 and counting as delivered (not visible from outside), and the production
+  read-only check below. The site's own `apply.sh` is never run.
+- Finding by the E2E suite (site v0.54.4), fixed in site v0.54.5: the site's ArcadeDB client did not retry a concurrent modification, so a note save could return 503 `could not save` and a push could wait for the minute scan. The suite sends each write once and awaits each push once (no retries, no nudge).
 
 ## Clean up (always)
 Stop `site-api` and the `http.server`; `docker rm -f bt-intg-tls bt-intg-site-arcadedb`;

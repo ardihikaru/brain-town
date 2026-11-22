@@ -32,9 +32,23 @@ const envFile = path.resolve(__dirname, '..', 'env', `.env.${testEnv}`);
 if (fs.existsSync(envFile)) {
   loadDotenv({ path: envFile, quiet: true });
 }
+// Written by scripts/stack.sh when the mfardiansyah.id test services start (random site admin password, removed with the
+// stack). Shell exports and env/.env.<env> win over it; it never holds anything but local throwaway values.
+const siteEnvFile = path.resolve(__dirname, '..', '.stack', 'site', 'site.env');
+if (fs.existsSync(siteEnvFile)) {
+  loadDotenv({ path: siteEnvFile, quiet: true });
+}
 
 const flag = z.stringbool().default(false);
 const optionalUrl = z.preprocess((v) => (v === '' ? undefined : v), z.url().optional());
+/** A host-side URL of a test service: must be loopback, so the suite can never reach a real site. */
+const loopbackUrl = (fallback: string) =>
+  z
+    .url()
+    .default(fallback)
+    .refine((u) => ['127.0.0.1', 'localhost', '[::1]'].includes(new URL(u).hostname), {
+      message: 'must point at loopback (127.0.0.1, localhost or ::1): the suite only targets the local stack',
+    });
 
 const schema = z.object({
   // ── Brain Town (web + api behind one nginx origin) ───────────────────────
@@ -46,6 +60,20 @@ const schema = z.object({
   // ── Feed puller fixture (an https JSON Feed served inside the compose network) ─
   /** Base URL of the feed fixture as the api container sees it. */
   FEED_FIXTURE_URL: z.url().default('https://feed-fixture:8443'),
+  // ── mfardiansyah.id test services (compose profile "site", see scripts/stack.sh) ─────────────────────
+  /** Site api whose pushes go to the stack-owned "push" integration. */
+  SITE_API_URL: loopbackUrl('http://127.0.0.1:18281'),
+  /** Site api whose Brain Town is unreachable (a closed port). */
+  SITE_OFFLINE_API_URL: loopbackUrl('http://127.0.0.1:18282'),
+  /** Site api whose pushes go to the stack-owned "pull" integration, which also pulls its real feed. */
+  SITE_PULL_API_URL: loopbackUrl('http://127.0.0.1:18283'),
+  /** The site's real web image (serves /office). */
+  SITE_WEB_URL: loopbackUrl('http://127.0.0.1:18284'),
+  /** The pull instance's /feed.json as the Brain Town api container sees it (https front, throwaway CA). */
+  SITE_PULL_FEED_URL_INTERNAL: z.url().default('https://site-pull-tls:8443/feed.json'),
+  SITE_ADMIN_USER: z.string().min(1).default('e2e-admin'),
+  /** Random per stack, written to .stack/site/site.env by stack.sh. Absent when the site pieces are not running. */
+  SITE_ADMIN_PASSWORD: z.string().optional(),
   // ── Ingest limits the stack was started with (the rate-limit spec reads them) ─
   INGEST_RATE: z.coerce.number().positive().default(50),
   INGEST_BURST: z.coerce.number().int().positive().default(200),
@@ -61,7 +89,9 @@ const schema = z.object({
   BROWSER_CHANNEL: z.string().optional(),
   API_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   /** Comma-separated hostnames that must never be targeted (Brain Town demo and production). */
-  PROTECTED_HOSTS: z.string().default('town.mfardiansyah.id,town.demo.mfardiansyah.id'),
+  PROTECTED_HOSTS: z
+    .string()
+    .default('town.mfardiansyah.id,town.demo.mfardiansyah.id,mfardiansyah.id,www.mfardiansyah.id'),
 });
 
 const parsed = schema.safeParse(process.env);
