@@ -98,3 +98,7 @@ curl -X POST "$BRAIN_TOWN_URL" \
 ```
 
 A courier should walk to the mfardiansyah.id pendopo in the town.
+
+## Pull fallback
+
+Set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the site's https JSON Feed 1.1; Brain Town pulls the latest 20 items every 5 minutes as `article.published` with `id` = item id, so a push with the same id is deduplicated.

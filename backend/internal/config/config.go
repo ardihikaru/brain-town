@@ -20,6 +20,7 @@ type Config struct {
 	Mode          string  // BRAIN_TOWN_MODE: demo | prod
 	IngestRate    float64 // INGEST_RATE: events per second per integration (default 50)
 	IngestBurst   float64 // INGEST_BURST: burst size per integration (default 200)
+	FeedInterval  int     // FEED_PULL_INTERVAL_SECONDS: how often site JSON Feeds are pulled (default 300)
 }
 
 func Load() (Config, error) {
@@ -35,6 +36,7 @@ func Load() (Config, error) {
 		Mode:          get("BRAIN_TOWN_MODE", "demo"),
 		IngestRate:    getFloat("INGEST_RATE", 50),
 		IngestBurst:   getFloat("INGEST_BURST", 200),
+		FeedInterval:  int(getFloat("FEED_PULL_INTERVAL_SECONDS", 300)),
 	}
 	if c.AdminEmail == "" || c.AdminPassword == "" {
 		return c, errors.New("ADMIN_EMAIL and ADMIN_PASSWORD must be set")

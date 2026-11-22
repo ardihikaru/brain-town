@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -223,11 +224,18 @@ func ingestPath(i store.Integration) string {
 }
 
 func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Name, Org *string }
+	var in struct{ Name, Org, FeedURL *string }
 	if !decode(w, r, &in) {
 		return
 	}
-	i, ok := a.St.UpdateIntegration(r.PathValue("id"), in.Name, in.Org)
+	if in.FeedURL != nil {
+		*in.FeedURL = strings.TrimSpace(*in.FeedURL)
+		if u, err := url.Parse(*in.FeedURL); *in.FeedURL != "" && (err != nil || u.Scheme != "https" || u.Host == "" || len(*in.FeedURL) > 512) {
+			fail(w, 422, "feedUrl must be an https URL (or empty to disable pulling)")
+			return
+		}
+	}
+	i, ok := a.St.UpdateIntegration(r.PathValue("id"), in.Name, in.Org, in.FeedURL)
 	if !ok {
 		fail(w, 404, "no such integration")
 		return

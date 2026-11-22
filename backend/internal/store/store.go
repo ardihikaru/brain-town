@@ -30,6 +30,7 @@ type Integration struct {
 	Kind           string    `json:"kind"` // github | qa | gaos | site
 	Name           string    `json:"name"`
 	Org            string    `json:"org,omitempty"`
+	FeedURL        string    `json:"feedUrl,omitempty"` // site only: JSON Feed 1.1 URL pulled by internal/feed (https)
 	TokenHash      string    `json:"tokenHash,omitempty"`
 	TokenHint      string    `json:"tokenHint,omitempty"`
 	CreatedAt      time.Time `json:"createdAt"`
@@ -283,7 +284,7 @@ func (st *Store) CreateIntegration(kind, name, org string) (Integration, string)
 	return c, plain
 }
 
-func (st *Store) UpdateIntegration(id string, name *string, org *string) (Integration, bool) {
+func (st *Store) UpdateIntegration(id string, name, org, feedURL *string) (Integration, bool) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	i, ok := st.s.Integrations[id]
@@ -295,6 +296,9 @@ func (st *Store) UpdateIntegration(id string, name *string, org *string) (Integr
 	}
 	if org != nil {
 		i.Org = *org
+	}
+	if feedURL != nil {
+		i.FeedURL = *feedURL
 	}
 	st.qIntegration(i)
 	c := *i

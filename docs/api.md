@@ -56,7 +56,7 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | --- | --- |
 | `POST /api/admin/login`, `/logout`; `GET /session` | Sign in (10 failures/min cap), out, check. |
 | `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). |
-| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, delete. |
+| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `feedUrl` (https JSON Feed 1.1 URL of a `site` integration, pulled every 5 minutes; empty disables), delete. |
 | `POST /api/admin/integrations/{id}/token` | Rotate the secret; the old one stops working. |
 | `GET /api/admin/products` | Orgs and products. |
 | `PUT /api/admin/orgs/{key}`, `/products/{key}` | `visibility` (`public`/`hidden`), `alias`, product `hall`. |
