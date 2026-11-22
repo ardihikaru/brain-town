@@ -59,14 +59,18 @@ ENV_FILE=.env.demo docker compose -p brain-town-demo --env-file .env.demo up -d 
 
 - **Edge vhost:** [`deploy/edge/brain-town.conf`](../deploy/edge/brain-town.conf) is a reference
   copy. Each hostname has its own certificate lineage (`brain-town`, `brain-town-demo`).
-  Unknown hosts get `444`. `/` keeps buffering off and a long read timeout, ready for the
-  planned SSE `/events`.
+  Unknown hosts get `444`. `/` keeps buffering off and a long read timeout, so the SSE streams
+  `/events` and `/admin/events` stay open. Rate limits: pages and API 20 r/s per client IP
+  (burst 60); `/ingest/` 100 r/s (burst 300), because platform servers may send in batches.
 - **App host:** this repo is checked out to `~/devel/projects/brain-town`, with `.env.demo` and
   `.env.prod` (mode 600, never committed). Containers bind only to the WireGuard address.
 - **Database:** a shared ArcadeDB server with one database per tenant. Brain Town has its
   own database and its own user (not root). Prod gets `ARCADEDB_URL`, `ARCADEDB_DATABASE`,
-  `ARCADEDB_USER` and `ARCADEDB_PASSWORD` through `.env.prod`. The static pages do not use
-  them yet; the planned backend will.
+  `ARCADEDB_USER` and `ARCADEDB_PASSWORD` through `.env.prod`; the `api` service reads them.
+  Demo leaves them empty and keeps events in memory only (they reset on restart).
+- **Admin login and limits:** `.env.demo` and `.env.prod` also need `ADMIN_EMAIL` and
+  `ADMIN_PASSWORD`. `INGEST_RATE` / `INGEST_BURST` (default 50 per second, burst 200) bound each
+  integration; above that the API answers `429` with `Retry-After` and senders retry.
 
 ### Redeploy after merging to `main`
 

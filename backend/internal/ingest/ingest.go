@@ -18,6 +18,8 @@ type Handler struct {
 	St  *store.Store
 	Hub *hub.Hub
 
+	rate, burst float64 // per-integration token bucket: sustained events/s and burst size
+
 	mu      sync.Mutex
 	buckets map[string]*bucket
 }
@@ -27,13 +29,15 @@ type bucket struct {
 	last   time.Time
 }
 
-const (
-	rate  = 20.0 // events per second per integration
-	burst = 60.0
-)
-
-func New(st *store.Store, h *hub.Hub) *Handler {
-	return &Handler{St: st, Hub: h, buckets: map[string]*bucket{}}
+// New builds the handler. rate and burst bound each integration; non-positive values fall back to 50/s, burst 200.
+func New(st *store.Store, h *hub.Hub, rate, burst float64) *Handler {
+	if rate <= 0 {
+		rate = 50
+	}
+	if burst <= 0 {
+		burst = 200
+	}
+	return &Handler{St: st, Hub: h, rate: rate, burst: burst, buckets: map[string]*bucket{}}
 }
 
 type verr struct{ Field, Msg string }
@@ -46,12 +50,12 @@ func (h *Handler) allow(id string) bool {
 	now := time.Now()
 	b, ok := h.buckets[id]
 	if !ok {
-		b = &bucket{tokens: burst, last: now}
+		b = &bucket{tokens: h.burst, last: now}
 		h.buckets[id] = b
 	}
-	b.tokens += now.Sub(b.last).Seconds() * rate
-	if b.tokens > burst {
-		b.tokens = burst
+	b.tokens += now.Sub(b.last).Seconds() * h.rate
+	if b.tokens > h.burst {
+		b.tokens = h.burst
 	}
 	b.last = now
 	if b.tokens < 1 {

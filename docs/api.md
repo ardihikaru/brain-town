@@ -13,6 +13,7 @@ platform repos; this service only receives (see `integrations/`).
 | `ARCADEDB_URL` | empty | ArcadeDB HTTP address as seen from the container. Required when `BRAIN_TOWN_MODE=prod`; empty keeps everything in memory (lost on restart). |
 | `ARCADEDB_DATABASE`, `ARCADEDB_USER`, `ARCADEDB_PASSWORD` | `braintown`, none, none | Database and credentials. The service creates the database and schema when missing and the user may. |
 | `PUBLIC_URL` | `http://127.0.0.1:8080` | `https://` turns on `Secure` cookies. |
+| `INGEST_RATE`, `INGEST_BURST` | `50`, `200` | Per-integration token bucket for ingest. |
 | `BRAIN_TOWN_MODE` | `demo` | Reported by `/api/admin/session`. |
 
 ## Ingest
@@ -27,7 +28,7 @@ shown once, when an integration is created or its secret is rotated.
 | `401` | Token missing or wrong, unknown integration, or wrong source for the integration. |
 | `409` | `Idempotency-Key` (else body `id`) was already accepted for this integration. |
 | `422` | Body failed validation. The JSON `field` names it. |
-| `429` | More than 20 events/s sustained (burst 60) for one integration. `Retry-After: 1`. |
+| `429` | More than `INGEST_RATE` events/s sustained (default 50, burst `INGEST_BURST` = 200) for one integration. `Retry-After: 1`. |
 
 `site.visit` keeps only `page`, `country` (two uppercase letters) and an optional `title`;
 anything else the sender adds (an IP, a user agent) is dropped before storage.

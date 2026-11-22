@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -27,14 +28,16 @@ type env struct {
 	cl  *http.Client
 }
 
-func newEnv(t *testing.T) *env {
+func newEnv(t *testing.T) *env { return newEnvLimits(t, 0, 0) }
+
+func newEnvLimits(t *testing.T, rate, burst float64) *env {
 	st, err := store.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	h := hub.New()
 	mux := http.NewServeMux()
-	mux.Handle("POST /ingest/{kind}/{id}", ingest.New(st, h))
+	mux.Handle("POST /ingest/{kind}/{id}", ingest.New(st, h, rate, burst))
 	admin.New(st, h, config.Config{AdminEmail: "a@x.id", AdminPassword: testPW, PublicURL: "http://x"}).Routes(mux)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
@@ -138,19 +141,38 @@ func TestIdempotencyKeyHeaderDedupes(t *testing.T) {
 	}
 }
 
-func TestRateLimit(t *testing.T) {
-	e := newEnv(t)
+func eventN(i int) string {
+	return strings.Replace(gaosEv, `"id":"e1"`, fmt.Sprintf(`"id":"n%d"`, i), 1)
+}
+
+func TestRateLimit429WhenBurstExceeded(t *testing.T) {
+	e := newEnvLimits(t, 1, 5) // 1 event/s sustained, burst of 5
 	e.login()
 	id, tok := e.integration("gaos", "GAOS")
-	got429 := false
-	for i := 0; i < 200 && !got429; i++ {
-		body := strings.Replace(gaosEv, `"id":"e1"`, `"id":"r`+string(rune('a'+i%26))+strings.Repeat("x", i/26)+`"`, 1)
-		if c, _, _ := e.do("POST", "/ingest/gaos/"+id, tok, body); c == 429 {
-			got429 = true
+	var got []int
+	for i := 0; i < 8; i++ {
+		c, _, _ := e.do("POST", "/ingest/gaos/"+id, tok, eventN(i))
+		got = append(got, c)
+	}
+	for i, c := range got {
+		want := 202
+		if i >= 5 {
+			want = 429
+		}
+		if c != want {
+			t.Fatalf("request %d: want %d got %d (all: %v)", i, want, c, got)
 		}
 	}
-	if !got429 {
-		t.Fatal("expected a 429 after bursting")
+}
+
+func TestDefaultLimitAllowsBulkBurst(t *testing.T) {
+	e := newEnv(t) // defaults: 50/s, burst 200, so a 150-event migration is not throttled
+	e.login()
+	id, tok := e.integration("gaos", "GAOS")
+	for i := 0; i < 150; i++ {
+		if c, _, _ := e.do("POST", "/ingest/gaos/"+id, tok, eventN(i)); c != 202 {
+			t.Fatalf("event %d got %d", i, c)
+		}
 	}
 }
 
