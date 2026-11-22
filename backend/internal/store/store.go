@@ -3,13 +3,14 @@
 package store
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"log"
-	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -84,52 +85,74 @@ type state struct {
 }
 
 type Store struct {
-	mu    sync.RWMutex
-	s     state
-	path  string
-	dirty bool
+	mu  sync.RWMutex
+	s   state
+	p   Persister // nil = memory only
+	ops []Op      // changes not yet written
 }
 
-func New(path string) (*Store, error) {
-	st := &Store{path: path, s: state{
+const maxOps = 50000 // cap on the unwritten queue if the database is down for long
+
+// New builds a store. With a Persister it initialises the schema and loads existing data.
+func New(p Persister) (*Store, error) {
+	st := &Store{p: p, s: state{
 		Integrations: map[string]*Integration{}, Orgs: map[string]*Org{}, Products: map[string]*Product{},
 		Seen: map[string]time.Time{}, NextSeq: 1, Settings: Settings{RetentionDays: 30, Animation: true},
 	}}
-	if path != "" {
-		// Fail at startup, not silently later, when the snapshot location is not writable.
-		if err := os.WriteFile(path+".tmp", nil, 0o600); err != nil {
-			return nil, err
-		}
-		_ = os.Remove(path + ".tmp")
-		if b, err := os.ReadFile(path); err == nil {
-			if err := json.Unmarshal(b, &st.s); err != nil {
-				return nil, err
-			}
-			if st.s.Integrations == nil {
-				st.s.Integrations = map[string]*Integration{}
-			}
-			if st.s.Orgs == nil {
-				st.s.Orgs = map[string]*Org{}
-			}
-			if st.s.Products == nil {
-				st.s.Products = map[string]*Product{}
-			}
-			if st.s.Seen == nil {
-				st.s.Seen = map[string]time.Time{}
-			}
-			if st.s.NextSeq < 1 {
-				st.s.NextSeq = 1
-			}
-		} else if !os.IsNotExist(err) {
-			return nil, err
+	if p == nil {
+		return st, nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if err := p.Init(ctx); err != nil {
+		return nil, err
+	}
+	sn, err := p.Load(ctx)
+	if err != nil {
+		return nil, err
+	}
+	for i := range sn.Integrations {
+		v := sn.Integrations[i]
+		st.s.Integrations[v.ID] = &v
+	}
+	for i := range sn.Orgs {
+		v := sn.Orgs[i]
+		st.s.Orgs[v.Key] = &v
+	}
+	for i := range sn.Products {
+		v := sn.Products[i]
+		st.s.Products[v.Key] = &v
+	}
+	st.s.Events = sn.Events
+	if sn.Seen != nil {
+		st.s.Seen = sn.Seen
+	}
+	if sn.Settings != nil {
+		st.s.Settings = *sn.Settings
+	}
+	last := sn.LastSeq
+	for _, e := range sn.Events {
+		if e.Seq > last {
+			last = e.Seq
 		}
 	}
+	st.s.NextSeq = last + 1
 	return st, nil
 }
 
-// Run flushes the snapshot every two seconds while dirty, and prunes by retention hourly.
+func (st *Store) q(o Op) {
+	if st.p == nil {
+		return
+	}
+	if len(st.ops) >= maxOps {
+		st.ops = st.ops[len(st.ops)/10:] // shed the oldest tenth rather than grow without bound
+	}
+	st.ops = append(st.ops, o)
+}
+
+// Run writes queued changes every second and prunes by retention hourly.
 func (st *Store) Run(stop <-chan struct{}) {
-	flush, prune := time.NewTicker(2*time.Second), time.NewTicker(time.Hour)
+	flush, prune := time.NewTicker(time.Second), time.NewTicker(time.Hour)
 	defer flush.Stop()
 	defer prune.Stop()
 	for {
@@ -145,32 +168,28 @@ func (st *Store) Run(stop <-chan struct{}) {
 	}
 }
 
-func (st *Store) Flush() {
-	if st.path == "" {
-		return
+// Flush writes the queue to the database. On failure the ops stay queued and are retried.
+func (st *Store) Flush() error {
+	if st.p == nil {
+		return nil
 	}
 	st.mu.Lock()
-	if !st.dirty {
-		st.mu.Unlock()
-		return
-	}
-	b, err := json.Marshal(st.s)
-	st.dirty = false
+	ops := st.ops
+	st.ops = nil
 	st.mu.Unlock()
-	if err != nil {
-		return
+	if len(ops) == 0 {
+		return nil
 	}
-	tmp := st.path + ".tmp"
-	if err := os.WriteFile(tmp, b, 0o600); err != nil {
-		log.Printf("store: snapshot write failed: %v", err)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := st.p.Apply(ctx, ops); err != nil {
+		log.Printf("store: write failed, %d changes kept for retry: %v", len(ops), err)
 		st.mu.Lock()
-		st.dirty = true
+		st.ops = append(ops, st.ops...)
 		st.mu.Unlock()
-		return
+		return err
 	}
-	if err := os.Rename(tmp, st.path); err != nil {
-		log.Printf("store: snapshot rename failed: %v", err)
-	}
+	return nil
 }
 
 // Prune drops events and dedupe entries older than the retention window.
@@ -193,7 +212,7 @@ func (st *Store) Prune(now time.Time) int {
 			delete(st.s.Seen, k)
 		}
 	}
-	st.dirty = true
+	st.q(Op{Kind: OpPrune, Cut: cut})
 	return n
 }
 
@@ -258,7 +277,7 @@ func (st *Store) CreateIntegration(kind, name, org string) (Integration, string)
 	_, _ = rand.Read(idb)
 	i := &Integration{ID: kind + "-" + hex.EncodeToString(idb), Kind: kind, Name: name, Org: org, TokenHash: hash, TokenHint: hint, CreatedAt: time.Now().UTC()}
 	st.s.Integrations[i.ID] = i
-	st.dirty = true
+	st.qIntegration(i)
 	c := *i
 	c.TokenHash = ""
 	return c, plain
@@ -277,7 +296,7 @@ func (st *Store) UpdateIntegration(id string, name *string, org *string) (Integr
 	if org != nil {
 		i.Org = *org
 	}
-	st.dirty = true
+	st.qIntegration(i)
 	c := *i
 	c.TokenHash = ""
 	return c, true
@@ -292,7 +311,7 @@ func (st *Store) RotateToken(id string) (string, bool) {
 	}
 	plain, hash, hint := NewToken()
 	i.TokenHash, i.TokenHint = hash, hint
-	st.dirty = true
+	st.qIntegration(i)
 	return plain, true
 }
 
@@ -301,7 +320,9 @@ func (st *Store) DeleteIntegration(id string) bool {
 	defer st.mu.Unlock()
 	_, ok := st.s.Integrations[id]
 	delete(st.s.Integrations, id)
-	st.dirty = ok || st.dirty
+	if ok {
+		st.q(Op{Kind: OpIntegrationDel, Key: id})
+	}
 	return ok
 }
 
@@ -332,25 +353,20 @@ func (st *Store) productAliases() map[string]bool {
 	return m
 }
 
-func (st *Store) ensureOrg(key string) *Org {
-	if key == "" {
-		return nil
-	}
-	if o, ok := st.s.Orgs[key]; ok {
-		return o
-	}
-	o := &Org{Key: key, Visibility: Public, Alias: key}
-	st.s.Orgs[key] = o
-	return o
-}
-
 // Touch registers the org and product an event is about, with the source kind. A new product
 // takes the visibility the sender reports; after that the back-office setting wins.
 func (st *Store) touch(org, product, name, reportedVis, kind string) {
-	st.ensureOrg(org)
+	if org != "" {
+		if _, ok := st.s.Orgs[org]; !ok {
+			o := &Org{Key: org, Visibility: Public, Alias: org}
+			st.s.Orgs[org] = o
+			st.qOrg(o)
+		}
+	}
 	if product == "" {
 		return
 	}
+	changed := false
 	p, ok := st.s.Products[product]
 	if !ok {
 		p = &Product{Key: product, Org: org, Name: name, Visibility: Public, Alias: product, Hall: defaultHall(kind)}
@@ -359,22 +375,31 @@ func (st *Store) touch(org, product, name, reportedVis, kind string) {
 			p.Alias = nextAlias("Product", st.productAliases())
 		}
 		st.s.Products[product] = p
+		changed = true
 	}
 	if p.Org == "" && org != "" {
-		p.Org = org
+		p.Org, changed = org, true
 	}
 	if p.Name == "" && name != "" {
-		p.Name = name
+		p.Name, changed = name, true
 	}
-	label := map[string]string{"github": "GitHub", "qa": "QA", "gaos": "GAOS", "site": "Site"}[kind]
-	for _, s := range p.Sources {
-		if s == label {
-			return
-		}
+	if label := map[string]string{"github": "GitHub", "qa": "QA", "gaos": "GAOS", "site": "Site"}[kind]; label != "" && !slices.Contains(p.Sources, label) {
+		p.Sources, changed = append(p.Sources, label), true
 	}
-	if label != "" {
-		p.Sources = append(p.Sources, label)
+	if changed {
+		st.qProduct(p)
 	}
+}
+
+func (st *Store) qIntegration(i *Integration) {
+	c := *i
+	st.q(Op{Kind: OpIntegration, Integration: &c})
+}
+func (st *Store) qOrg(o *Org) { c := *o; st.q(Op{Kind: OpOrg, Org: &c}) }
+func (st *Store) qProduct(p *Product) {
+	c := *p
+	c.Sources = append([]string(nil), p.Sources...)
+	st.q(Op{Kind: OpProduct, Product: &c})
 }
 
 func defaultHall(kind string) string {
@@ -447,7 +472,7 @@ func (st *Store) SetOrg(key string, vis, alias *string) (Org, bool) {
 	if alias != nil && strings.TrimSpace(*alias) != "" {
 		o.Alias = strings.TrimSpace(*alias)
 	}
-	st.dirty = true
+	st.qOrg(o)
 	return *o, true
 }
 
@@ -472,7 +497,7 @@ func (st *Store) SetProduct(key string, vis, alias, hall *string) (Product, bool
 	if hall != nil {
 		p.Hall = *hall
 	}
-	st.dirty = true
+	st.qProduct(p)
 	return *p, true
 }
 
@@ -504,9 +529,11 @@ func (st *Store) AddAccepted(a Accept) (Event, bool) {
 	}
 	now := time.Now().UTC()
 	st.s.Seen[k] = now
+	st.q(Op{Kind: OpSeen, Key: k, At: now})
 	st.touch(a.Org, a.Product, a.ProductName, a.Vis, a.Kind)
 	if i, ok := st.s.Integrations[a.Integration]; ok {
 		i.LastEventAt = now
+		st.qIntegration(i)
 	}
 	ev := Event{Seq: st.s.NextSeq, ID: a.ID, Integration: a.Integration, Kind: a.Kind, Type: a.Type, At: a.At, Received: now,
 		Delivery: OK, Status: 202, Product: a.Product, Org: a.Org, Raw: a.Raw}
@@ -521,6 +548,7 @@ func (st *Store) AddRejected(integration, kind, typ string, status int, reason s
 	now := time.Now().UTC()
 	if i, ok := st.s.Integrations[integration]; ok {
 		i.LastRejectedAt = now
+		st.qIntegration(i)
 	}
 	ev := Event{Seq: st.s.NextSeq, Integration: integration, Kind: kind, Type: typ, At: now, Received: now, Delivery: Reject, Status: status, Reason: reason}
 	st.s.NextSeq++
@@ -533,7 +561,8 @@ func (st *Store) append(ev Event) {
 	if len(st.s.Events) > maxEvents {
 		st.s.Events = append([]Event(nil), st.s.Events[len(st.s.Events)-maxEvents:]...)
 	}
-	st.dirty = true
+	e := ev
+	st.q(Op{Kind: OpEvent, Event: &e})
 }
 
 type Query struct {
@@ -600,7 +629,7 @@ func (st *Store) SetSettings(s Settings) Settings {
 		s.RetentionDays = 3650
 	}
 	st.s.Settings = s
-	st.dirty = true
+	st.q(Op{Kind: OpSettings, Settings: &s})
 	return s
 }
 

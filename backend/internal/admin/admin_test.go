@@ -28,7 +28,7 @@ type env struct {
 }
 
 func newEnv(t *testing.T) *env {
-	st, err := store.New("")
+	st, err := store.New(nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -290,25 +290,5 @@ func TestVisibilityAndSettingsValidation(t *testing.T) {
 	c, m, _ = e.do("PUT", "/api/admin/settings", "", `{"retentionDays":0,"animation":true}`)
 	if c != 200 || m["retentionDays"].(float64) != 1 {
 		t.Fatalf("settings clamp: %d %v", c, m)
-	}
-}
-
-func TestSnapshotPersistsAcrossRestart(t *testing.T) {
-	path := t.TempDir() + "/db.json"
-	st, err := store.New(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	i, _ := st.CreateIntegration("gaos", "GAOS", "")
-	st.Flush()
-	st2, err := store.New(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := st2.GetIntegration(i.ID); !ok {
-		t.Fatal("integration lost after restart")
-	}
-	if _, err := store.New("/nonexistent-dir/db.json"); err == nil {
-		t.Fatal("unwritable snapshot path must fail at startup")
 	}
 }

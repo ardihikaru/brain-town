@@ -10,7 +10,8 @@ platform repos; this service only receives (see `integrations/`).
 | --- | --- | --- |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | required | Single admin. Server-side env only. |
 | `LISTEN_ADDR` | `:8081` | |
-| `DATA_FILE` | empty | JSON snapshot path. Empty keeps everything in memory. |
+| `ARCADEDB_URL` | empty | ArcadeDB HTTP address as seen from the container. Required when `BRAIN_TOWN_MODE=prod`; empty keeps everything in memory (lost on restart). |
+| `ARCADEDB_DATABASE`, `ARCADEDB_USER`, `ARCADEDB_PASSWORD` | `braintown`, none, none | Database and credentials. The service creates the database and schema when missing and the user may. |
 | `PUBLIC_URL` | `http://127.0.0.1:8080` | `https://` turns on `Secure` cookies. |
 | `BRAIN_TOWN_MODE` | `demo` | Reported by `/api/admin/session`. |
 
@@ -65,7 +66,21 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 Orgs and products are created automatically from the events that mention them. A new product
 takes the visibility its sender reports; after that the back-office value wins.
 
+## Storage (ArcadeDB)
+
+The service keeps its working set in memory and writes every change to ArcadeDB in order, in
+batches of up to 100 per transaction, about once a second and on shutdown. If the database is
+unreachable, changes stay queued and are retried (the queue is capped at 50,000 and sheds the
+oldest tenth beyond that). A hard crash can lose up to about a second of accepted events.
+On start it loads integrations, orgs, products, the newest 5,000 events, dedupe keys and
+settings, so tokens, visibility and duplicate detection survive a restart. Startup retries for
+about a minute while ArcadeDB comes up.
+
+Graph: vertices `Integration`, `Org`, `Product`, `Event`, plus `Seen` (dedupe keys) and `Meta`
+(settings, sequence counter). Edges: `BELONGS_TO` (Product to Org), `PRODUCED` (Integration to
+Event), `ABOUT` (Event to Product). Retention deletes old `Event` and `Seen` vertices hourly.
+
 ## Not built yet
 
-ArcadeDB storage (the snapshot is the interim store), GitHub signed webhooks (no contract
+GitHub signed webhooks (no contract
 yet), the JSON Feed/RSS puller, pausing an integration, and changing the admin password.

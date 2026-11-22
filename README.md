@@ -179,8 +179,7 @@ Step-by-step, including redeploys: [`docs/deployment.md`](docs/deployment.md).
 
 - [x] Ingest + events backend (Go, `backend/`): `POST /ingest/{gaos,qa,site}/<integration-id>`
       with Bearer tokens, dedupe, validation, rate limit, and `/events` + `/admin/events` SSE.
-- [ ] Storage in ArcadeDB (graph of products, tasks, runs and events). Today the API keeps a
-      JSON snapshot on a volume.
+- [x] Storage in ArcadeDB (graph of integrations, products, events; `docs/api.md`).
 - [x] Back-office backed by the real API (login, integrations, tokens, products, event log).
       Still sample data: Settings (retention, account), Pause, GitHub webhooks.
 - [ ] Feed puller for sites that only expose JSON Feed / RSS.
