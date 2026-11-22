@@ -51,7 +51,7 @@ Contract, event mapping and rollups: [`integrations/github.md`](integrations/git
 | `413` / `415` | Body over 2 MB / content type is not `application/json`. |
 | `422` | Missing `X-GitHub-Event` or `X-GitHub-Delivery`, body not JSON, or organisation mismatch (`field`). |
 | `429` | Same per-integration bucket as the other sources. `Retry-After: 1`. |
-| `503` | The secret cannot be decrypted (`BRAIN_TOWN_SECRET_KEY` missing or changed). |
+| `503` | The secret cannot be decrypted (`BRAIN_TOWN_SECRET_KEY` missing or changed), or busy (4 bodies already in flight, `Retry-After: 1`). |
 
 Grouped events (comments, reviews, pushes, labels, stars, CI runs, ...) are merged for 15 s per key (at most
 1,000 open rollups, flushed on shutdown) and stored as one event with id `gh-roll-<first delivery id>`.

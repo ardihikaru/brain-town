@@ -20,7 +20,11 @@ import (
 	"github.com/ardihikaru/brain-town/backend/internal/store"
 )
 
-const maxBody = 2 << 20
+const (
+	maxBody      = 2 << 20
+	maxReaders   = 4               // concurrent body reads: at most 8 MB of bodies in memory
+	defaultQueue = 2 * time.Second // how long a request waits for a read slot before 503
+)
 
 type Handler struct {
 	St  *store.Store
@@ -28,17 +32,40 @@ type Handler struct {
 	Key []byte // BRAIN_TOWN_SECRET_KEY
 	Co  *Coalescer
 
-	lim *ratelimit.Limiter
-	now func() time.Time
+	lim  *ratelimit.Limiter
+	now  func() time.Time
+	sem  chan struct{} // bounds concurrent body reads
+	wait time.Duration // max wait for a slot
 }
 
 func New(st *store.Store, h *hub.Hub, key []byte, rate, burst float64, co *Coalescer) *Handler {
-	return &Handler{St: st, Hub: h, Key: key, Co: co, lim: ratelimit.New(rate, burst), now: co.Now}
+	return &Handler{St: st, Hub: h, Key: key, Co: co, lim: ratelimit.New(rate, burst), now: co.Now,
+		sem: make(chan struct{}, maxReaders), wait: defaultQueue}
 }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Cheap checks first: nothing is read from an unauthenticated sender for an unknown integration.
+	iid := r.PathValue("id")
+	integ, ok := h.St.Lookup(iid)
+	if !ok || integ.Kind != "github" {
+		reply(w, 401, "signature missing or wrong", "") // do not reveal whether the id exists
+		return
+	}
 	if r.ContentLength > maxBody {
 		reply(w, 413, "body over 2 MB", "")
+		return
+	}
+	// Bound the bodies held in memory (64 MB container): wait briefly for a slot, then 503.
+	t := time.NewTimer(h.wait)
+	defer t.Stop()
+	select {
+	case h.sem <- struct{}{}:
+		defer func() { <-h.sem }()
+	case <-t.C:
+		w.Header().Set("Retry-After", "1")
+		reply(w, 503, "busy: too many deliveries in flight, retry shortly", "")
+		return
+	case <-r.Context().Done():
 		return
 	}
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBody))
@@ -49,12 +76,6 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		} else {
 			reply(w, 400, "could not read the body", "")
 		}
-		return
-	}
-	iid := r.PathValue("id")
-	integ, ok := h.St.Lookup(iid)
-	if !ok || integ.Kind != "github" {
-		reply(w, 401, "signature missing or wrong", "") // do not reveal whether the id exists
 		return
 	}
 	event, delivery := r.Header.Get("X-GitHub-Event"), r.Header.Get("X-GitHub-Delivery")

@@ -44,13 +44,13 @@ X-Hub-Signature-256: sha256=<hex HMAC-SHA256 of the raw body with the whsec secr
 | Status | When |
 | --- | --- |
 | `202` | `{"status":"accepted"}` stored (or queued in a rollup), `{"status":"ignored"}` for an event or action the town does not use, `{"status":"skipped"}` for a bot sender or a duplicate CI source. GitHub always gets its answer at once; nothing waits for the rollup. |
-| `401` | Unknown integration, not a GitHub integration, missing or wrong `X-Hub-Signature-256` (checked in constant time on the raw body, before anything is parsed). Logged as rejected for a known integration. |
+| `401` | Unknown integration or not a GitHub integration (answered before the body is read), missing or wrong `X-Hub-Signature-256` (checked in constant time on the raw body, before anything is parsed). Logged as rejected for a known integration. |
 | `409` | `X-GitHub-Delivery` already accepted for this integration (GitHub "Redeliver"). Grouped deliveries are claimed too. |
 | `413` | Body over 2 MB. |
 | `415` | Content type is not `application/json`. |
 | `422` | Missing `X-GitHub-Event` or `X-GitHub-Delivery`, body not JSON, or org mismatch (see below). `field` names the problem. |
 | `429` | Over the per-integration rate (`INGEST_RATE`/`INGEST_BURST`, same bucket logic as the other sources). `Retry-After: 1`. |
-| `503` | `BRAIN_TOWN_SECRET_KEY` is not configured, so the secret cannot be decrypted. |
+| `503` | Busy: more than 4 bodies are already being read and no slot freed within ~2 s (`Retry-After: 1`; the body was not read, GitHub's manual redelivery works). Also: `BRAIN_TOWN_SECRET_KEY` is not configured, so the secret cannot be decrypted. |
 
 **Org check.** The delivery's org is `organization.login`, else `repository.owner.login`. If the integration has an org
 set, they must be equal (case-insensitive), otherwise `422 {"field":"organization"}`. If the integration has no org yet,

@@ -519,3 +519,59 @@ func TestRunCacheIsBounded(t *testing.T) {
 		t.Errorf("jobs per run = %d", n)
 	}
 }
+
+type failReader struct{ t *testing.T }
+
+func (f failReader) Read([]byte) (int, error) {
+	f.t.Error("body was read")
+	return 0, io.EOF
+}
+
+func rawHandler(t *testing.T) (*Handler, *env) {
+	e := newEnv(t, "")
+	key := make([]byte, 32)
+	return New(e.st, e.hub, key, 0, 0, e.co), e
+}
+
+func TestUnknownIntegrationDoesNotReadBody(t *testing.T) {
+	h, _ := rawHandler(t)
+	mux := http.NewServeMux()
+	mux.Handle("POST /ingest/github/{id}", h)
+	req := httptest.NewRequest("POST", "/ingest/github/nope", failReader{t})
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 401 {
+		t.Fatalf("got %d", rec.Code)
+	}
+}
+
+func TestBusyReturns503AfterWait(t *testing.T) {
+	h, e := rawHandler(t)
+	h.wait = 20 * time.Millisecond
+	for i := 0; i < maxReaders; i++ {
+		h.sem <- struct{}{}
+	}
+	mux := http.NewServeMux()
+	mux.Handle("POST /ingest/github/{id}", h)
+	req := httptest.NewRequest("POST", "/ingest/github/"+e.id, failReader{t})
+	rec := httptest.NewRecorder()
+	start := time.Now()
+	mux.ServeHTTP(rec, req)
+	if rec.Code != 503 || rec.Header().Get("Retry-After") != "1" {
+		t.Fatalf("got %d %q", rec.Code, rec.Header().Get("Retry-After"))
+	}
+	if time.Since(start) < 20*time.Millisecond {
+		t.Fatal("did not wait")
+	}
+	<-h.sem // a freed slot lets the next one through to the body read
+	if len(h.sem) != maxReaders-1 {
+		t.Fatal("slot accounting")
+	}
+}
+
+func TestSlotReleasedAfterRequest(t *testing.T) {
+	e := newEnv(t, "")
+	if code, _ := e.send("ping", "d-slot", map[string]any{"hook": map[string]any{"events": []string{"push"}}}); code != 202 {
+		t.Fatalf("got %d", code)
+	}
+}
