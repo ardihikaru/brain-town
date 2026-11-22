@@ -169,15 +169,16 @@ test.describe('backoffice · github owners', () => {
       await backoffice.owner.open(target.id);
       await expect(backoffice.owner.addRepoPanel).toHaveAttribute('data-owner-type', 'user');
 
-      await backoffice.owner.typeRepoNames('a b bad/name');
+      await backoffice.owner.typeRepoNames('a b mf/c bad$name');
 
       await expect(backoffice.owner.addRepoScript).toContainText('read -rs');
       await expect(backoffice.owner.addRepoScript).toContainText(`/ingest/github/${target.id}`);
-      await expect(backoffice.owner.addRepoScript).toContainText('for repo in a b;');
+      await expect(backoffice.owner.addRepoScript).toContainText('for repo in a b c;');
       await backoffice.owner.showSecret.click();
       const script = await backoffice.owner.scriptText();
       expect(script).not.toContain(secret);
-      expect(script).not.toContain('bad/name');
+      expect(script).not.toContain('bad$name');
+      expect(script).not.toContain('mf/c');
     },
   );
 
