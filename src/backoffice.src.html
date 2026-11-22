@@ -74,6 +74,7 @@ label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;ga
 #rail nav a b{font-family:var(--font-mono);font-weight:400;font-size:10.5px;margin-left:auto;opacity:.75}
 #rail .foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:8px;border-top:1px solid var(--rule);font-size:12.5px}
 main{padding:22px 26px 60px;min-width:0}
+main{overflow-x:clip}
 .page{display:none;flex-direction:column;gap:16px} /* fills the working column; no max-width */
 .page.on{display:flex;animation:pagein .32s ease both}
 @keyframes pagein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
@@ -130,6 +131,13 @@ td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
 .scroll{overflow-x:auto}
 tbody tr.click{cursor:pointer} tbody tr.click:hover{background:rgba(31,43,58,.05)}
 td.t{font-family:var(--font-mono);font-size:12px;white-space:nowrap}
+/* setup page: "What becomes what" map; wraps instead of overflowing (td.t stays nowrap elsewhere) */
+#su-map table{table-layout:fixed;width:100%}
+#su-map th{white-space:normal;overflow-wrap:break-word}
+#su-map th:first-child{width:50%}
+#su-map td{overflow-wrap:break-word}
+#su-map td.t{white-space:normal;overflow-wrap:anywhere}
+#su-map .su-note{display:block;margin-top:2px;font-family:var(--font-body);font-size:11.5px;color:var(--ink-soft)}
 /* Core empty state: any <tbody> with no rows gets one "No data record" row (see syncEmpty). */
 tr.empty td{text-align:center;padding:28px 12px;color:var(--ink-soft);border-bottom:0}
 tr.empty td b{display:block;color:var(--ink);font-weight:500;margin-bottom:2px}
@@ -306,7 +314,6 @@ body.still #navmark{transition:none}
 .ghtile[data-ghost=true]{border-style:dashed;border-color:var(--warn)}
 .ghtile[data-ghost=true] svg{opacity:.35}
 #gh-preview-note{margin-top:4px}
-#su-map td{overflow-wrap:anywhere} #su-map td.t{white-space:normal}
 #gh-wait-extra{display:flex;flex-direction:column;gap:8px}
 /* popover (bottom sheet on phones) */
 .ghpop{position:absolute;left:0;top:0;width:min(340px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--ink);border-radius:3px;box-shadow:3px 3px 0 rgba(31,43,58,.1);z-index:12;opacity:0;visibility:hidden;transform:scale(.96);transform-origin:var(--o,50% 0);transition:opacity 120ms var(--ease-out),transform 120ms var(--ease-out),visibility 0s 120ms}
@@ -416,7 +423,7 @@ body.still #gh-pop-scrim,body.still #gh-pop-scrim.on{transition:opacity 150ms ea
             </div>
           </div>
           <div class="panel pad" id="gh-preview" data-testid="gh-preview" data-mode="recommended" hidden></div>
-          <div class="panel pad" id="su-map"></div>
+          <div class="panel pad" id="su-map" role="region" aria-labelledby="su-map-title"></div>
         </div>
       </div>
     </section>
@@ -626,9 +633,9 @@ function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWit
     github:[['Issue opened or reopened','issue.opened'],['Issue assigned','issue.assigned'],['Checklist box ticked in an issue','task.done'],['Issue labeled','issue.labeled',1],['Issue closed','issue.closed'],['Sub-issue added or removed','issue.subissues',1],['Pull request opened, reopened or ready for review','pr.opened'],['Pull request merged','pr.merged'],['Pull request closed without merging','pr.closed'],['Review submitted','pr.reviewed',1],['Comment on an issue or pull request','issue.commented',1],['Check run finished on a pull request','pr.checks'],['Workflow run or job changes','ci.run',1],['Push','repo.pushed',1],['Branch or tag created','ref.created',1],['Branch or tag deleted','ref.deleted',1],['Repo label created, edited or deleted','repo.labels',1],['Discussion created','discussion.opened'],['Discussion answered','discussion.answered'],['Discussion comment','discussion.commented',1],['Repo starred','repo.starred',1],['Webhook saved (ping)','ping, no town object']],
     qa:[['First test of a spec begins','qa.run.started'],['A test.step ends','qa.step'],['Last test of a spec ends','qa.run.finished']],
     gaos:[['Product created or changed','product.upserted'],['Task created','task.created'],['Task moved on the kanban','task.moved'],['Design gate requested','gate.requested'],['Design gate decided','gate.decided'],['Agent claims a task','task.claimed'],['Task finished','task.done']],
-    site:[['Article goes live','article.published'],['Illustration goes live','illustration.published'],['Someone opens the home page or a blog article','site.visit (page and country only)']],
+    site:[['Article goes live','article.published'],['Illustration goes live','illustration.published'],['Someone opens the home page or a blog article','site.visit','(page and country only)']],
   }[k];
-  $('su-map').innerHTML=`<h3>What becomes what</h3><table style="margin-top:6px"><thead><tr><th>${K.label} sends</th><th>Town event</th></tr></thead><tbody>${maps.map(([a,b,g])=>`<tr><td>${a}</td><td class="t">${b}${g?'<span class="muted"> · grouped</span>':''}</td></tr>`).join('')}</tbody></table>${k==='github'?'<p class="small muted" style="margin-top:8px">Grouped: deliveries for the same thing within 15 s become one town event with a count. Comment text, commit messages and logins are never stored.</p>':''}`;
+  $('su-map').innerHTML=`<h3 id="su-map-title">What becomes what</h3><table style="margin-top:6px"><thead><tr><th>${K.label} sends</th><th>Town event</th></tr></thead><tbody>${maps.map(([a,b,c])=>`<tr><td>${a}</td><td class="t">${b.replace(/\./g,'.<wbr>')}${typeof c==='number'?(c?'<span class="muted"> · grouped</span>':''):c?`<span class="su-note">${c}</span>`:''}</td></tr>`).join('')}</tbody></table>${k==='github'?'<p class="small muted" style="margin-top:8px">Grouped: deliveries for the same thing within 15 s become one town event with a count. Comment text, commit messages and logins are never stored.</p>':''}`;
   const gh=k==='github'; $('su-test').hidden=gh&&LIVE; $('su-test-row').hidden=gh&&LIVE; $('gh-wait-extra').hidden=!(gh&&LIVE); $('su-test').textContent=gh&&!LIVE?'Simulate a ping (demo)':'Send test event';
   $('gh-wait-links').innerHTML=gh?(i.org?`<a class="small" href="https://github.com/organizations/${encodeURIComponent(i.org)}/settings/hooks" target="_blank" rel="noopener" data-testid="gh-open-hooks">Open webhooks in GitHub</a>`:'')+'<a class="small" href="#events">See deliveries</a>':'';
   if(gh){ ghPaint(false); ghPreviewInit(i); } else $('gh-preview').hidden=true;
