@@ -1,5 +1,5 @@
-// Package store holds integrations, orgs, products and events in memory, with an
-// optional JSON snapshot on disk. Token plaintext is never stored, only its SHA-256.
+// Package store holds integrations, orgs, products and events in memory and writes every change
+// to a Persister (ArcadeDB). Token plaintext is never stored, only its SHA-256.
 package store
 
 import (
