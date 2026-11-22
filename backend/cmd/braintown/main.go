@@ -26,7 +26,7 @@ func main() {
 	h := hub.New()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/healthz", func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte("ok\n")) })
-	mux.Handle("POST /ingest/{kind}/{id}", ingest.New(st, h))
+	mux.Handle("POST /ingest/{kind}/{id}", ingest.New(st, h, cfg.IngestRate, cfg.IngestBurst))
 	admin.New(st, h, cfg).Routes(mux)
 
 	srv := &http.Server{Addr: cfg.Listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 2 * time.Minute}
