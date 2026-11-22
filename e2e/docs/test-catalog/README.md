@@ -17,9 +17,9 @@ counts as automated: it passes while the bug exists and turns red when the bug i
 | [Feed puller (feed)](feed.md)          |     5 |   2 |   3 |         3 |       0 |       1 |           0 |    1 |         60% |
 | [Ingest (ingest)](ingest.md)           |    29 |  14 |  15 |        29 |       0 |       0 |           0 |    0 |        100% |
 | [Event streams (stream)](stream.md)    |    15 |  13 |   2 |        14 |       0 |       0 |           0 |    1 |         93% |
-| [Back-office (web)](web-backoffice.md) |    13 |  10 |   3 |        13 |       0 |       0 |           0 |    0 |        100% |
+| [Back-office (web)](web-backoffice.md) |    17 |  14 |   3 |        17 |       0 |       0 |           0 |    0 |        100% |
 | [Town (web)](web-town.md)              |     9 |   7 |   2 |         9 |       0 |       0 |           0 |    0 |        100% |
-| **Total**                              |   102 |  64 |  38 |        98 |       0 |       1 |           1 |    2 |         96% |
+| **Total**                              |   106 |  68 |  38 |       102 |       0 |       1 |           1 |    2 |         96% |
 
 <!-- coverage:end -->
 
