@@ -4,6 +4,7 @@ package admin
 import (
 	"crypto/rand"
 	"crypto/subtle"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/ardihikaru/brain-town/backend/internal/config"
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
+	"github.com/ardihikaru/brain-town/backend/internal/secret"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
 	"github.com/ardihikaru/brain-town/backend/internal/visibility"
 )
@@ -49,6 +51,7 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH /api/admin/integrations/{id}", a.auth(a.updateIntegration))
 	mux.HandleFunc("DELETE /api/admin/integrations/{id}", a.auth(a.deleteIntegration))
 	mux.HandleFunc("POST /api/admin/integrations/{id}/token", a.auth(a.rotate))
+	mux.HandleFunc("GET /api/admin/integrations/{id}/secret", a.auth(a.revealSecret))
 	mux.HandleFunc("GET /api/admin/products", a.auth(a.products))
 	mux.HandleFunc("PUT /api/admin/orgs/{key}", a.auth(a.putOrg))
 	mux.HandleFunc("PUT /api/admin/products/{key}", a.auth(a.putProduct))
@@ -211,15 +214,22 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, "kind must be github, qa, gaos or site, and name is required")
 		return
 	}
+	if in.Kind == "github" {
+		sealed, hint, plain, err := a.newWebhookSecret()
+		if err != nil {
+			fail(w, 503, "BRAIN_TOWN_SECRET_KEY is not configured, so GitHub secrets cannot be stored")
+			return
+		}
+		i := a.St.CreateSecretIntegration("github", strings.TrimSpace(in.Name), in.Org, sealed, hint)
+		writeJSON(w, 201, map[string]any{"integration": i, "token": plain, "ingestPath": ingestPath(i)})
+		return
+	}
 	i, tok := a.St.CreateIntegration(in.Kind, strings.TrimSpace(in.Name), in.Org)
 	// The plaintext token is shown only here and on rotate.
 	writeJSON(w, 201, map[string]any{"integration": i, "token": tok, "ingestPath": ingestPath(i)})
 }
 
 func ingestPath(i store.Integration) string {
-	if i.Kind == "github" {
-		return ""
-	}
 	return "/ingest/" + i.Kind + "/" + i.ID
 }
 
@@ -251,7 +261,46 @@ func (a *API) deleteIntegration(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(204)
 }
 
+// newWebhookSecret makes a whsec_ secret and returns it sealed, its hint (last 4) and the plaintext.
+func (a *API) newWebhookSecret() (sealed, hint, plain string, err error) {
+	b := make([]byte, 32)
+	if _, err = rand.Read(b); err != nil {
+		return
+	}
+	plain = "whsec_" + base64.RawURLEncoding.EncodeToString(b)
+	if sealed, err = secret.Seal(a.Cfg.SecretKey, plain); err != nil {
+		return "", "", "", err
+	}
+	return sealed, plain[len(plain)-4:], plain, nil
+}
+
+// revealSecret returns the GitHub webhook secret so the setup page can show and copy it again.
+func (a *API) revealSecret(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
+	i, ok := a.St.Lookup(r.PathValue("id"))
+	if !ok || i.Kind != "github" {
+		fail(w, 404, "no such GitHub integration")
+		return
+	}
+	plain, err := secret.Open(a.Cfg.SecretKey, i.SecretEnc)
+	if err != nil || i.SecretEnc == "" {
+		fail(w, 503, "the secret cannot be decrypted: check BRAIN_TOWN_SECRET_KEY, or rotate the secret")
+		return
+	}
+	writeJSON(w, 200, map[string]string{"secret": plain})
+}
+
 func (a *API) rotate(w http.ResponseWriter, r *http.Request) {
+	if i, ok := a.St.Lookup(r.PathValue("id")); ok && i.Kind == "github" {
+		sealed, hint, plain, err := a.newWebhookSecret()
+		if err != nil {
+			fail(w, 503, "BRAIN_TOWN_SECRET_KEY is not configured, so GitHub secrets cannot be stored")
+			return
+		}
+		a.St.RotateSecret(i.ID, sealed, hint)
+		writeJSON(w, 200, map[string]string{"token": plain})
+		return
+	}
 	tok, ok := a.St.RotateToken(r.PathValue("id"))
 	if !ok {
 		fail(w, 404, "no such integration")

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const IntegrationKindSchema = z.enum(['github', 'qa', 'gaos', 'site']);
 export type IntegrationKind = z.infer<typeof IntegrationKindSchema>;
-/** Kinds that have an ingest endpoint (GitHub webhooks are not built yet). */
+/** Kinds that sign in with a Bearer token. GitHub uses a webhook secret instead (see the github client). */
 export type IngestKind = Exclude<IntegrationKind, 'github'>;
 
 export const SessionSchema = z.object({ email: z.email(), mode: z.string().min(1) });
@@ -16,6 +16,8 @@ export const IntegrationSchema = z
     name: z.string(),
     org: z.string().optional(),
     feedUrl: z.string().optional(),
+    /** GitHub only: events subscribed on the webhook. Other kinds send an empty list (or null). */
+    events: z.array(z.string()).nullish(),
     tokenHint: z.string().length(4),
     createdAt: z.iso.datetime({ offset: true }),
     lastEventAt: z.string(),
@@ -59,7 +61,7 @@ export const PublicEventSchema = z
     seq: z.number().int().positive(),
     id: z.string(),
     type: z.string(),
-    source: z.enum(['gaos', 'qa', 'site']),
+    source: z.enum(['github', 'gaos', 'qa', 'site']),
     at: z.iso.datetime(),
     payload: z.record(z.string(), z.unknown()),
   })

@@ -71,6 +71,11 @@ export class AdminClient extends BaseApiClient {
     return this.post(`/api/admin/integrations/${encodeURIComponent(id)}/token`);
   }
 
+  /** GitHub integrations only (404 for other kinds): the plaintext webhook secret. */
+  getSecret(id: string): Promise<APIResponse> {
+    return this.get(`/api/admin/integrations/${encodeURIComponent(id)}/secret`);
+  }
+
   products(): Promise<APIResponse> {
     return this.get('/api/admin/products');
   }

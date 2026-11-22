@@ -27,6 +27,7 @@ animation detail (who a visitor looks like, the route they take, how long they s
             │ GAOS · QA Tool · mfardiansyah.id · yours  │
             └──────┬──────────────┬─────────────┬───────┘
      POST /ingest/gaos/<id>  /ingest/qa/<id>  /ingest/site/<id>   (Bearer bt_live_…)
+     POST /ingest/github/<id>                                     (X-Hub-Signature-256)
                    ▼
         ┌──────────────────────┐        ┌────────────────────────┐
         │  Brain Town backend  │◀──────▶│  ArcadeDB (graph)      │
@@ -47,6 +48,11 @@ animation detail (who a visitor looks like, the route they take, how long they s
   uses sample data.
 - **Backend (planned).** Receives ingest POSTs, validates the token per integration,
   de-duplicates by event `id`, stores the event, and fans it out on `/events`.
+- **GitHub receiver** (`backend/internal/github`). Verifies GitHub's HMAC signature with the
+  integration's secret (stored AES-GCM encrypted with `BRAIN_TOWN_SECRET_KEY`), keeps only a small
+  envelope (never the GitHub payload), and groups noisy events (comments, reviews, pushes, CI,
+  refs, labels, stars) into one rollup per subject every 15 s. Contract:
+  [`integrations/github.md`](integrations/github.md).
 - **Feed puller** (`backend/internal/feed`). Every `FEED_PULL_INTERVAL_SECONDS` (default 300) it pulls the JSON Feed 1.1 of each `site` integration that has a `feedUrl` and records new items as `article.published`, deduped against pushes by item id.
 - **ArcadeDB.** A graph database (HTTP API on port 2480). Products, tasks, runs, integrations
   and events become vertices and edges, which fits "who did what to which product".
@@ -61,7 +67,8 @@ Every event has the same envelope:
 
 The types the town understands today are listed in the `EVENT BUS` comment at the top of the
 town's script. They include `article.*`, `illustration.published`, `magazine.printed`,
-`video.*`, `issue.*`, `task.*`, `pr.*`, `qa.run.*`, `qa.step`, `imago.*` and `site.visit`. The
+`video.*`, `issue.*`, `task.*`, `pr.*`, `qa.run.*`, `qa.step`, `imago.*` and `site.visit`, plus
+the GitHub types `ci.run`, `repo.*`, `ref.*` and `discussion.*`. The
 per-platform contracts are in [`integrations/`](integrations/).
 
 ## Design rules
