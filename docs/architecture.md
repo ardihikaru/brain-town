@@ -55,7 +55,9 @@ animation detail (who a visitor looks like, the route they take, how long they s
   [`integrations/github.md`](integrations/github.md).
 - **Feed puller** (`backend/internal/feed`). Every `FEED_PULL_INTERVAL_SECONDS` (default 300) it pulls the JSON Feed 1.1 of each `site` integration that has a `feedUrl` and records new items as `article.published`, deduped against pushes by item id.
 - **ArcadeDB.** A graph database (HTTP API on port 2480). Products, tasks, runs, integrations
-  and events become vertices and edges, which fits "who did what to which product".
+  and events become vertices and edges, which fits "who did what to which product". A GitHub integration is one per
+  owner: besides `events` it keeps `ownerType` (`user`/`organization`) and `repos` (per-repo hook events, privacy,
+  last event and last rejection, stored as a JSON string property like `events`; records without them still load).
 
 ## Event model
 

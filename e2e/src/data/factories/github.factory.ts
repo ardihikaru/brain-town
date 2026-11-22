@@ -11,6 +11,8 @@ export interface GithubScope {
   org: string;
   repo: string;
   private: boolean;
+  /** `organization` (default) sends an organization object; `user` is a personal account's repository. */
+  ownerType?: 'user' | 'organization';
 }
 
 export interface GithubSender {
@@ -68,17 +70,22 @@ export function buildPullRequest(overrides: Partial<GithubPullRequest> = {}): Gi
   };
 }
 
+function repository(scope: GithubScope): GithubPayload {
+  return {
+    id: number(),
+    name: scope.repo,
+    full_name: `${scope.org}/${scope.repo}`,
+    private: scope.private,
+    owner: { login: scope.org, type: scope.ownerType === 'user' ? 'User' : 'Organization' },
+    stargazers_count: 0,
+  };
+}
+
 function context(scope: GithubScope, sender: GithubSender): GithubPayload {
   return {
-    repository: {
-      id: number(),
-      name: scope.repo,
-      full_name: `${scope.org}/${scope.repo}`,
-      private: scope.private,
-      owner: { login: scope.org, type: 'Organization' },
-      stargazers_count: 0,
-    },
-    organization: { login: scope.org },
+    repository: repository(scope),
+    // A personal account's repository has no organization object; that is how the town tells the owner types apart.
+    ...(scope.ownerType === 'user' ? {} : { organization: { login: scope.org } }),
     sender: { login: sender.login, type: sender.type },
   };
 }
@@ -101,6 +108,18 @@ export function buildPing(scope: GithubScope, events: string[] = ['issues', 'pul
     hook_id: number(),
     hook: { type: 'Organization', active: true, events, config: { content_type: 'json' } },
     organization: { login: scope.org },
+    sender: buildSender(),
+  };
+}
+
+/** `ping` of one repository's own webhook (a personal account has no account-wide hook): carries `repository`. */
+export function buildRepoPing(scope: GithubScope, events: string[] = ['issues', 'pull_request']): GithubPayload {
+  return {
+    zen: 'Keep it logically awesome.',
+    hook_id: number(),
+    hook: { type: 'Repository', active: true, events, config: { content_type: 'json' } },
+    repository: repository(scope),
+    ...(scope.ownerType === 'user' ? {} : { organization: { login: scope.org } }),
     sender: buildSender(),
   };
 }

@@ -20,6 +20,42 @@ payloads; Brain Town verifies them, keeps only what the town needs, and turns th
 6. Choose **Let me select individual events** and tick the events below. Save. GitHub sends a `ping`; the setup page
    ticks its last step and shows which events are subscribed.
 
+### Personal account
+
+A GitHub **personal account** has no account-wide webhook, so the setup differs from an organisation:
+
+- **One integration per owner.** Create a single Brain Town GitHub integration for the account (set the owner type to
+  *user*). It shows a repo table instead of one card per repo.
+- **One hook per repo, same URL and secret.** Add a webhook to each repo (Settings, Webhooks) with the integration's
+  payload URL and its secret. All hooks of the owner share them.
+- **Per-repo subscribed events.** Each repo's hook has its own event list. Its `ping` records that list for the repo and
+  registers the repo as a product (hidden when private), so an alias can be set before its first event; the integration's
+  `events` is the sorted union over all repos. Deliveries add the event name to that repo's list, and CI de-duplication
+  (check runs vs workflow events) uses the repo's own list when it has one.
+- **Owner type** is detected from the payload (`organization` object, else `repository.owner.type`) when not set.
+
+Mandatory events are `issues` and `pull_request`. Create the hooks with the `gh` CLI (the secret is read without echo
+and never written to a file):
+
+```bash
+printf 'Webhook secret: '; read -rs SECRET; echo
+URL='https://town.example/ingest/github/<id>'
+for r in repo-a repo-b; do
+  gh api "repos/<owner>/$r/hooks" -X POST -f name=web -f "config[url]=$URL" -f config[content_type]=json \
+    -f "config[secret]=$SECRET" -F active=true \
+    -f 'events[]=issues' -f 'events[]=pull_request' -f 'events[]=check_run' -f 'events[]=workflow_run' \
+    -f 'events[]=workflow_job' -f 'events[]=issue_comment' -f 'events[]=pull_request_review' \
+    -f 'events[]=pull_request_review_comment' -f 'events[]=push' -f 'events[]=create' -f 'events[]=delete' \
+    -f 'events[]=label' -f 'events[]=sub_issues' -f 'events[]=discussion' -f 'events[]=discussion_comment' \
+    -f 'events[]=star'
+done
+unset SECRET
+```
+
+A delivery whose repository belongs to another owner than the integration's is rejected (`422`) and counted as a
+rejection on that repo only when the repo is already known to the integration (a rejection never adds a repo);
+rejected deliveries never reach public output.
+
 ### Event tiers (GitHub's checkbox names)
 
 | Tier | Events | Why |

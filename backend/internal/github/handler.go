@@ -143,8 +143,9 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if org == "" {
 		org = str(obj(p, "repository", "owner"), "login")
 	}
+	repo := str(obj(p, "repository"), "name")
 	if integ.Org != "" && org != "" && !strings.EqualFold(integ.Org, org) {
-		h.reject(iid, event, 422, "delivery is for another organisation")
+		h.rejectRepo(iid, event, 422, "delivery is for another organisation", repo)
 		reply(w, 422, "this delivery is for another organisation than the integration's", "organization")
 		return
 	}
@@ -154,6 +155,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	at := h.now().UTC()
 	id := "gh-" + delivery
+	ownerType := ownerTypeOf(p)
 	if event == "ping" {
 		events := strList(obj(p, "hook")["events"])
 		ev, fresh := h.St.AddAccepted(store.Accept{Integration: iid, Kind: "github", Key: delivery, ID: id, Type: "ping", At: at, Org: org,
@@ -162,31 +164,46 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			reply(w, 409, "delivery already accepted", "X-GitHub-Delivery")
 			return
 		}
-		h.St.SetEvents(iid, events)
+		if repo != "" { // a repo hook (personal account, or a single repo): per-repo events, the integration shows the union
+			private := boolean(obj(p, "repository"), "private")
+			h.St.SetRepoHook(iid, repo, private, events)
+			h.St.RegisterProduct(org, repo, "github", private) // so an alias can be set before the first real event
+		} else {
+			h.St.SetEvents(iid, events)
+		}
 		h.St.AdoptOrg(iid, org)
+		h.St.AdoptOwnerType(iid, ownerType)
 		h.Hub.Publish(ev)
 		reply(w, 202, accepted, "")
 		return
 	}
 
-	ct, outcome := translate(event, p, integ.Events)
+	// The repo's own subscription list tells translate whether CI is also reported by another event.
+	subscribed := integ.Events
+	if rs := integ.Repos[repo]; len(rs.HookEvents) > 0 {
+		subscribed = rs.HookEvents
+	}
+	ct, outcome := translate(event, p, subscribed)
+	hidden := boolean(obj(p, "repository"), "private")
+	if repo != "" {
+		h.St.TouchRepo(iid, repo, hidden, event, at)
+	}
 	if outcome != accepted {
 		reply(w, 202, outcome, "")
 		return
 	}
-	repo := str(obj(p, "repository"), "name")
 	if repo == "" {
 		h.reject(iid, event, 422, "repository.name is required")
 		reply(w, 422, "repository.name is required", "repository")
 		return
 	}
-	hidden := boolean(obj(p, "repository"), "private")
 	if ct.Grouped {
 		if !h.St.ClaimDelivery(iid, delivery) {
 			reply(w, 409, "delivery already accepted", "X-GitHub-Delivery")
 			return
 		}
 		h.St.AdoptOrg(iid, org)
+		h.St.AdoptOwnerType(iid, ownerType)
 		h.Co.Add(base{Integration: iid, Org: org, Repo: repo, Hidden: hidden, Delivery: delivery, At: at}, ct)
 		reply(w, 202, accepted, "")
 		return
@@ -203,8 +220,24 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.St.AdoptOrg(iid, org)
+	h.St.AdoptOwnerType(iid, ownerType)
 	h.Hub.Publish(ev)
 	reply(w, 202, accepted, "")
+}
+
+// ownerTypeOf reads who owns the repository: an "organization" object means an organisation; otherwise
+// repository.owner.type says "User" or "Organization". "" when the payload does not say.
+func ownerTypeOf(p map[string]any) string {
+	if obj(p, "organization") != nil {
+		return "organization"
+	}
+	switch str(obj(p, "repository", "owner"), "type") {
+	case "User":
+		return "user"
+	case "Organization":
+		return "organization"
+	}
+	return ""
 }
 
 // validSignature checks "sha256=<hex>" against HMAC-SHA256(secret, body) in constant time.
@@ -223,7 +256,12 @@ func validSignature(secret string, body []byte, header string) bool {
 }
 
 func (h *Handler) reject(id, typ string, status int, reason string) {
-	h.Hub.Publish(h.St.AddRejected(id, "github", typ, status, reason))
+	h.rejectRepo(id, typ, status, reason, "")
+}
+
+// rejectRepo records a rejection; repo (when known) is counted per repo and never reaches public output.
+func (h *Handler) rejectRepo(id, typ string, status int, reason, repo string) {
+	h.Hub.Publish(h.St.AddRejectedRepo(id, "github", typ, status, reason, repo))
 }
 
 func reply(w http.ResponseWriter, status int, msg, field string) {

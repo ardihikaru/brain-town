@@ -3,6 +3,7 @@ import { DashboardPage } from './pages/dashboard.page';
 import { EventsPage } from './pages/events.page';
 import { GithubSetupPage } from './pages/github-setup.page';
 import { IntegrationsPage } from './pages/integrations.page';
+import { OwnerPage } from './pages/owner.page';
 import { LoginPage } from './pages/login.page';
 import { SetupPage } from './pages/setup.page';
 
@@ -14,6 +15,7 @@ export class BackofficeApp {
   readonly setup: SetupPage;
   readonly events: EventsPage;
   readonly githubSetup: GithubSetupPage;
+  readonly owner: OwnerPage;
 
   constructor(readonly page: Page) {
     this.login = new LoginPage(page);
@@ -22,5 +24,6 @@ export class BackofficeApp {
     this.setup = new SetupPage(page);
     this.events = new EventsPage(page);
     this.githubSetup = new GithubSetupPage(page);
+    this.owner = new OwnerPage(page);
   }
 }

@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestGithubIntegrationHelpers(t *testing.T) {
@@ -89,5 +90,49 @@ func TestAddEventDedupeCapAndPersistOnChange(t *testing.T) {
 	}
 	if got, _ := st.GetIntegration(i.ID); len(got.Events) != MaxIntegrationEvents {
 		t.Errorf("cap: %d", len(got.Events))
+	}
+}
+
+func TestRepoStateIsDeepCopiedAndCapped(t *testing.T) {
+	st, _ := New(nil)
+	i := st.CreateSecretIntegration("github", "GH", "alice", "sealed", "wxyz")
+	st.SetRepoHook(i.ID, "a", false, []string{"issues"})
+	got, _ := st.Lookup(i.ID)
+	got.Repos["a"].HookEvents[0] = "x"
+	got.Repos["b"] = RepoState{Name: "b"}
+	if again, _ := st.Lookup(i.ID); len(again.Repos) != 1 || again.Repos["a"].HookEvents[0] != "issues" {
+		t.Error("Lookup shares repo state")
+	}
+	if c, _ := st.CheckToken(i.ID, ""); c == nil || len(c.Repos) != 1 {
+		t.Error("CheckToken copy")
+	}
+	for n := 0; n < MaxRepos+20; n++ {
+		st.TouchRepo(i.ID, fmt.Sprintf("r%d", n), false, "push", time.Now())
+	}
+	if g, _ := st.Lookup(i.ID); len(g.Repos) != MaxRepos {
+		t.Errorf("repos = %d, want cap %d", len(g.Repos), MaxRepos)
+	}
+}
+
+func TestAdoptOwnerTypeOnlyOnce(t *testing.T) {
+	st, _ := New(nil)
+	i := st.CreateSecretIntegration("github", "GH", "", "sealed", "wxyz")
+	for _, c := range []struct{ in, want string }{{"", ""}, {"team", ""}, {"user", "user"}, {"organization", "user"}} {
+		st.AdoptOwnerType(i.ID, c.in)
+		if got, _ := st.GetIntegration(i.ID); got.OwnerType != c.want {
+			t.Errorf("after %q: %q, want %q", c.in, got.OwnerType, c.want)
+		}
+	}
+}
+
+func TestAliasCustom(t *testing.T) {
+	for _, c := range []struct {
+		alias, key string
+		want       bool
+	}{{"gaos", "gaos", false}, {"Product A", "gaos", false}, {"Product Z", "x", false}, {"Product 093015", "x", false},
+		{"Falcon", "gaos", true}, {"Product AB", "x", true}, {"Product 12345", "x", true}} {
+		if got := AliasCustom(c.alias, c.key); got != c.want {
+			t.Errorf("AliasCustom(%q,%q) = %v", c.alias, c.key, got)
+		}
 	}
 }
