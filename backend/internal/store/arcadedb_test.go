@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -134,3 +136,57 @@ func TestFlushRetriesAfterFailure(t *testing.T) {
 }
 
 func ptr(s string) *string { return &s }
+
+func TestArcadeKeepsOwnerTypeAndRepos(t *testing.T) {
+	a := arcade(t)
+	st, err := New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := st.CreateSecretIntegration("github", "alice", "alice", "sealed", "wxyz")
+	st.AdoptOwnerType(i.ID, "user")
+	st.SetRepoHook(i.ID, "alpha", true, []string{"pull_request", "issues"})
+	st.TouchRepo(i.ID, "beta", false, "push", time.Now())
+	st.AddRejectedRepo(i.ID, "github", "issues", 422, "bad", "beta") // must not break the flush: no product named beta
+	if err := st.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	st2, err := New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, _ := st2.GetIntegration(i.ID)
+	if got.OwnerType != "user" || len(got.Repos) != 2 || !got.Repos["alpha"].Private ||
+		len(got.Repos["alpha"].HookEvents) != 2 || got.Repos["beta"].LastEventAt.IsZero() || got.Repos["beta"].LastRejectedAt.IsZero() {
+		t.Errorf("after restart: %+v", got)
+	}
+	// A record written before these properties existed still loads.
+	if err := a.script(context.Background(), "INSERT INTO Integration SET id='old-1', kind='github', name='old', events='[]'", nil); err != nil {
+		t.Fatal(err)
+	}
+	st3, err := New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old, ok := st3.GetIntegration("old-1"); !ok || old.OwnerType != "" || len(old.Repos) != 0 {
+		t.Errorf("old record: %+v %v", old, ok)
+	}
+}
+
+func TestBuildScriptCarriesOwnerTypeAndRepos(t *testing.T) {
+	g := Integration{ID: "github-1", Kind: "github", OwnerType: "user", Events: []string{"issues"},
+		Repos: map[string]RepoState{"a": {Name: "a", HookEvents: []string{"issues"}}}}
+	sql, p := buildScript([]Op{{Kind: OpIntegration, Integration: &g}})
+	if !strings.Contains(sql, "ownerType=:p0_ot") || !strings.Contains(sql, "repos=:p0_repos") {
+		t.Errorf("script: %s", sql)
+	}
+	var back map[string]RepoState
+	if p["p0_ot"] != "user" || json.Unmarshal([]byte(p["p0_repos"].(string)), &back) != nil || back["a"].HookEvents[0] != "issues" {
+		t.Errorf("params: %v", p)
+	}
+	// A rejected event never gets an ABOUT edge: its product may not exist.
+	sql, _ = buildScript([]Op{{Kind: OpEvent, Event: &Event{Seq: 1, Delivery: Reject, Product: "x"}}})
+	if strings.Contains(sql, "ABOUT") {
+		t.Error("rejected event creates an ABOUT edge")
+	}
+}

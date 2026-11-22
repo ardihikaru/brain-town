@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"log"
+	"regexp"
 	"slices"
 	"sort"
 	"strings"
@@ -26,18 +27,47 @@ const (
 )
 
 type Integration struct {
-	ID             string    `json:"id"`
-	Kind           string    `json:"kind"` // github | qa | gaos | site
+	ID             string               `json:"id"`
+	Kind           string               `json:"kind"` // github | qa | gaos | site
+	Name           string               `json:"name"`
+	Org            string               `json:"org,omitempty"`
+	FeedURL        string               `json:"feedUrl,omitempty"` // site only: JSON Feed 1.1 URL pulled by internal/feed (https)
+	TokenHash      string               `json:"tokenHash,omitempty"`
+	TokenHint      string               `json:"tokenHint,omitempty"`
+	SecretEnc      string               `json:"secretEnc,omitempty"` // github only: AES-256-GCM sealed webhook secret; never sent by the admin API
+	Events         []string             `json:"events"`              // github only: events subscribed on the webhook, from the last ping
+	OwnerType      string               `json:"ownerType"`           // github only: "user" | "organization" | "" (unknown), adopted once from the payload
+	Repos          map[string]RepoState `json:"-"`                   // github only: per-repo state, keyed by repo name; the admin list emits it as a sorted slice
+	CreatedAt      time.Time            `json:"createdAt"`
+	LastEventAt    time.Time            `json:"lastEventAt"`
+	LastRejectedAt time.Time            `json:"lastRejectedAt"`
+}
+
+// RepoState is what the town knows about one repository of a GitHub integration. A personal account has no
+// account-wide webhook, so each repo carries its own hook and its own subscribed events.
+type RepoState struct {
 	Name           string    `json:"name"`
-	Org            string    `json:"org,omitempty"`
-	FeedURL        string    `json:"feedUrl,omitempty"` // site only: JSON Feed 1.1 URL pulled by internal/feed (https)
-	TokenHash      string    `json:"tokenHash,omitempty"`
-	TokenHint      string    `json:"tokenHint,omitempty"`
-	SecretEnc      string    `json:"secretEnc,omitempty"` // github only: AES-256-GCM sealed webhook secret; never sent by the admin API
-	Events         []string  `json:"events"`              // github only: events subscribed on the webhook, from the last ping
-	CreatedAt      time.Time `json:"createdAt"`
+	Private        bool      `json:"private"`
+	HookEvents     []string  `json:"hookEvents"`
 	LastEventAt    time.Time `json:"lastEventAt"`
 	LastRejectedAt time.Time `json:"lastRejectedAt"`
+}
+
+// MaxRepos caps the repos kept on one integration.
+const MaxRepos = 500
+
+// clone returns a deep copy: the events slice and the repos map are never shared with the store.
+func (i *Integration) clone() Integration {
+	c := *i
+	c.Events = append([]string{}, i.Events...)
+	if i.Repos != nil {
+		c.Repos = make(map[string]RepoState, len(i.Repos))
+		for k, r := range i.Repos {
+			r.HookEvents = append([]string{}, r.HookEvents...)
+			c.Repos[k] = r
+		}
+	}
+	return c
 }
 
 type Org struct {
@@ -237,7 +267,7 @@ func (st *Store) CheckToken(id, token string) (*Integration, bool) {
 	if !ok {
 		return nil, false
 	}
-	c := *i
+	c := i.clone()
 	good := i.TokenHash != "" && subtle.ConstantTimeCompare([]byte(i.TokenHash), []byte(HashToken(token))) == 1
 	return &c, good
 }
@@ -246,9 +276,8 @@ func (st *Store) CheckToken(id, token string) (*Integration, bool) {
 
 // public returns a copy that is safe to hand out: no token hash, no sealed secret, events never nil.
 func (i *Integration) public() Integration {
-	c := *i
+	c := i.clone()
 	c.TokenHash, c.SecretEnc = "", ""
-	c.Events = append([]string{}, i.Events...)
 	return c
 }
 
@@ -284,9 +313,7 @@ func (st *Store) Lookup(id string) (Integration, bool) {
 	if !ok {
 		return Integration{}, false
 	}
-	c := *i
-	c.Events = append([]string{}, i.Events...)
-	return c, true
+	return i.clone(), true
 }
 
 func (st *Store) add(i *Integration) {
@@ -382,6 +409,130 @@ func (st *Store) AdoptOrg(id, org string) string {
 	return i.Org
 }
 
+// AdoptOwnerType sets the GitHub owner type ("user" or "organization") once; a non-empty value is never overwritten.
+func (st *Store) AdoptOwnerType(id, ownerType string) {
+	if !ValidOwnerType(ownerType) || ownerType == "" {
+		return
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if i, ok := st.s.Integrations[id]; ok && i.OwnerType == "" {
+		i.OwnerType = ownerType
+		st.qIntegration(i)
+	}
+}
+
+// SetOwnerType overwrites the owner type of a github integration (admin only; "" clears it).
+func (st *Store) SetOwnerType(id, ownerType string) (Integration, bool) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i, ok := st.s.Integrations[id]
+	if !ok || i.Kind != "github" || !ValidOwnerType(ownerType) {
+		return Integration{}, false
+	}
+	i.OwnerType = ownerType
+	st.qIntegration(i)
+	return i.public(), true
+}
+
+// ValidOwnerType reports whether t is "", "user" or "organization".
+func ValidOwnerType(t string) bool { return t == "" || t == "user" || t == "organization" }
+
+// repo returns the state of a repo for update, creating it unless the cap is reached.
+func (i *Integration) repo(name string) (RepoState, bool) {
+	r, ok := i.Repos[name]
+	if !ok {
+		if len(i.Repos) >= MaxRepos {
+			return r, false
+		}
+		r = RepoState{Name: name}
+	}
+	return r, true
+}
+
+func (i *Integration) putRepo(r RepoState) {
+	if i.Repos == nil {
+		i.Repos = map[string]RepoState{}
+	}
+	i.Repos[r.Name] = r
+}
+
+func addEventTo(list []string, event string) []string {
+	if event == "" || len(event) > 64 || len(list) >= MaxIntegrationEvents || slices.Contains(list, event) {
+		return list
+	}
+	out := append(append([]string{}, list...), event)
+	sort.Strings(out)
+	return out
+}
+
+// SetRepoHook records the events a repo's own hook subscribes to (from a repo ping) and sets the integration's
+// Events to the sorted union over all repos, so the setup page keeps working for personal owners.
+func (st *Store) SetRepoHook(id, repo string, private bool, events []string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i, ok := st.s.Integrations[id]
+	if !ok || repo == "" {
+		return
+	}
+	r, ok := i.repo(repo)
+	if !ok {
+		return
+	}
+	if len(events) > MaxIntegrationEvents {
+		events = events[:MaxIntegrationEvents]
+	}
+	r.Private = private
+	r.HookEvents = append([]string{}, events...)
+	sort.Strings(r.HookEvents)
+	i.putRepo(r)
+	var union []string
+	for _, rs := range i.Repos {
+		for _, e := range rs.HookEvents {
+			if !slices.Contains(union, e) {
+				union = append(union, e)
+			}
+		}
+	}
+	sort.Strings(union)
+	if len(union) > MaxIntegrationEvents {
+		union = union[:MaxIntegrationEvents]
+	}
+	i.Events = append([]string{}, union...)
+	st.qIntegration(i)
+}
+
+// TouchRepo records an accepted delivery for a repo: last event time, privacy and the event name.
+func (st *Store) TouchRepo(id, repo string, private bool, event string, at time.Time) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	i, ok := st.s.Integrations[id]
+	if !ok || repo == "" {
+		return
+	}
+	r, ok := i.repo(repo)
+	if !ok {
+		return
+	}
+	r.Private, r.LastEventAt = private, at.UTC()
+	if event != "ping" {
+		r.HookEvents = addEventTo(r.HookEvents, event)
+	}
+	i.putRepo(r)
+	st.qIntegration(i)
+}
+
+// RegisterProduct registers the org and product for a repo without an event, so an alias can be set early.
+func (st *Store) RegisterProduct(org, product, kind string, private bool) {
+	vis := ""
+	if private {
+		vis = Hidden
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.touch(org, product, product, vis, kind)
+}
+
 // ClaimDelivery atomically records a delivery key for dedupe and bumps the integration's LastEventAt.
 // It returns false when the key was already claimed. Single events use AddAccepted instead.
 func (st *Store) ClaimDelivery(integration, key string) bool {
@@ -457,6 +608,34 @@ func nextAlias(prefix string, taken map[string]bool) string {
 	return prefix + " " + time.Now().Format("150405")
 }
 
+var generatedAlias = regexp.MustCompile(`^Product ([A-Z]|\d{6})$`)
+
+// AliasCustom reports whether an alias was typed by a person: false when it equals the key (public) or matches the
+// generated "Product A" / "Product 150405" pattern.
+func AliasCustom(alias, key string) bool {
+	return alias != key && !generatedAlias.MatchString(alias)
+}
+
+// DefaultProductAlias is what resetting the alias of a product would give: the key when public, the current
+// alias when it is already generated, else a fresh generated one. "" when the product does not exist.
+func (st *Store) DefaultProductAlias(key string) string {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	p, ok := st.s.Products[key]
+	if !ok {
+		return ""
+	}
+	if !AliasCustom(p.Alias, p.Key) {
+		return p.Alias
+	}
+	if p.Visibility != Hidden {
+		return p.Key
+	}
+	taken := st.productAliases()
+	delete(taken, p.Alias)
+	return nextAlias("Product", taken)
+}
+
 func (st *Store) orgAliases() map[string]bool {
 	m := map[string]bool{}
 	for _, o := range st.s.Orgs {
@@ -511,8 +690,7 @@ func (st *Store) touch(org, product, name, reportedVis, kind string) {
 }
 
 func (st *Store) qIntegration(i *Integration) {
-	c := *i
-	c.Events = append([]string(nil), i.Events...)
+	c := i.clone()
 	st.q(Op{Kind: OpIntegration, Integration: &c})
 }
 func (st *Store) qOrg(o *Org) { c := *o; st.q(Op{Kind: OpOrg, Org: &c}) }
@@ -611,8 +789,15 @@ func (st *Store) SetProduct(key string, vis, alias, hall *string) (Product, bool
 			p.Alias = nextAlias("Product", st.productAliases())
 		}
 	}
-	if alias != nil && strings.TrimSpace(*alias) != "" {
-		p.Alias = strings.TrimSpace(*alias)
+	if alias != nil {
+		if a := strings.TrimSpace(*alias); a != "" {
+			p.Alias = a
+		} else if p.Visibility == Hidden && AliasCustom(p.Alias, p.Key) {
+			// An empty alias on a hidden product resets it to a generated default.
+			taken := st.productAliases()
+			delete(taken, p.Alias)
+			p.Alias = nextAlias("Product", taken)
+		}
 	}
 	if hall != nil {
 		p.Hall = *hall
@@ -663,14 +848,27 @@ func (st *Store) AddAccepted(a Accept) (Event, bool) {
 }
 
 func (st *Store) AddRejected(integration, kind, typ string, status int, reason string) Event {
+	return st.AddRejectedRepo(integration, kind, typ, status, reason, "")
+}
+
+// AddRejectedRepo is AddRejected for a delivery whose repository is known: the repo becomes the event's Product
+// (so rejections can be counted per repo; the event is never public) and its LastRejectedAt is set.
+// The product is not registered: a rejected delivery adds nothing to the town.
+func (st *Store) AddRejectedRepo(integration, kind, typ string, status int, reason, repo string) Event {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	now := time.Now().UTC()
 	if i, ok := st.s.Integrations[integration]; ok {
 		i.LastRejectedAt = now
+		if repo != "" {
+			if r, ok := i.repo(repo); ok {
+				r.LastRejectedAt = now
+				i.putRepo(r)
+			}
+		}
 		st.qIntegration(i)
 	}
-	ev := Event{Seq: st.s.NextSeq, Integration: integration, Kind: kind, Type: typ, At: now, Received: now, Delivery: Reject, Status: status, Reason: reason}
+	ev := Event{Seq: st.s.NextSeq, Integration: integration, Kind: kind, Type: typ, At: now, Received: now, Delivery: Reject, Status: status, Reason: reason, Product: repo}
 	st.s.NextSeq++
 	st.append(ev)
 	return ev

@@ -121,8 +121,9 @@ func (a *Arcade) Load(ctx context.Context) (Snapshot, error) {
 		g := Integration{ID: str(r, "id"), Kind: str(r, "kind"), Name: str(r, "name"), Org: str(r, "org"), FeedURL: str(r, "feedUrl"),
 			TokenHash: str(r, "tokenHash"), TokenHint: str(r, "tokenHint"), CreatedAt: parseT(str(r, "createdAt")),
 			LastEventAt: parseT(str(r, "lastEventAt")), LastRejectedAt: parseT(str(r, "lastRejectedAt")),
-			SecretEnc: str(r, "secretEnc")}
+			SecretEnc: str(r, "secretEnc"), OwnerType: str(r, "ownerType")}
 		_ = json.Unmarshal([]byte(str(r, "events")), &g.Events)
+		_ = json.Unmarshal([]byte(str(r, "repos")), &g.Repos) // absent on records written before per-repo state
 		sn.Integrations = append(sn.Integrations, g)
 	}
 	if rows, err = a.query(ctx, "SELECT FROM Org", nil); err != nil {
@@ -197,10 +198,10 @@ func buildScript(ops []Op) (string, map[string]any) {
 		switch o.Kind {
 		case OpIntegration:
 			g := o.Integration
-			fmt.Fprintf(&sb, "UPDATE Integration SET id=%s, kind=%s, name=%s, org=%s, feedUrl=%s, tokenHash=%s, tokenHint=%s, createdAt=%s, lastEventAt=%s, lastRejectedAt=%s, secretEnc=%s, events=%s UPSERT WHERE id=%s;\n",
+			fmt.Fprintf(&sb, "UPDATE Integration SET id=%s, kind=%s, name=%s, org=%s, feedUrl=%s, tokenHash=%s, tokenHint=%s, createdAt=%s, lastEventAt=%s, lastRejectedAt=%s, secretEnc=%s, events=%s, ownerType=%s, repos=%s UPSERT WHERE id=%s;\n",
 				set("id", g.ID), set("kind", g.Kind), set("name", g.Name), set("org", g.Org), set("feed", g.FeedURL), set("th", g.TokenHash), set("hint", g.TokenHint),
 				set("ca", g.CreatedAt.UTC().Format(TimeFmt)), set("le", g.LastEventAt.UTC().Format(TimeFmt)), set("lr", g.LastRejectedAt.UTC().Format(TimeFmt)),
-				set("se", g.SecretEnc), set("ev", jsonStr(g.Events)), k("id"))
+				set("se", g.SecretEnc), set("ev", jsonStr(g.Events)), set("ot", g.OwnerType), set("repos", jsonStr(g.Repos)), k("id"))
 		case OpIntegrationDel:
 			fmt.Fprintf(&sb, "DELETE VERTEX FROM Integration WHERE id=%s;\n", set("id", o.Key))
 		case OpOrg:
@@ -221,7 +222,7 @@ func buildScript(ops []Op) (string, map[string]any) {
 				set("seq", e.Seq), set("eid", e.ID), set("int", e.Integration), set("kind", e.Kind), set("type", e.Type), set("at", e.At.UTC().Format(TimeFmt)),
 				set("rec", e.Received.UTC().Format(TimeFmt)), set("del", e.Delivery), set("st", e.Status), set("reason", e.Reason), set("prod", e.Product), set("org", e.Org), set("raw", jsonStr(e.Raw)))
 			fmt.Fprintf(&sb, "CREATE EDGE PRODUCED FROM (SELECT FROM Integration WHERE id=%s) TO (SELECT FROM Event WHERE seq=%s);\n", k("int"), k("seq"))
-			if e.Product != "" {
+			if e.Product != "" && e.Delivery == OK { // a rejected event names a repo that may not be a product
 				fmt.Fprintf(&sb, "CREATE EDGE ABOUT FROM (SELECT FROM Event WHERE seq=%s) TO (SELECT FROM Product WHERE key=%s);\n", k("seq"), k("prod"))
 			}
 			fmt.Fprintf(&sb, "UPDATE Meta SET name='seq', n=%s UPSERT WHERE name='seq';\n", k("seq"))

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -178,36 +179,86 @@ func (a *API) session(w http.ResponseWriter, r *http.Request) {
 
 var kinds = map[string]bool{"github": true, "qa": true, "gaos": true, "site": true}
 
+// repoRow is one repository of a GitHub integration in the admin list.
+type repoRow struct {
+	Name           string    `json:"name"`
+	Private        bool      `json:"private"`
+	HookEvents     []string  `json:"hookEvents"`
+	LastEventAt    time.Time `json:"lastEventAt"`
+	LastRejectedAt time.Time `json:"lastRejectedAt"`
+	Today          int       `json:"today"`
+	Rejected       int       `json:"rejected"`
+	Product        string    `json:"product"`
+	Visibility     string    `json:"visibility"`
+	Alias          string    `json:"alias"`
+	AliasCustom    bool      `json:"aliasCustom"`
+	DefaultAlias   string    `json:"defaultAlias"`
+}
+
 func (a *API) listIntegrations(w http.ResponseWriter, r *http.Request) {
 	list := a.St.Integrations()
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	type row struct {
 		store.Integration
-		Today  int `json:"today"`
-		Errors int `json:"errors"`
+		Today  int       `json:"today"`
+		Errors int       `json:"errors"`
+		Repos  []repoRow `json:"repos"`
+	}
+	products := map[string]store.Product{}
+	for _, p := range a.St.Products() {
+		products[p.Key] = p
 	}
 	out := make([]row, 0, len(list))
 	evs := a.St.Events(store.Query{Limit: 500, Newest: true})
 	for _, i := range list {
-		rw := row{Integration: i}
+		rw := row{Integration: i, Repos: []repoRow{}}
+		perRepo := map[string]*repoRow{}
+		for name, rs := range i.Repos {
+			rr := &repoRow{Name: name, Private: rs.Private, HookEvents: append([]string{}, rs.HookEvents...),
+				LastEventAt: rs.LastEventAt, LastRejectedAt: rs.LastRejectedAt, Visibility: store.Public}
+			if rs.Private {
+				rr.Visibility = store.Hidden
+			}
+			if p, ok := products[name]; ok {
+				rr.Product, rr.Visibility, rr.Alias = p.Key, p.Visibility, p.Alias
+				rr.AliasCustom = store.AliasCustom(p.Alias, p.Key)
+				rr.DefaultAlias = a.St.DefaultProductAlias(p.Key)
+			}
+			perRepo[name] = rr
+		}
 		for _, e := range evs {
 			if e.Integration != i.ID || e.Received.Before(today) {
 				continue
 			}
+			rr := perRepo[e.Product]
 			if e.Delivery == store.OK {
 				rw.Today++
+				if rr != nil {
+					rr.Today++
+				}
 			} else {
 				rw.Errors++
+				if rr != nil {
+					rr.Rejected++
+				}
 			}
 		}
+		for _, rr := range perRepo {
+			rw.Repos = append(rw.Repos, *rr)
+		}
+		sort.Slice(rw.Repos, func(x, y int) bool { return rw.Repos[x].Name < rw.Repos[y].Name })
 		out = append(out, rw)
 	}
 	writeJSON(w, 200, out)
 }
 
 func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Kind, Name, Org string }
+	var in struct{ Kind, Name, Org, OwnerType string }
 	if !decode(w, r, &in) {
+		return
+	}
+	if in.Kind == "github" && !store.ValidOwnerType(in.OwnerType) {
+		fail(w, 422, "ownerType must be user or organization")
 		return
 	}
 	if !kinds[in.Kind] || strings.TrimSpace(in.Name) == "" || len(in.Name) > 80 {
@@ -221,6 +272,9 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		i := a.St.CreateSecretIntegration("github", strings.TrimSpace(in.Name), in.Org, sealed, hint)
+		if in.OwnerType != "" {
+			i, _ = a.St.SetOwnerType(i.ID, in.OwnerType)
+		}
 		writeJSON(w, 201, map[string]any{"integration": i, "token": plain, "ingestPath": ingestPath(i)})
 		return
 	}
@@ -234,8 +288,12 @@ func ingestPath(i store.Integration) string {
 }
 
 func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
-	var in struct{ Name, Org, FeedURL *string }
+	var in struct{ Name, Org, FeedURL, OwnerType *string }
 	if !decode(w, r, &in) {
+		return
+	}
+	if in.OwnerType != nil && !store.ValidOwnerType(*in.OwnerType) {
+		fail(w, 422, "ownerType must be user or organization")
 		return
 	}
 	if in.FeedURL != nil {
@@ -249,6 +307,9 @@ func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		fail(w, 404, "no such integration")
 		return
+	}
+	if in.OwnerType != nil && i.Kind == "github" {
+		i, _ = a.St.SetOwnerType(i.ID, *in.OwnerType)
 	}
 	writeJSON(w, 200, i)
 }

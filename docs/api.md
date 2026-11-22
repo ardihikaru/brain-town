@@ -77,12 +77,12 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | Method and path | Purpose |
 | --- | --- |
 | `POST /api/admin/login`, `/logout`; `GET /session` | Sign in (10 failures/min cap), out, check. |
-| `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). |
-| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `feedUrl` (https JSON Feed 1.1 URL of a `site` integration, pulled every 5 minutes; empty disables), delete. |
+| `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). A `github` create may carry `ownerType` (`user` or `organization`; anything else is `422`; ignored for other kinds). |
+| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `ownerType` (`github` only, same validation), set `feedUrl` (https JSON Feed 1.1 URL of a `site` integration, pulled every 5 minutes; empty disables), delete. |
 | `POST /api/admin/integrations/{id}/token` | Rotate the secret; the old one stops working. For a `github` integration this makes a new `whsec_` secret (returned in the same `token` field). |
 | `GET /api/admin/integrations/{id}/secret` | `github` only, `Cache-Control: no-store`: `{"secret":"whsec_…"}` so the setup page can show it again. `404` for an unknown id or another kind, `503` when it cannot be decrypted. |
 | `GET /api/admin/products` | Orgs and products. |
-| `PUT /api/admin/orgs/{key}`, `/products/{key}` | `visibility` (`public`/`hidden`), `alias`, product `hall`. |
+| `PUT /api/admin/orgs/{key}`, `/products/{key}` | `visibility` (`public`/`hidden`), `alias`, product `hall`. An empty (after trim) `alias` on a **hidden** product resets it to a generated default (`Product A`); on a public product it is ignored. |
 | `GET /api/admin/events?integration=&type=&delivery=&q=&limit=` | Event log, newest first. |
 | `GET/PUT /api/admin/settings` | `retentionDays` (1 to 3650, pruned hourly), `animation`. |
 | `GET /api/admin/stats` | Counts. |
@@ -90,6 +90,22 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 Integration objects carry `events` (the events subscribed on a GitHub webhook, from its last `ping`; `[]` until
 then). `secretEnc` and `tokenHash` are never returned. A `github` integration has no token hash; its
 `tokenHint` is the last 4 characters of the secret, and its `ingestPath` is `/ingest/github/<id>`.
+
+Integration objects also carry `ownerType` (`"user"`, `"organization"` or `""` while unknown; always present). It is set
+once from the first payload (an `organization` object, else `repository.owner.type`) and never overwritten by a
+delivery. The list (`GET /api/admin/integrations`) adds `repos`, always an array (`[]` for non-github or no repos),
+sorted by `name`:
+
+```json
+{"name":"gaos","private":true,"hookEvents":["issues","pull_request"],"lastEventAt":"…","lastRejectedAt":"…",
+ "today":3,"rejected":0,"product":"gaos","visibility":"hidden","alias":"Product B","aliasCustom":false,"defaultAlias":"Product B"}
+```
+
+`today` and `rejected` count this integration's accepted and rejected deliveries received today for that repo.
+`product`, `visibility` and `alias` come from the products store (`product` is `""` and `alias` is `""` until the
+product exists; `visibility` then follows `private`). `aliasCustom` is false when the alias equals the key or matches
+the generated `Product A` / `Product 093015` pattern. `defaultAlias` is the current alias when it is not custom; for a
+custom alias it is what an empty-alias reset would give (the key when the product is public).
 
 Orgs and products are created automatically from the events that mention them. A new product
 takes the visibility its sender reports; after that the back-office value wins.
