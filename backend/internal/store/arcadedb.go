@@ -118,7 +118,7 @@ func (a *Arcade) Load(ctx context.Context) (Snapshot, error) {
 		return sn, err
 	}
 	for _, r := range rows {
-		sn.Integrations = append(sn.Integrations, Integration{ID: str(r, "id"), Kind: str(r, "kind"), Name: str(r, "name"), Org: str(r, "org"),
+		sn.Integrations = append(sn.Integrations, Integration{ID: str(r, "id"), Kind: str(r, "kind"), Name: str(r, "name"), Org: str(r, "org"), FeedURL: str(r, "feedUrl"),
 			TokenHash: str(r, "tokenHash"), TokenHint: str(r, "tokenHint"), CreatedAt: parseT(str(r, "createdAt")),
 			LastEventAt: parseT(str(r, "lastEventAt")), LastRejectedAt: parseT(str(r, "lastRejectedAt"))})
 	}
@@ -194,8 +194,8 @@ func buildScript(ops []Op) (string, map[string]any) {
 		switch o.Kind {
 		case OpIntegration:
 			g := o.Integration
-			fmt.Fprintf(&sb, "UPDATE Integration SET id=%s, kind=%s, name=%s, org=%s, tokenHash=%s, tokenHint=%s, createdAt=%s, lastEventAt=%s, lastRejectedAt=%s UPSERT WHERE id=%s;\n",
-				set("id", g.ID), set("kind", g.Kind), set("name", g.Name), set("org", g.Org), set("th", g.TokenHash), set("hint", g.TokenHint),
+			fmt.Fprintf(&sb, "UPDATE Integration SET id=%s, kind=%s, name=%s, org=%s, feedUrl=%s, tokenHash=%s, tokenHint=%s, createdAt=%s, lastEventAt=%s, lastRejectedAt=%s UPSERT WHERE id=%s;\n",
+				set("id", g.ID), set("kind", g.Kind), set("name", g.Name), set("org", g.Org), set("feed", g.FeedURL), set("th", g.TokenHash), set("hint", g.TokenHint),
 				set("ca", g.CreatedAt.UTC().Format(TimeFmt)), set("le", g.LastEventAt.UTC().Format(TimeFmt)), set("lr", g.LastRejectedAt.UTC().Format(TimeFmt)), k("id"))
 		case OpIntegrationDel:
 			fmt.Fprintf(&sb, "DELETE VERTEX FROM Integration WHERE id=%s;\n", set("id", o.Key))

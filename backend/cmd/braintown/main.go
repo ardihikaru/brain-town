@@ -12,6 +12,7 @@ import (
 
 	"github.com/ardihikaru/brain-town/backend/internal/admin"
 	"github.com/ardihikaru/brain-town/backend/internal/config"
+	"github.com/ardihikaru/brain-town/backend/internal/feed"
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
 	"github.com/ardihikaru/brain-town/backend/internal/ingest"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
@@ -32,6 +33,7 @@ func main() {
 	srv := &http.Server{Addr: cfg.Listen, Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 2 * time.Minute}
 	stop := make(chan struct{})
 	go st.Run(stop)
+	go feed.New(st, h).Run(time.Duration(cfg.FeedInterval)*time.Second, stop)
 	go func() {
 		sig := make(chan os.Signal, 1)
 		signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
