@@ -105,3 +105,16 @@ curl -X POST "$BRAIN_TOWN_URL" \
 ```
 
 A person should appear at the Demo hall in the town, and the delivery shows in the back-office event log.
+
+## As built (GAOS v0.46.0, D-086)
+What the emitter really sends. Where this differs from the brief above, this section wins.
+
+- **Token** comes from a file: `BRAIN_TOWN_TOKEN_FILE` (not `BRAIN_TOWN_TOKEN`). `BRAIN_TOWN_PUBLIC_PRODUCTS` lists the product ids sent as `public`; every other product is `hidden`.
+- **Redaction happens at the source.** A hidden product arrives with `product.name: "Private product"` and `task.title` = the task id. Do not expect real text for hidden products.
+- **Product key** is the lower-case GAOS product id (`p-6`).
+- **Columns** are GAOS board ids, free strings: `backlog`, `ready`, `working`, `needs-you`, `review`, `blocked`, `failed`, `done`, `canceled`. There is no `in_progress`. Task `kind` is `implement`, `design` or `review`.
+- **`agent`** is a role name (for example `engineer`), not a unique agent id.
+- **`task.failed`** carries `data.reason` of `failed` or `canceled`.
+- **`task.qa` is never sent.** GAOS cannot tie a QA result to a task yet.
+- **Tolerate:** a task can move after `task.done` (design send-back, then a second `task.done`); `task.created` for a known id is a no-op; a failed review sends only `task.moved` (no `gate.decided`); after a GAOS restart a task first appears as a synthetic `task.created`, and unsent events are lost.
+- **Retries:** 1 s, 5 s, 30 s with the same `id`. 2xx and 409 count as success; other 4xx are not retried.

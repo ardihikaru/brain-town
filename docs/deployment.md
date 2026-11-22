@@ -88,3 +88,14 @@ curl -sI https://town.demo.mfardiansyah.id/ | head -1             # 200
 curl -sI https://town.demo.mfardiansyah.id/backoffice | grep -i ^location   # /backoffice/
 curl -sI https://town.mfardiansyah.id/backoffice/ | head -1       # 200
 ```
+
+## Go-live checklist for the three integrations
+Tokens are created in the back-office and passed only through the operator's own secret channel. Never commit them.
+
+1. In the back-office create three integrations (`site`, `gaos`, `qa`) and the products they will send (QA keys such as `sipreport`, `hisv3`; GAOS `p-6`). Set the site integration's feed URL to `https://mfardiansyah.id/feed.json`.
+2. Copy each ingest URL and one-time token to its emitter:
+   - mfardiansyah.id: `BRAIN_TOWN_ENABLED`, `BRAIN_TOWN_URL`, `BRAIN_TOWN_TOKEN` in `.env` on clinodb (mode 600), then `docker compose up -d`.
+   - GAOS (rnd-v3-vpn): token into `deploy/stacks/prod.bt-token` (mode 600), plus `BRAIN_TOWN_ENABLED`, `BRAIN_TOWN_URL`, `BRAIN_TOWN_PUBLIC_PRODUCTS` on the redeploy line.
+   - QA tool (rnd-v3): `BRAIN_TOWN_URL`, `BRAIN_TOWN_TOKEN`, `BRAIN_TOWN_PRODUCTS` in `~/.config/qa-automation/playwright-executor.env`, then `systemctl --user restart playwright-executor`.
+3. Check each path: move a GAOS card, run one QA case, publish a throwaway note and open `/`. Each should show in the town and in the back-office events page.
+4. GAOS on `vm-rnd-ardi` is not upgraded yet; it needs back-office sign-in accounts first.

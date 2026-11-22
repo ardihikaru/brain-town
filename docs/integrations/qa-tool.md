@@ -83,3 +83,12 @@ curl -X POST "$BRAIN_TOWN_URL" \
 ```
 
 The QA bot for that product should start walking in the QA Lab.
+
+## As built (qa-automation-tools PR #75)
+- The reporter is `playwright-executor/reporters/brain-town-reporter.cjs`, configured from env (the executor selects reporters with `--reporter=`, which cannot carry options).
+- **Product keys:** the executor only knows the `automation-<id>.env` id, so `BRAIN_TOWN_PRODUCTS` maps `<id>=<key>` (for example `1=sipreport,2=hisv3`). `BRAIN_TOWN_PRODUCT` is the fallback key; without it the key is `product-<id>`. Create the same keys as products in the back-office.
+- `org` defaults to `sismedika` (`BRAIN_TOWN_ORG`).
+- Envelope: `{id: "<run>-<seq>", type, at, product, org, run, data}`. `run` is the same for every event of one execution; `id` is unique per event.
+- Steps appear only for specs that wrap actions in `await test.step('name', ...)`. Otherwise only `qa.run.started` and `qa.run.finished` arrive. Only top-level steps are reported.
+- No error text, stack, page content or screenshots are sent. A failed step sends its title and `failed`.
+- No retries. After the first failed request the rest of that run's events are dropped.
