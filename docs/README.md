@@ -5,6 +5,7 @@ This is the initial documentation, built from the v1 package (22 Nov 2026).
 | Document | What it covers |
 | --- | --- |
 | [architecture.md](architecture.md) | Concepts, the event model, components, data store and design rules. |
+| [api.md](api.md) | The back-office service: endpoints, ingest status codes, SSE, masking. |
 | [deployment.md](deployment.md) | Running locally, the container, and the author's demo + production deployment. |
 | [integrations/gaos.md](integrations/gaos.md) | Contract for [GAOS](https://github.com/ardihikaru/gaos): products, tasks, design gate, agents. |
 | [integrations/qa-tool.md](integrations/qa-tool.md) | Contract for the QA Tool: a Playwright reporter that streams test runs. |

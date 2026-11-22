@@ -177,10 +177,12 @@ Step-by-step, including redeploys: [`docs/deployment.md`](docs/deployment.md).
 
 ## Roadmap
 
-- [ ] Ingest + events backend: `POST /ingest/{gaos,qa,site}/<integration-id>` with Bearer
-      tokens, an `/events` SSE stream, and storage in ArcadeDB (graph of products, tasks, runs
-      and events).
-- [ ] Back-office backed by the real API (integrations, tokens, products, event log).
+- [x] Ingest + events backend (Go, `backend/`): `POST /ingest/{gaos,qa,site}/<integration-id>`
+      with Bearer tokens, dedupe, validation, rate limit, and `/events` + `/admin/events` SSE.
+- [ ] Storage in ArcadeDB (graph of products, tasks, runs and events). Today the API keeps a
+      JSON snapshot on a volume.
+- [x] Back-office backed by the real API (login, integrations, tokens, products, event log).
+      Still sample data: Settings (retention, account), Pause, GitHub webhooks.
 - [ ] Feed puller for sites that only expose JSON Feed / RSS.
 - [ ] Prod town connects to `/events` by default; the demo keeps the simulator.
 - [ ] Screenshots and a short screen recording in the docs.
