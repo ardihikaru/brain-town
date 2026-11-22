@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#f6f7f1">
+<title>Brain Town Back-office</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: a left rail and one working column on pale paper, in the same ink-and-paper
+   world as the town; every panel is a thin ink frame, and live data arrives as small motion. */
+:root{
+  color-scheme: light;
+  --paper:#e9ede8; --ground:#f6f7f1; --panel:#fbfcf8; --ink:#1f2b3a; --ink-soft:#647282; --rule:rgba(31,43,58,.18);
+  --accent:#c8472f; --good:#2f8f6b; --warn:#b98a2e; --bad:#c8472f;
+  --gh:#dcae45; --qa:#2f8f6b; --gaos:#6f8fb3; --site:#b06a42;
+  --font-display:"Bricolage Grotesque","Avenir Next","Segoe UI",sans-serif;
+  --font-body:"IBM Plex Sans","Segoe UI",system-ui,sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--font-body);font-size:14px;line-height:1.45}
+h1,h2,h3{font-family:var(--font-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+h1{font-size:26px;line-height:1.1} h2{font-size:17px} h3{font-size:14.5px}
+p{margin:0}
+a{color:var(--ink);text-underline-offset:3px}
+code,.mono{font-family:var(--font-mono);font-size:12px}
+button,select,input{font:inherit;color:inherit}
+button{background:transparent;border:1px solid var(--ink);border-radius:3px;padding:5px 11px;cursor:pointer}
+button:hover{background:rgba(31,43,58,.07)}
+button.primary{background:var(--ink);color:var(--ground)} button.primary:hover{background:#34445a}
+button.quiet{border-color:var(--rule)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+input[type=text],input[type=email],input[type=password],input[type=number],select{background:var(--ground);border:1px solid var(--ink);border-radius:3px;padding:6px 9px;min-width:0}
+label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;gap:4px}
+.panel{background:var(--panel);border:1px solid var(--ink);border-radius:3px;box-shadow:3px 3px 0 rgba(31,43,58,.1)}
+.pad{padding:14px 16px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.grow{flex:1;min-width:0}
+.muted{color:var(--ink-soft)} .small{font-size:12px}
+.pill{font-family:var(--font-mono);font-size:10.5px;border:1px solid currentColor;border-radius:20px;padding:1px 8px;display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.pill i{width:6px;height:6px;border-radius:50%;background:currentColor;display:inline-block}
+.pill.ok{color:var(--good)} .pill.warn{color:#8a6516} .pill.bad{color:var(--bad)} .pill.off{color:var(--ink-soft)}
+.kind{width:10px;height:10px;border:1px solid var(--ink);display:inline-block;flex:none}
+.k-github{background:var(--gh)} .k-qa{background:var(--qa)} .k-gaos{background:var(--gaos)} .k-site{background:var(--site)}
+
+/* ---------- login ---------- */
+#login{position:fixed;inset:0;display:grid;place-items:center;padding:16px;background:var(--paper);z-index:20;overflow:hidden}
+#login canvas{position:absolute;left:0;right:0;bottom:0;width:100%;height:190px}
+#login form{position:relative;width:min(380px,100%);display:flex;flex-direction:column;gap:12px}
+#login h1{font-size:30px}
+.gate{position:fixed;top:0;bottom:0;width:50%;background:var(--ink);z-index:30;transition:transform .7s cubic-bezier(.7,0,.2,1)}
+.gate.l{left:0;transform:translateX(-101%)} .gate.r{right:0;transform:translateX(101%)}
+.gate.shut{transform:none}
+
+/* ---------- shell ---------- */
+#app{display:grid;grid-template-columns:216px 1fr;min-height:100%}
+#rail{border-right:1px solid var(--ink);background:var(--ground);padding:16px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
+#rail .brand{font-family:var(--font-display);font-weight:700;font-size:19px;line-height:1.05;padding:2px 8px 12px}
+#rail .brand span{display:block;font-family:var(--font-mono);font-weight:400;font-size:10.5px;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
+#rail nav{display:flex;flex-direction:column;gap:2px}
+#rail nav a{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:3px;text-decoration:none;border:1px solid transparent}
+#rail nav a:hover{background:rgba(31,43,58,.06)}
+#rail nav a[aria-current=page]{background:var(--ink);color:var(--ground)}
+#rail nav a b{font-family:var(--font-mono);font-weight:400;font-size:10.5px;margin-left:auto;opacity:.75}
+#rail .foot{margin-top:auto;display:flex;flex-direction:column;gap:8px;padding:8px;border-top:1px solid var(--rule);font-size:12.5px}
+main{padding:22px 26px 60px;min-width:0}
+.page{display:none;max-width:1120px;flex-direction:column;gap:16px}
+.page.on{display:flex;animation:pagein .32s ease both}
+@keyframes pagein{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.head{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:flex-end}
+.head p{color:var(--ink-soft);max-width:68ch;margin-top:4px}
+.eyebrow{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase}
+
+/* ---------- dashboard ---------- */
+#strip{display:block;width:100%;height:120px}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{padding:12px 14px}
+.tile b{display:block;font-family:var(--font-display);font-size:30px;line-height:1;font-variant-numeric:tabular-nums}
+.tile b.bump{animation:bump .5s ease}
+@keyframes bump{30%{transform:translateY(-4px);color:var(--accent)}}
+.tile span{font-size:12px;color:var(--ink-soft)}
+.tile em{font-style:normal;font-family:var(--font-mono);font-size:10.5px;display:block;margin-top:4px}
+.two{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);gap:16px;align-items:start}
+#chart{display:block;width:100%;height:170px}
+.health{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+.hcard{padding:11px 13px;display:flex;flex-direction:column;gap:6px;position:relative}
+.hcard .dot{position:absolute;top:12px;right:12px;width:9px;height:9px;border-radius:50%;background:var(--good)}
+.hcard .dot.ping{animation:ping .7s ease-out}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(47,143,107,.6)}100%{box-shadow:0 0 0 12px rgba(47,143,107,0)}}
+.hcard.warn .dot{background:var(--warn)} .hcard.off .dot{background:var(--ink-soft)}
+.tail{list-style:none;margin:0;padding:0;font-family:var(--font-mono);font-size:11.5px;max-height:330px;overflow:auto}
+.tail li{display:grid;grid-template-columns:62px 1fr;gap:8px;padding:5px 0;border-bottom:1px dotted var(--rule);overflow-wrap:anywhere}
+.tail li.new,tr.new{animation:slidein .35s ease}
+@keyframes slidein{from{opacity:0;transform:translateY(-8px);background:rgba(230,182,85,.35)}to{opacity:1;transform:none}}
+.tail time{color:var(--ink-soft)}
+
+/* ---------- integrations ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px}
+.icard{padding:14px;display:flex;flex-direction:column;gap:10px;border-top-width:5px}
+.icard dl{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0}
+.icard dt{font-size:11px;color:var(--ink-soft)} .icard dd{margin:0;font-family:var(--font-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.icard.add{border-style:dashed;box-shadow:none;background:transparent}
+
+/* ---------- setup ---------- */
+.setup{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:16px;align-items:start}
+.steps{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;counter-reset:s}
+.steps li{display:grid;grid-template-columns:26px 1fr;gap:10px;align-items:start;counter-increment:s}
+.steps li::before{content:counter(s);width:24px;height:24px;border:1px solid var(--ink);border-radius:50%;display:grid;place-items:center;font-family:var(--font-mono);font-size:11.5px;background:var(--ground)}
+.steps li.done::before{content:"✓";background:var(--good);color:#fff;border-color:var(--good)}
+.copy{display:flex;gap:6px;margin-top:6px}
+.copy input{flex:1;font-family:var(--font-mono);font-size:12px}
+pre{margin:0;font-family:var(--font-mono);font-size:11.5px;line-height:1.5;background:var(--ground);border:1px solid var(--rule);border-radius:3px;padding:10px 12px;overflow:auto;white-space:pre}
+pre.md{white-space:pre-wrap;max-height:340px}
+details summary{cursor:pointer;font-weight:500}
+#waitcv{display:block;width:100%;height:150px;border-bottom:1px solid var(--rule)}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th{font-family:var(--font-mono);font-weight:500;font-size:10.5px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);text-align:left;padding:8px 10px;border-bottom:1px solid var(--ink);white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--rule);vertical-align:top}
+.scroll{overflow-x:auto}
+tbody tr.click{cursor:pointer} tbody tr.click:hover{background:rgba(31,43,58,.05)}
+td.t{font-family:var(--font-mono);font-size:12px;white-space:nowrap}
+
+/* ---------- drawer + toast ---------- */
+#drawer{position:fixed;top:0;right:0;bottom:0;width:min(460px,100%);background:var(--panel);border-left:1px solid var(--ink);box-shadow:-6px 0 0 rgba(31,43,58,.08);padding:18px;display:flex;flex-direction:column;gap:12px;transform:translateX(105%);transition:transform .28s ease;z-index:10;overflow:auto}
+#drawer.on{transform:none}
+#toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,20px);background:var(--ink);color:var(--ground);padding:8px 14px;border-radius:3px;font-size:13px;opacity:0;transition:.25s;pointer-events:none;z-index:40}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+.switch{display:inline-flex;border:1px solid var(--ink);border-radius:3px;overflow:hidden}
+.switch button{border:0;border-radius:0;padding:3px 9px;font-size:12px}
+.switch button[aria-pressed=true]{background:var(--ink);color:var(--ground)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:6px 16px;font-size:13px}
+.kv dt{color:var(--ink-soft)} .kv dd{margin:0;font-family:var(--font-mono);font-size:12px;overflow-wrap:anywhere}
+
+/* ---------- nav icons + sliding marker ---------- */
+#rail nav{position:relative}
+#rail nav a{position:relative;z-index:1;transition:color .2s}
+#rail nav a svg{flex:none}
+#rail nav a .short{display:none}
+#rail nav a[aria-current=page]{background:transparent;color:var(--ground)}
+#navmark{position:absolute;left:0;top:0;width:0;height:0;background:var(--ink);border-radius:3px;transition:transform .32s cubic-bezier(.3,.8,.2,1),width .32s cubic-bezier(.3,.8,.2,1),height .32s cubic-bezier(.3,.8,.2,1)}
+
+/* ---------- page changes: old page slides out, new one comes in piece by piece ---------- */
+#wipe{position:fixed;left:0;right:0;top:0;height:3px;background:var(--accent);transform:scaleX(0);transform-origin:left;z-index:15;pointer-events:none}
+#wipe.go{animation:wipe .55s cubic-bezier(.4,0,.2,1)}
+@keyframes wipe{0%{transform:scaleX(0);opacity:1}60%{transform:scaleX(1);opacity:1}100%{transform:scaleX(1);opacity:0}}
+.page.on{animation:none}
+.page.leave{display:flex;animation:leave .16s ease-in both}
+@keyframes leave{to{opacity:0;transform:translate(calc(var(--dx,24px) * -1),0)}}
+.page.enter>*{animation:rise .46s cubic-bezier(.2,.75,.2,1) both}
+.page.enter>*:nth-child(2){animation-delay:.05s}.page.enter>*:nth-child(3){animation-delay:.1s}.page.enter>*:nth-child(4){animation-delay:.15s}.page.enter>*:nth-child(5){animation-delay:.2s}.page.enter>*:nth-child(n+6){animation-delay:.25s}
+@keyframes rise{from{opacity:0;transform:translate(var(--dx,24px),10px)}to{opacity:1;transform:none}}
+.page.enter :is(.tiles,.cards,.health)>*{animation:pop .42s cubic-bezier(.2,.9,.3,1.2) both;animation-delay:calc(.12s + var(--n,0) * .045s)}
+.page.enter :is(.tiles,.cards,.health)>*:nth-child(2){--n:1}.page.enter :is(.tiles,.cards,.health)>*:nth-child(3){--n:2}.page.enter :is(.tiles,.cards,.health)>*:nth-child(4){--n:3}.page.enter :is(.tiles,.cards,.health)>*:nth-child(5){--n:4}.page.enter :is(.tiles,.cards,.health)>*:nth-child(6){--n:5}.page.enter :is(.tiles,.cards,.health)>*:nth-child(n+7){--n:6}
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
+.page.enter .head h1{animation:ink .5s ease both}
+@keyframes ink{from{letter-spacing:.12em;opacity:0}to{letter-spacing:-.01em;opacity:1}}
+.page.enter .steps li{animation:rise .4s ease both;animation-delay:calc(.15s + var(--n,0) * .06s)}
+.page.enter .steps li:nth-child(2){--n:1}.page.enter .steps li:nth-child(3){--n:2}.page.enter .steps li:nth-child(4){--n:3}.page.enter .steps li:nth-child(5){--n:4}
+
+/* ---------- never scroll sideways ---------- */
+body{overflow-x:clip}
+#app{grid-template-columns:216px minmax(0,1fr)}
+.page>*,.panel,.two>*,.setup>*{min-width:0}
+.head p,.lede{overflow-wrap:anywhere}
+.copy input{min-width:0}
+@media (pointer:coarse){ button,select,input[type=text],input[type=email],input[type=password],input[type=number]{min-height:42px} input,select{font-size:16px} .switch button{min-height:38px;padding:3px 14px} }
+
+/* ---------- tablet: icon rail ---------- */
+@media (max-width:1040px) and (min-width:761px){
+  #app{grid-template-columns:68px minmax(0,1fr)}
+  #rail{padding:14px 8px;align-items:stretch}
+  #rail .brand{font-size:0;padding:0 0 10px;text-align:center}
+  #rail .brand::before{content:"BT";font-size:19px}
+  #rail .brand span{display:none}
+  #rail nav a{justify-content:center;padding:11px 0}
+  #rail nav a .full,#rail nav a b,#rail .foot .muted{display:none}
+  #rail .foot{padding:8px 0;align-items:center;font-size:11px;text-align:center}
+  #rail .foot button{padding:5px 4px;font-size:11px}
+  main{padding:20px}
+  .two,.setup{grid-template-columns:minmax(0,1fr)}
+}
+
+/* ---------- phone: top bar, bottom tabs, stacked everything ---------- */
+@media (max-width:760px){
+  body{font-size:15px}
+  #app{display:block}
+  #rail{position:sticky;top:0;z-index:6;height:auto;flex-direction:row;align-items:center;gap:10px;padding:8px 14px;border-right:0;border-bottom:1px solid var(--ink)}
+  #rail .brand{padding:0;font-size:17px;flex:1}
+  #rail .brand span{display:inline;margin:0 0 0 8px}
+  #rail .foot{margin:0;padding:0;border:0;flex-direction:row;align-items:center;gap:10px}
+  #rail .foot .muted{display:none}
+  #rail .foot button{min-height:36px;padding:4px 10px}
+  #rail nav{position:fixed;left:0;right:0;bottom:0;z-index:7;flex-direction:row;gap:0;background:var(--ground);border-top:1px solid var(--ink);padding:5px 6px 7px}
+  #rail nav a{flex:1;flex-direction:column;gap:2px;justify-content:center;padding:6px 2px;min-height:52px;font-size:11px;text-align:center}
+  #rail nav a .full,#rail nav a b{display:none}
+  #rail nav a .short{display:block}
+  main{padding:14px 14px 92px}
+  h1{font-size:23px}
+  .page{gap:13px}
+  .head{align-items:flex-start}
+  .two,.setup{grid-template-columns:minmax(0,1fr);gap:13px}
+  .tiles{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .tile b{font-size:26px}
+  .health,.cards{grid-template-columns:minmax(0,1fr)}
+  #strip{height:104px} #chart{height:150px}
+  .pad{padding:13px}
+  .tail{max-height:none}
+  .tail li{grid-template-columns:58px minmax(0,1fr)}
+  .copy{flex-wrap:wrap} .copy input{flex:1 1 100%} .copy button{flex:1}
+  .icard dl{gap:4px}
+  .icard .row>*{flex:1} .icard .row .pill{flex:none} .icard .row a{flex:1 1 100%} .icard .row a button{width:100%}
+  [data-page=events] .panel.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  [data-page=events] .panel.row label:last-child{grid-column:1/-1}
+  [data-page=events] .panel.row select,[data-page=events] .panel.row input{width:100%}
+  table.stack thead{display:none}
+  table.stack,table.stack tbody{display:block}
+  table.stack tr{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;padding:11px 13px;border-bottom:1px solid var(--rule)}
+  table.stack td{display:block;border:0;padding:0;min-width:0;overflow-wrap:anywhere}
+  table.stack td[data-l]::before{content:attr(data-l);display:block;font-family:var(--font-mono);font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-soft);margin-bottom:2px}
+  #ev-body td[data-l]::before{display:none}
+  #ev-body td:nth-child(2){grid-column:1;grid-row:1;font-size:12.5px;color:var(--ink-soft)}
+  #ev-body td:nth-child(1){grid-column:2;grid-row:1;text-align:right}
+  #ev-body td:nth-child(3){grid-column:1;grid-row:2;font-weight:500}
+  #ev-body td:nth-child(5){grid-column:2;grid-row:2;text-align:right}
+  #ev-body td:nth-child(4){grid-column:1/-1}
+  #org-body tr,#prod-body tr{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  #org-body td.lead,#prod-body td.lead{grid-column:1/-1;font-size:16px}
+  #org-body td input,#prod-body td input,#prod-body td select{width:100%}
+  #org-body td:last-child{grid-column:1/-1}
+  .panel.scroll{overflow-x:visible}
+  #drawer{top:auto;left:0;right:0;width:auto;max-height:84%;border-left:0;border-top:1px solid var(--ink);box-shadow:0 -6px 0 rgba(31,43,58,.08);transform:translateY(105%);padding:16px 14px 90px}
+  #drawer.on{transform:none}
+  #toast{bottom:78px;max-width:calc(100% - 28px);width:max-content;text-align:center}
+  #login{align-items:start;padding-top:9vh}
+  #login canvas{height:150px}
+  #login h1{font-size:26px}
+  .kv{grid-template-columns:minmax(0,1fr)} .kv dt{margin-top:4px}
+  #pwform .row{flex-direction:column;align-items:stretch}
+  pre{font-size:11px}
+}
+@media (prefers-reduced-motion:reduce){ .page.enter>*,.page.enter *,.page.leave,.tail li.new,tr.new,.tile b.bump,.hcard .dot.ping,#wipe.go{animation:none!important} .gate,#drawer,#navmark{transition:none} }
+body.still .page.enter>*,body.still .page.enter *,body.still .page.leave,body.still .tail li.new,body.still tr.new,body.still .tile b.bump,body.still .hcard .dot.ping,body.still #wipe.go{animation:none!important}
+body.still #navmark{transition:none}
+</style>
+</head>
+<body>
+<div class="gate l"></div><div class="gate r"></div><div id="wipe" aria-hidden="true"></div>
+
+<div id="login">
+  <canvas id="logincv" aria-hidden="true"></canvas>
+  <form class="panel pad" id="loginform">
+    <div><div class="eyebrow">town.mfardiansyah.id</div><h1>Brain Town back-office</h1></div>
+    <p class="muted">Sign in to connect platforms and watch the event stream. This is a static preview: any email and password opens the gate.</p>
+    <label>Email<input type="email" id="lg-email" value="admin@mfardiansyah.id" autocomplete="username" required></label>
+    <label>Password<input type="password" id="lg-pass" value="preview-only" autocomplete="current-password" required></label>
+    <button class="primary" id="lg-btn">Sign in</button>
+  </form>
+</div>
+
+<div id="app" hidden>
+  <aside id="rail">
+    <div class="brand">Brain Town<span>Back-office</span></div>
+    <nav aria-label="Pages"><span id="navmark" aria-hidden="true"></span>
+      <a href="#dashboard"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 3h6v8H3zM11 3h6v4h-6zM11 9h6v8h-6zM3 13h6v4H3z'/></svg><span class="full">Dashboard</span><span class="short">Home</span></a>
+      <a href="#integrations"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='5' cy='10' r='2.5'/><circle cx='15' cy='5' r='2.5'/><circle cx='15' cy='15' r='2.5'/><path d='M7.3 9l5.5-3M7.3 11l5.5 3'/></svg><span class="full">Integrations</span><span class="short">Connect</span><b id="n-int"></b></a>
+      <a href="#events"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 5h14M3 10h14M3 15h9'/></svg><span class="full">Event log</span><span class="short">Events</span><b id="n-ev"></b></a>
+      <a href="#products"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10z'/><circle cx='10' cy='10' r='2.3'/></svg><span class="full">Products and visibility</span><span class="short">Products</span></a>
+      <a href="#prefs"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 6h8M15 6h2M3 14h2M9 14h8'/><circle cx='13' cy='6' r='2'/><circle cx='7' cy='14' r='2'/></svg><span class="full">Settings</span><span class="short">Settings</span></a>
+    </nav>
+    <div class="foot">
+      <a href="https://claude.ai/artifact/E8oTgHiGzbyosGo7tNmjgE" target="_blank" rel="noopener">View town</a>
+      <span class="muted" id="who">admin@mfardiansyah.id</span>
+      <button class="quiet" id="logout">Sign out</button>
+    </div>
+  </aside>
+
+  <main>
+    <!-- DASHBOARD -->
+    <section class="page" data-page="dashboard">
+      <div class="head"><div class="grow"><div class="eyebrow">Live · sample data</div><h1>Dashboard</h1><p>Everything the four platforms sent today. Each event that arrives walks to its building below.</p></div>
+        <span class="pill ok" id="sse-pill"><i></i>stream connected</span></div>
+      <div class="panel"><canvas id="strip" aria-label="Events walking to their buildings"></canvas></div>
+      <div class="tiles" id="tiles"></div>
+      <div class="two">
+        <div class="panel pad"><div class="row"><h2 class="grow">Events per 10 seconds</h2><span class="small muted">last 5 minutes</span></div><canvas id="chart" aria-label="Events per 10 seconds over the last 5 minutes"></canvas></div>
+        <div class="panel pad"><div class="row"><h2 class="grow">Live tail</h2><a class="small" href="#events">Open event log</a></div><ol class="tail" id="tail"></ol></div>
+      </div>
+      <h2>Integration health</h2>
+      <div class="health" id="health"></div>
+    </section>
+
+    <!-- INTEGRATIONS -->
+    <section class="page" data-page="integrations">
+      <div class="head"><div class="grow"><h1>Integrations</h1><p>One card per connected platform. A card turns amber after an hour of silence and red after a rejected delivery.</p></div></div>
+      <div class="cards" id="icards"></div>
+    </section>
+
+    <!-- SETUP -->
+    <section class="page" data-page="setup">
+      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / setup</div><h1 id="su-title"></h1><p id="su-lede"></p></div><span class="pill" id="su-pill"></span></div>
+      <div class="setup">
+        <div class="panel pad" style="display:flex;flex-direction:column;gap:14px">
+          <h2>Set it up</h2>
+          <ol class="steps" id="su-steps"></ol>
+          <div id="su-extra" style="display:flex;flex-direction:column;gap:12px"></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <div class="panel">
+            <canvas id="waitcv" aria-label="A figure waiting at the gate for the first event"></canvas>
+            <div class="pad" style="display:flex;flex-direction:column;gap:8px">
+              <h3 id="wait-title">Waiting for the first event</h3>
+              <p class="small muted" id="wait-text">The figure stands at the gate until this platform sends something. Send a test event to see it walk in.</p>
+              <div class="row"><button class="primary" id="su-test">Send test event</button><a class="small" href="#events">See deliveries</a></div>
+            </div>
+          </div>
+          <div class="panel pad" id="su-map"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- EVENTS -->
+    <section class="page" data-page="events">
+      <div class="head"><div class="grow"><h1>Event log</h1><p>Every delivery as received and the town event it became. Click a row to compare the raw payload with what the public town is sent.</p></div>
+        <button id="ev-pause" aria-pressed="false">Pause stream</button></div>
+      <div class="panel pad row">
+        <label>Integration<select id="f-int"><option value="">All</option></select></label>
+        <label>Type<select id="f-type"><option value="">All</option><option>issue</option><option>pr</option><option>task</option><option>gate</option><option>qa</option><option>article</option><option>illustration</option></select></label>
+        <label>Delivery<select id="f-st"><option value="">All</option><option>ok</option><option>rejected</option></select></label>
+        <label class="grow">Search<input type="text" id="f-q" placeholder="repo, title, id"></label>
+      </div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>Time</th><th>Integration</th><th>Type</th><th>Summary</th><th>Delivery</th></tr></thead><tbody id="ev-body"></tbody></table></div>
+    </section>
+
+    <!-- PRODUCTS -->
+    <section class="page" data-page="products">
+      <div class="head"><div class="grow"><h1>Products and visibility</h1><p>The town is public. A hidden org or product still appears, but under its public name and with every title replaced. Visibility is decided here, per org and per product.</p></div></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>GitHub org</th><th>Visibility</th><th>Public name in town</th><th>Products</th></tr></thead><tbody id="org-body"></tbody></table></div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>Product</th><th>Sources</th><th>Org</th><th>Visibility</th><th>Public name in town</th><th>Town building</th></tr></thead><tbody id="prod-body"></tbody></table></div>
+      <div class="panel pad"><h3>What a visitor sees</h3><p class="small muted" style="margin:4px 0 10px">The same event, as stored and as sent on the public stream.</p><div class="two"><pre id="vis-raw"></pre><pre id="vis-pub"></pre></div></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="page" data-page="prefs">
+      <div class="head"><div class="grow"><h1>Settings</h1><p>Service, database and account.</p></div></div>
+      <div class="two">
+        <div class="panel pad" style="display:flex;flex-direction:column;gap:12px"><h2>Service</h2>
+          <dl class="kv"><dt>Address</dt><dd>https://town.mfardiansyah.id</dd><dt>Public stream</dt><dd>https://town.mfardiansyah.id/events</dd><dt>Back-office stream</dt><dd>https://town.mfardiansyah.id/admin/events</dd><dt>Heartbeat</dt><dd>every 15 s</dd></dl>
+          <div class="row"><label>Keep events (days)<input type="number" id="keep" value="30" min="1" max="365" style="width:110px"></label>
+            <label>Animation<span class="switch" id="motion"><button type="button" aria-pressed="true" data-v="on">On</button><button type="button" aria-pressed="false" data-v="off">Off</button></span></label></div>
+          <div><button id="save-svc">Save</button></div></div>
+        <div class="panel pad" style="display:flex;flex-direction:column;gap:12px"><div class="row"><h2 class="grow">Database</h2><span class="pill ok"><i></i>connected</span></div>
+          <dl class="kv"><dt>Engine</dt><dd>ArcadeDB (graph)</dd><dt>Database</dt><dd>braintown</dd><dt>Reached over</dt><dd>HTTP API, port 2480</dd></dl>
+          <table><thead><tr><th>Vertex or edge type</th><th>Records</th></tr></thead><tbody id="db-body"></tbody></table></div>
+      </div>
+      <form class="panel pad" id="pwform" style="display:flex;flex-direction:column;gap:12px;max-width:520px"><h2>Account</h2>
+        <label>Email<input type="email" id="acc-email" value="admin@mfardiansyah.id"></label>
+        <div class="row"><label class="grow">New password<input type="password" id="acc-p1" autocomplete="new-password"></label><label class="grow">Repeat it<input type="password" id="acc-p2" autocomplete="new-password"></label></div>
+        <div><button>Update account</button></div></form>
+    </section>
+  </main>
+</div>
+
+<aside id="drawer" aria-label="Event detail"><div class="row"><h2 class="grow" id="dr-title"></h2><button id="dr-x" aria-label="Close">Close</button></div>
+  <dl class="kv" id="dr-kv"></dl><h3>Raw delivery</h3><pre id="dr-raw"></pre><h3>Sent on the public stream</h3><pre id="dr-pub"></pre></aside>
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+const TASKS = {"brain-town-integration-gaos.md": "# Task: send GAOS events to Brain Town\n\nRepo: `ardihikaru/gaos` \u00b7 Receiver: `https://town.mfardiansyah.id`\n\nBrain Town is a public, animated town that shows work as it happens. Each GAOS product becomes a hall in the town and each task becomes a person who queues, waits at the design gate, gets worked on by an agent, and leaves when done. GAOS only has to tell Brain Town when something changes. Brain Town never calls GAOS back.\n\nThis file was written without access to the GAOS source. Where a name below differs from the real GAOS model (column names, task kinds, agent ids), keep the GAOS name and map it in the `data` fields.\n\n## What to build\n\nAn outbound event emitter: when a product or task changes state, GAOS sends one HTTP POST to Brain Town.\n\n### Configuration\n\n| Setting | Example | Notes |\n| --- | --- | --- |\n| `BRAIN_TOWN_ENABLED` | `true` | Off by default. When off, nothing is sent. |\n| `BRAIN_TOWN_URL` | `https://town.mfardiansyah.id/ingest/gaos/<integration-id>` | Copied from the Brain Town back-office, Integrations, GAOS. |\n| `BRAIN_TOWN_TOKEN` | `bt_live_\u2026` | Sent as `Authorization: Bearer <token>`. Keep it out of logs. |\n\n### When to send\n\n| GAOS moment | `type` |\n| --- | --- |\n| Product created, renamed, or its visibility changed | `product.upserted` |\n| Task created | `task.created` |\n| Task moved to another kanban column | `task.moved` |\n| Design gate review requested for a task | `gate.requested` |\n| Design gate decided | `gate.decided` |\n| An agent claims a task | `task.claimed` |\n| A QA result is attached to a task | `task.qa` |\n| Task finished | `task.done` |\n| Task failed or was cancelled | `task.failed` |\n\n### Request\n\n```http\nPOST /ingest/gaos/<integration-id>\nAuthorization: Bearer <token>\nContent-Type: application/json\nIdempotency-Key: <event id>\n```\n\n```json\n{\n  \"id\": \"01JD3X9T2M8Q4W6Z7K5B\",\n  \"type\": \"task.moved\",\n  \"at\": \"2026-11-21T09:14:03Z\",\n  \"product\": { \"key\": \"article2video\", \"name\": \"Article to Video\", \"visibility\": \"public\" },\n  \"task\": { \"id\": \"T-204\", \"title\": \"Add caption timing\", \"kind\": \"feature\", \"column\": \"in_progress\" },\n  \"data\": { \"from\": \"ready\", \"to\": \"in_progress\", \"agent\": \"agent-7\" }\n}\n```\n\nField rules:\n\n- `id`: unique per event and stable across retries. A ULID or UUID is fine.\n- `at`: UTC, RFC 3339.\n- `product.key`: stable slug. Brain Town keys its hall on it.\n- `product.visibility`: `public` or `hidden`. For `hidden`, Brain Town shows an alias and never shows task titles. Still send the real values; hiding happens on the Brain Town side.\n- `task` is omitted for `product.upserted`.\n- `data` per type: `task.moved` has `from`, `to`; `gate.decided` has `decision` (`approved` or `rejected`); `task.claimed` has `agent`; `task.qa` has `passed`, `failed`, `total`; `task.failed` has `reason`.\n\n### Delivery rules\n\n- Send after the state change is committed, from a background worker. A slow or failing Brain Town must never slow down or fail a GAOS task.\n- Timeout 3 seconds. Retry up to 3 times with backoff (1 s, 5 s, 30 s) on network errors, `429` and `5xx`. Do not retry other `4xx`.\n- Keep order per task: do not send `task.done` before `task.claimed` for the same task.\n- Log one line per failed delivery with the event id and status code.\n\n## Responses from Brain Town\n\n| Status | Meaning |\n| --- | --- |\n| `202` | Accepted. |\n| `401` | Token missing or wrong. |\n| `409` | This `Idempotency-Key` was already accepted. Treat as success. |\n| `422` | Body failed validation. The response names the field. |\n| `429` | Slow down and retry. |\n\n## Done when\n\n- [ ] With `BRAIN_TOWN_ENABLED=false`, no request leaves GAOS.\n- [ ] Creating a task, moving it across every column, passing the design gate and finishing it produces the matching events, in order.\n- [ ] Stopping Brain Town for a minute does not block or fail any GAOS operation.\n- [ ] A retried event carries the same `id`.\n- [ ] The token never appears in logs or error messages.\n- [ ] A short section in the GAOS README explains the three settings.\n\n## Try it by hand\n\n```bash\ncurl -X POST \"$BRAIN_TOWN_URL\" \\\n  -H \"Authorization: Bearer $BRAIN_TOWN_TOKEN\" -H \"Content-Type: application/json\" \\\n  -H \"Idempotency-Key: test-001\" \\\n  -d '{\"id\":\"test-001\",\"type\":\"task.created\",\"at\":\"2026-11-21T09:00:00Z\",\"product\":{\"key\":\"demo\",\"name\":\"Demo\",\"visibility\":\"public\"},\"task\":{\"id\":\"T-1\",\"title\":\"Hello town\",\"kind\":\"feature\",\"column\":\"backlog\"}}'\n```\n\nA person should appear at the Demo hall in the town, and the delivery shows in the back-office event log.\n", "brain-town-integration-mfardiansyah-id.md": "# Task: connect mfardiansyah.id to Brain Town\n\nRepo: the mfardiansyah.id site \u00b7 Receiver: `https://town.mfardiansyah.id`\n\nBrain Town shows the site as a pendopo. When an article or illustration is published, a courier walks to it. The site has to tell Brain Town about new content. Two ways are supported; build both, in this order.\n\n## Part 1: a feed Brain Town can pull\n\nNeeds no secret and works even if Part 2 is never built.\n\n- Expose `https://mfardiansyah.id/feed.json` (JSON Feed 1.1) or an RSS/Atom feed listing the latest 20 published items, newest first.\n- Each item needs: a stable `id`, `url`, `title`, `date_published`, and a tag or field that says whether it is an `article` or an `illustration`.\n- Brain Town checks the feed every 5 minutes and emits one event per new `id`.\n\n## Part 2: a publish hook that pushes\n\nMakes the courier appear within a second of publishing.\n\n### Configuration\n\n| Setting | Example | Notes |\n| --- | --- | --- |\n| `BRAIN_TOWN_URL` | `https://town.mfardiansyah.id/ingest/site/<integration-id>` | From the Brain Town back-office, Integrations, mfardiansyah.id. |\n| `BRAIN_TOWN_TOKEN` | `bt_live_\u2026` | Sent as `Authorization: Bearer <token>`. Keep it in the deploy secrets. |\n\n### When to send\n\n| Moment | `type` |\n| --- | --- |\n| An article goes live | `article.published` |\n| An illustration goes live | `illustration.published` |\n\nSend once per item, after the page is reachable. If the site is statically built, do it as the last deploy step, for items whose `id` was not in the previous build.\n\n```json\n{\n  \"id\": \"post-shipping-reports-as-images\",\n  \"type\": \"article.published\",\n  \"at\": \"2026-11-21T09:14:03Z\",\n  \"data\": { \"title\": \"Shipping reports as images\", \"url\": \"https://mfardiansyah.id/blog/shipping-reports\", \"to\": \"blog\" }\n}\n```\n\n### Rules\n\n- A failed call must not fail the publish or the deploy: 3 second timeout, log and continue.\n- Use the same `id` as the feed, so an item seen by both push and pull is counted once.\n- Send public content only. Drafts and scheduled items are not sent.\n\n## Part 3: a visit beacon\n\nBrain Town turns each visit into a person who travels into the town, so the site reports page views of the home page and blog articles.\n\n- On each page view of `/` or `/blog/...`, the server (or an edge function) sends one `site.visit` event. Do it server-side, so no token ever reaches the browser.\n- Send only two facts: which page, and the visitor's country as a two-letter code taken from the request (for example the CDN's country header). Never send the IP address, user agent, cookies or any identifier of the person.\n- `id` is a random value per page view. It must not be derived from the visitor.\n- Skip bots and the site owner's own visits where that is easy to detect.\n- This is best effort: 2 second timeout, no retries. A lost visit only means one fewer person in the town.\n\n```json\n{\n  \"id\": \"b7f3c2e1-9a40-4d0e-8f65-2c1d7a9e0b11\",\n  \"type\": \"site.visit\",\n  \"at\": \"2026-11-22T00:14:03Z\",\n  \"data\": { \"page\": \"blog\", \"country\": \"JP\", \"title\": \"Shipping reports as images\" }\n}\n```\n\n`page` is `home` or `blog`. `title` is optional and only for blog articles. Brain Town invents everything else for the animation (who the visitor is, how they travel, how long they stay), so nothing more is needed from the site.\n\n## Part 4: the office page\n\nThe town's pendopo links to `https://mfardiansyah.id/office`. Make sure that page exists and returns `200`.\n\n## Done when\n\n- [ ] The feed URL returns the latest 20 items with the fields above.\n- [ ] Publishing a test article produces exactly one `article.published`, with the same `id` the feed shows.\n- [ ] A deploy with Brain Town unreachable still succeeds.\n- [ ] Opening the home page and one blog article each produce one `site.visit` with the right `page` and a two-letter `country`.\n- [ ] The `site.visit` body contains no IP address and nothing that identifies the person.\n- [ ] `/office` loads.\n\n## Try it by hand\n\n```bash\ncurl -X POST \"$BRAIN_TOWN_URL\" \\\n  -H \"Authorization: Bearer $BRAIN_TOWN_TOKEN\" -H \"Content-Type: application/json\" \\\n  -d '{\"id\":\"test-post-1\",\"type\":\"article.published\",\"at\":\"2026-11-21T09:00:00Z\",\"data\":{\"title\":\"Hello town\",\"url\":\"https://mfardiansyah.id/blog/hello\",\"to\":\"blog\"}}'\n```\n\nA courier should walk to the mfardiansyah.id pendopo in the town.\n", "brain-town-integration-qa-tool.md": "# Task: report Playwright runs to Brain Town\n\nRepo: the QA tool (Playwright end-to-end tests) \u00b7 Receiver: `https://town.mfardiansyah.id`\n\nBrain Town shows each product's automated test run as a QA bot walking through its steps in the QA Lab. The QA tool has to post each run as it happens. Brain Town never calls the QA tool back.\n\n## What to build\n\nA custom Playwright reporter, `brain-town-reporter.ts`, added next to the existing reporters.\n\n### Configuration\n\n| Setting | Example | Notes |\n| --- | --- | --- |\n| `BRAIN_TOWN_URL` | `https://town.mfardiansyah.id/ingest/qa/<integration-id>` | From the Brain Town back-office, Integrations, QA tool. |\n| `BRAIN_TOWN_TOKEN` | `bt_live_\u2026` | Sent as `Authorization: Bearer <token>`. Store as a CI secret. |\n| reporter option `product` | `sipreport` | The product key this test project covers. |\n| reporter option `org` | `sismedika` | Optional. The GitHub org the product belongs to. |\n\nIf `BRAIN_TOWN_URL` is not set, the reporter does nothing.\n\n```ts\n// playwright.config.ts\nreporter: [\n  ['list'],\n  ['./brain-town-reporter.ts', { product: 'sipreport', org: 'sismedika' }],\n],\n```\n\n### Events\n\nOne run is one spec file executed once.\n\n| Reporter hook | `type` | `data` |\n| --- | --- | --- |\n| `onTestBegin` (first test of a spec) | `qa.run.started` | `spec`, `steps` (titles, when known) |\n| `onStepEnd` for steps with category `test.step` | `qa.step` | `index`, `step`, `status` (`passed` or `failed`), `duration_ms` |\n| `onTestEnd` (last test of a spec) | `qa.run.finished` | `spec`, `passed`, `failed`, `total`, `duration_ms` |\n\n```json\n{\n  \"id\": \"run-1763715243-3\",\n  \"type\": \"qa.step\",\n  \"at\": \"2026-11-21T09:14:03Z\",\n  \"product\": \"sipreport\",\n  \"org\": \"sismedika\",\n  \"run\": \"run-1763715243\",\n  \"data\": { \"index\": 2, \"step\": \"Sign in\", \"status\": \"passed\", \"duration_ms\": 840 }\n}\n```\n\nOnly steps written as `await test.step('Sign in', async () => { \u2026 })` are reported, so the names shown in the town are the names in the spec. Wrap the main actions of each spec in `test.step`.\n\n### Rules\n\n- Never fail or slow a test run because Brain Town is unreachable: 2 second timeout, swallow errors, no retries inside the test process.\n- `onEnd` must wait for the last request so the final event is not lost when the process exits.\n- Do not send page content, screenshots, credentials or error stacks. A failed step sends its title and status only.\n- `run` is the same value for every event of one spec execution.\n\n## Done when\n\n- [ ] Running one spec locally produces `qa.run.started`, one `qa.step` per `test.step`, then `qa.run.finished`.\n- [ ] A failing step produces `status: \"failed\"` and `failed: 1` in the final event.\n- [ ] With `BRAIN_TOWN_URL` unset, no request is made and test output is unchanged.\n- [ ] With Brain Town unreachable, the run takes no more than 2 seconds longer in total.\n- [ ] CI passes the two settings as secrets.\n\n## Try it by hand\n\n```bash\ncurl -X POST \"$BRAIN_TOWN_URL\" \\\n  -H \"Authorization: Bearer $BRAIN_TOWN_TOKEN\" -H \"Content-Type: application/json\" \\\n  -d '{\"id\":\"t-1\",\"type\":\"qa.run.started\",\"at\":\"2026-11-21T09:00:00Z\",\"product\":\"sipreport\",\"run\":\"t\",\"data\":{\"spec\":\"login.spec.ts\",\"steps\":[\"Open page\",\"Sign in\",\"Check result\"]}}'\n```\n\nThe QA bot for that product should start walking in the QA Lab.\n"};
+const $=id=>document.getElementById(id), rnd=(a,b)=>a+Math.random()*(b-a), pick=a=>a[Math.floor(Math.random()*a.length)];
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const INK='#1f2b3a', HOST='https://town.mfardiansyah.id';
+const KCOL={github:'#dcae45',qa:'#2f8f6b',gaos:'#6f8fb3',site:'#b06a42'};
+function toast(t){ const el=$('toast'); el.textContent=t; el.classList.add('on'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('on'),2200); }
+function copy(text,what){ try{ navigator.clipboard.writeText(text).then(()=>toast(what+' copied'),()=>toast('Copy was blocked. Select the text and copy it by hand.')); }catch(_){ toast('Copy was blocked. Select the text and copy it by hand.'); } }
+
+/* ============================ sample data ============================ */
+const ORGS=[{id:'sismedika',vis:'hidden',alias:'Org A'},{id:'mf-labs',vis:'public',alias:'mf-labs'},{id:'mf-media',vis:'public',alias:'mf-media'}];
+const PRODUCTS=[
+  {key:'sipreport',org:'sismedika',src:'GitHub, QA, GAOS',vis:'hidden',alias:'Product A',hall:'GitHub Valley hall'},
+  {key:'dashboard-builder',org:'sismedika',src:'GitHub, QA',vis:'hidden',alias:'Product B',hall:'GitHub Valley hall'},
+  {key:'ai-manager',org:'mf-labs',src:'GitHub, QA, GAOS',vis:'public',alias:'ai-manager',hall:'GitHub Valley hall'},
+  {key:'education-graph',org:'mf-labs',src:'GitHub, QA',vis:'public',alias:'education-graph',hall:'GitHub Valley hall'},
+  {key:'article2video',org:'mf-media',src:'GitHub, GAOS',vis:'public',alias:'article2video',hall:'Video Generator'},
+  {key:'statusmag',org:'mf-media',src:'GitHub, GAOS',vis:'public',alias:'statusmag',hall:'Magazine House'},
+];
+const HALLS=['GitHub Valley hall','Video Generator','Magazine House','Article Bureau','Imago','LinkedIn Hall'];
+const INTS=[
+  {id:'gh-sismedika',kind:'github',name:'GitHub · sismedika',org:'sismedika',state:'ok',today:212,err:0,last:Date.now()-4000},
+  {id:'gh-mf-labs',kind:'github',name:'GitHub · mf-labs',org:'mf-labs',state:'ok',today:148,err:1,last:Date.now()-9000},
+  {id:'gh-mf-media',kind:'github',name:'GitHub · mf-media',org:'mf-media',state:'ok',today:97,err:0,last:Date.now()-21000},
+  {id:'qa-main',kind:'qa',name:'QA tool',state:'ok',today:324,err:0,last:Date.now()-2000},
+  {id:'gaos-main',kind:'gaos',name:'GAOS',state:'ok',today:186,err:2,last:Date.now()-6000},
+  {id:'site-main',kind:'site',name:'mfardiansyah.id',state:'waiting',today:0,err:0,last:0},
+];
+const KIND={
+  github:{label:'GitHub',lede:'One integration per GitHub organization. GitHub pushes signed webhooks; nothing is installed in the repos.'},
+  qa:{label:'QA tool',lede:'A small Playwright reporter in the QA project posts every run, step by step.',task:'brain-town-integration-qa-tool.md'},
+  gaos:{label:'GAOS',lede:'GAOS posts one event whenever a product or task changes state. It works for any product GAOS manages.',task:'brain-town-integration-gaos.md'},
+  site:{label:'mfardiansyah.id',lede:'The site either pushes a publish hook or exposes a feed that Brain Town pulls every 5 minutes. Both can run together.',task:'brain-town-integration-mfardiansyah-id.md'},
+};
+const TITLES=['Fix PDF margin on page 2','Add export to Excel','Retry failed worker','Chart legend overlaps','Slow query on archive','Add onboarding step','Wrong timezone in report','Dark theme for board','Upgrade dependencies'];
+const stats={events:967,opened:41,closed:36,qaRuns:54,qaFail:5,tasks:63,posts:4};
+const EVENTS=[]; let seq=48000, paused=false;
+const ulid=()=>'01JD'+(++seq).toString(36).toUpperCase()+Math.random().toString(36).slice(2,8).toUpperCase();
+const hhmmss=d=>new Date(d).toTimeString().slice(0,8);
+function makeEvent(int,forceType){ const k=int.kind; let type,data,sum; const prods=PRODUCTS.filter(p=>!int.org||p.org===int.org), p=pick(prods.length?prods:PRODUCTS), n=40+Math.floor(Math.random()*60), title=pick(TITLES);
+  if(k==='github'){ type=forceType||pick(['issue.opened','issue.assigned','task.done','pr.opened','pr.checks','pr.merged','issue.closed']); data={org:int.org,repo:p.key,number:n,title}; if(type==='pr.checks') data.check=pick(['lint','tests','build']),data.status=pick(['passed','passed','passed','failed']); sum=`${int.org}/${p.key} #${n} ${type.startsWith('pr.')?(data.check?data.check+' '+data.status:'pull request'):title}`; }
+  else if(k==='qa'){ type=forceType||pick(['qa.run.started','qa.step','qa.step','qa.step','qa.run.finished']); const spec=pick(['smoke','login','export','settings'])+'.spec.ts'; data={product:p.key,org:p.org,spec}; if(type==='qa.step') data.step=pick(['Launch browser','Open page','Sign in','Run scenario','Check result','Screenshot']),data.status=Math.random()<.06?'failed':'passed'; if(type==='qa.run.finished') data.failed=Math.random()<.12?1:0,data.total=6,data.passed=6-data.failed; sum=`${p.key} ${spec}${data.step?' · '+data.step+' '+data.status:''}${type==='qa.run.finished'?' · '+data.passed+'/6':''}`; }
+  else if(k==='gaos'){ type=forceType||pick(['task.created','task.moved','gate.requested','gate.decided','task.claimed','task.done']); const tid='T-'+(100+Math.floor(Math.random()*400)); data={product:p.key,org:p.org,task:tid,title}; if(type==='task.moved') data.from='ready',data.to='in_progress'; if(type==='gate.decided') data.decision=Math.random()<.85?'approved':'rejected'; if(type==='task.claimed') data.agent='agent-'+(1+Math.floor(Math.random()*9)); sum=`${p.key} ${tid} ${data.decision||data.to||data.agent||title}`; }
+  else { type=forceType||pick(['article.published','illustration.published']); data={title:pick(['Shipping reports as images','One kanban board, many agents','Pendopo at dusk']),url:'https://mfardiansyah.id/blog/'+Math.random().toString(36).slice(2,8)}; sum=data.title; }
+  const st=Math.random()<.02&&!forceType?'rejected':'ok';
+  return {id:ulid(),type,int:int.id,kind:k,at:Date.now(),data,sum,st,err:st==='rejected'?'signature did not match':''}; }
+function publicView(ev){ const d=JSON.parse(JSON.stringify(ev.data)); const o=ORGS.find(o=>o.id===d.org), p=PRODUCTS.find(p=>p.key===(d.repo||d.product)); const hidden=(o&&o.vis==='hidden')||(p&&p.vis==='hidden');
+  if(o&&d.org) d.org=o.vis==='hidden'?o.alias:o.id; if(p){ if(d.repo) d.repo=p.vis==='hidden'||(o&&o.vis==='hidden')?p.alias:p.key; if(d.product) d.product=p.vis==='hidden'||(o&&o.vis==='hidden')?p.alias:p.key; }
+  if(hidden){ if(d.title) d.title='(hidden)'; delete d.spec; delete d.url; }
+  return {id:ev.id,type:ev.type,at:new Date(ev.at).toISOString(),data:d}; }
+function rawView(ev){ return {id:ev.id,type:ev.type,integration:ev.int,at:new Date(ev.at).toISOString(),data:ev.data}; }
+
+/* ============================ strip canvas (walkers to buildings) ============================ */
+function figure(c,x,y,col,ph,moving,k=1.5){ const sw=moving?Math.sin(ph):0, Y=y-(moving?Math.abs(sw)*1.2:0), hip=Y-4.2*k; c.strokeStyle=INK; c.lineCap='round'; c.lineWidth=1.1*k; c.beginPath(); c.moveTo(x-1.1*k,hip); c.lineTo(x-1.1*k+sw*2.3*k,y); c.moveTo(x+1.1*k,hip); c.lineTo(x+1.1*k-sw*2.3*k,y); c.stroke();
+  c.lineWidth=1.2; c.beginPath(); c.moveTo(x-2.9*k,hip+.6*k); c.lineTo(x+2.9*k,hip+.6*k); c.lineTo(x+2.1*k,Y-10.2*k); c.lineTo(x-2.1*k,Y-10.2*k); c.closePath(); c.fillStyle=col; c.fill(); c.stroke(); c.beginPath(); c.arc(x,Y-13*k,2.7*k,0,7); c.fillStyle='#fff'; c.fill(); c.stroke(); }
+const BUILD={
+  github(c,x,y){ c.fillStyle='#c8472f'; for(const g of [-18,18]){ c.fillRect(x+g-3,y-52,6,52); c.strokeRect(x+g-3,y-52,6,52); } c.fillStyle='#2f6f8f'; c.fillRect(x-24,y-46,48,8); c.strokeRect(x-24,y-46,48,8); c.beginPath(); c.moveTo(x-30,y-54); c.lineTo(x+30,y-54); c.lineTo(x+38,y-64); c.lineTo(x,y-74); c.lineTo(x-38,y-64); c.closePath(); c.fillStyle='#dcae45'; c.fill(); c.stroke(); },
+  qa(c,x,y){ c.fillStyle='#f7f5ef'; c.fillRect(x-30,y-36,60,36); c.strokeRect(x-30,y-36,60,36); c.beginPath(); c.moveTo(x-38,y-36); c.lineTo(x+38,y-36); c.lineTo(x,y-62); c.closePath(); c.fillStyle='#59636e'; c.fill(); c.stroke(); c.fillStyle='#2f8f6b'; c.fillRect(x-8,y-22,16,22); c.strokeRect(x-8,y-22,16,22); },
+  gaos(c,x,y){ c.fillStyle='#e3bfae'; c.fillRect(x-36,y-34,72,34); c.strokeRect(x-36,y-34,72,34); for(let i=0;i<3;i++){ c.beginPath(); c.moveTo(x-36+i*24,y-34); c.lineTo(x-36+i*24,y-52); c.lineTo(x-12+i*24,y-34); c.closePath(); c.fillStyle='#6f8fb3'; c.fill(); c.stroke(); } c.fillStyle='#fff'; for(let i=0;i<3;i++){ c.fillRect(x-28+i*20,y-26,14,18); c.strokeRect(x-28+i*20,y-26,14,18); } },
+  site(c,x,y){ c.fillStyle='#e8e3d6'; c.fillRect(x-34,y-6,68,6); c.strokeRect(x-34,y-6,68,6); c.beginPath(); for(const g of [-26,0,26]){ c.moveTo(x+g,y-6); c.lineTo(x+g,y-30); } c.stroke(); c.beginPath(); c.moveTo(x-44,y-30); c.lineTo(x+44,y-30); c.lineTo(x+24,y-44); c.lineTo(x-24,y-44); c.closePath(); c.fillStyle='#b06a42'; c.fill(); c.stroke(); c.beginPath(); c.moveTo(x-24,y-44); c.lineTo(x+24,y-44); c.lineTo(x+6,y-66); c.lineTo(x-6,y-66); c.closePath(); c.fill(); c.stroke(); },
+};
+const LABEL={github:'GitHub Valley',qa:'QA Lab',gaos:'GAOS',site:'mfardiansyah.id'};
+class Strip{ constructor(cv,kinds,ambient){ this.cv=cv; this.kinds=kinds; this.w=[]; this.pulse={}; this.ambient=ambient; this.t=0; }
+  add(kind,hold){ this.w.push({x:null,kind,ph:Math.random()*6,a:1,hold:!!hold}); }
+  release(){ for(const w of this.w) w.hold=false; }
+  draw(dt){ const cv=this.cv, W=cv.clientWidth, H=cv.clientHeight; if(!W) return; const d=Math.min(devicePixelRatio||1,2); if(cv.width!==Math.round(W*d)||cv.height!==Math.round(H*d)){ cv.width=Math.round(W*d); cv.height=Math.round(H*d); }
+    const c=cv.getContext('2d'); c.setTransform(d,0,0,d,0,0); c.clearRect(0,0,W,H); const G=H-26; this.t+=dt;
+    const g=c.createLinearGradient(0,0,0,G); g.addColorStop(0,'#d9e8ee'); g.addColorStop(1,'#f4f2e6'); c.fillStyle=g; c.fillRect(0,0,W,G);
+    for(let i=0;i<3;i++){ const cx=((this.t*(7+i*3)+i*260)%(W+120))-60, cy=18+i*14; c.beginPath(); c.arc(cx,cy,9,Math.PI,0); c.arc(cx+13,cy-4,11,Math.PI*1.1,0); c.arc(cx+27,cy,8,Math.PI,0); c.closePath(); c.fillStyle='rgba(255,255,255,.9)'; c.fill(); c.strokeStyle='rgba(31,43,58,.35)'; c.lineWidth=1; c.stroke(); }
+    c.fillStyle='#efe9d8'; c.fillRect(0,G,W,H-G); c.strokeStyle=INK; c.lineWidth=1.2; c.beginPath(); c.moveTo(0,G); c.lineTo(W,G); c.stroke();
+    const n=this.kinds.length; this.kinds.forEach((k,i)=>{ const x=W*(i+.5+ (n===1?.25:0))/(n===1?1.5:n); this['x_'+k]=x; const sc=Math.min(1,W/n/104); c.save(); c.translate(x,G); c.scale(sc,sc); c.lineWidth=1.3/sc; c.strokeStyle=INK; BUILD[k](c,0,0); c.restore(); c.lineWidth=1.3;
+      const p=this.pulse[k]||0; if(p>0){ c.beginPath(); c.arc(x,G-30,18+(1-p)*26,0,7); c.strokeStyle=`rgba(47,143,107,${p})`; c.lineWidth=2; c.stroke(); this.pulse[k]=p-dt*1.6; }
+      c.fillStyle=INK; c.font=`500 ${W/n<100?9:10.5}px "IBM Plex Mono"`; c.textAlign='center'; c.fillText(W/n<100&&k==='site'?'site':W/n<100&&k==='github'?'GitHub':LABEL[k],x,G+17); });
+    if(this.ambient&&Math.random()<dt*.9) this.add(pick(this.kinds));
+    for(const w of this.w){ const tx=this['x_'+w.kind]-(w.hold?46:0); if(w.x===null) w.x=Math.max(-14,tx-Math.min(190,W/n*.8)-Math.random()*30); const dx=tx-w.x; if(dx>1.5){ w.x+=Math.min(dx,95*dt); w.ph+=dt*11; w.moving=true; } else { w.moving=false; if(!w.hold){ if(w.a===1) this.pulse[w.kind]=1; w.a-=dt*2.5; } }
+      c.globalAlpha=Math.max(0,w.a); figure(c,w.x,G,KCOL[w.kind],w.ph,w.moving); c.globalAlpha=1; }
+    this.w=this.w.filter(w=>w.a>0); } }
+
+/* ============================ dashboard ============================ */
+const TILES=[['events','events today'],['opened','issues opened'],['closed','issues closed'],['qaRuns','QA runs',()=>stats.qaFail+' failed'],['tasks','GAOS tasks done'],['posts','posts published']];
+function paintTiles(first){ if(first) $('tiles').innerHTML=TILES.map(([k,l,sub])=>`<div class="panel tile"><b id="t-${k}">${stats[k]}</b><span>${l}</span>${sub?`<em id="t-${k}-s">${sub()}</em>`:''}</div>`).join('');
+  for(const [k,,sub] of TILES){ const el=$('t-'+k); if(el&&el.textContent!=String(stats[k])){ el.textContent=stats[k]; el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } if(sub&&$('t-'+k+'-s')) $('t-'+k+'-s').textContent=sub(); } }
+const buckets=Array.from({length:30},()=>Math.round(rnd(3,9)));
+function drawChart(){ const cv=$('chart'), W=cv.clientWidth, H=cv.clientHeight; if(!W) return; const d=Math.min(devicePixelRatio||1,2); cv.width=W*d; cv.height=H*d; const c=cv.getContext('2d'); c.setTransform(d,0,0,d,0,0);
+  const L=30,R=10,T=10,B=22, max=Math.max(12,Math.ceil(Math.max(...buckets)/4)*4), X=i=>L+i*(W-L-R)/(buckets.length-1), Y=v=>T+(1-v/max)*(H-T-B);
+  c.font='10.5px "IBM Plex Mono"'; c.fillStyle='#647282'; c.strokeStyle='rgba(31,43,58,.12)'; c.lineWidth=1; for(let v=0;v<=max;v+=max/4){ c.beginPath(); c.moveTo(L,Y(v)); c.lineTo(W-R,Y(v)); c.stroke(); c.textAlign='right'; c.fillText(v,L-6,Y(v)+3.5); }
+  c.textAlign='center'; [['5 min ago',0],['now',buckets.length-1]].forEach(([t,i])=>c.fillText(t,Math.min(W-R-12,Math.max(L+26,X(i))),H-6));
+  c.beginPath(); buckets.forEach((v,i)=>i?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v))); c.lineTo(X(buckets.length-1),Y(0)); c.lineTo(X(0),Y(0)); c.closePath(); c.fillStyle='rgba(111,143,179,.22)'; c.fill();
+  c.beginPath(); buckets.forEach((v,i)=>i?c.lineTo(X(i),Y(v)):c.moveTo(X(i),Y(v))); c.strokeStyle=INK; c.lineWidth=1.6; c.lineJoin='round'; c.stroke();
+  const lx=X(buckets.length-1), ly=Y(buckets.at(-1)); c.beginPath(); c.arc(lx,ly,4,0,7); c.fillStyle='#c8472f'; c.fill(); c.stroke(); }
+const ago=t=>{ if(!t) return 'never'; const s=Math.max(0,Math.round((Date.now()-t)/1000)); return s<60?s+' s ago':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago'; };
+const stateOf=i=>i.state==='waiting'?['off','waiting for first event']:i.state==='paused'?['off','paused']:i.err>0&&Date.now()-i.lastErr<60000?['bad','delivery rejected']:['ok','receiving'];
+function paintHealth(){ $('health').innerHTML=INTS.map(i=>{ const [cl,tx]=stateOf(i); return `<a class="panel hcard ${cl==='off'?'off':''}" href="#setup-${i.id}" style="text-decoration:none"><span class="dot" id="dot-${i.id}"></span><div class="row"><span class="kind k-${i.kind}"></span><h3>${esc(i.name)}</h3></div><span class="pill ${cl}"><i></i>${tx}</span><span class="small muted">last event <span data-ago="${i.id}">${ago(i.last)}</span> · ${i.today} today</span></a>`; }).join(''); }
+function tailRow(ev,isNew){ const li=document.createElement('li'); if(isNew) li.className='new'; li.innerHTML=`<time>${hhmmss(ev.at)}</time><span><span class="kind k-${ev.kind}" style="margin-right:6px"></span><b style="font-weight:500">${esc(ev.type)}</b> ${esc(ev.sum)}</span>`; return li; }
+
+/* ============================ integrations ============================ */
+function paintIntegrations(){ $('n-int').textContent=INTS.length; placeMark();
+  $('icards').innerHTML=INTS.map(i=>{ const [cl,tx]=stateOf(i); return `<div class="panel icard" style="border-top-color:${KCOL[i.kind]}"><div class="row"><h2 class="grow">${esc(i.name)}</h2><span class="pill ${cl}"><i></i>${tx}</span></div>
+    <dl><div><dt>Last event</dt><dd data-ago="${i.id}">${ago(i.last)}</dd></div><div><dt>Today</dt><dd>${i.today}</dd></div><div><dt>Rejected</dt><dd>${i.err}</dd></div></dl>
+    <div class="row"><a href="#setup-${i.id}"><button class="primary" tabindex="-1">Setup guide</button></a><button data-pause="${i.id}">${i.state==='paused'?'Resume':'Pause'}</button><button class="quiet" data-rotate="${i.id}">Rotate secret</button></div></div>`; }).join('')
+   +`<div class="panel icard add"><h2>Add an integration</h2><p class="small muted">Pick a platform to open its tutorial.</p><div class="row">${Object.keys(KIND).map(k=>`<a href="#setup-new-${k}"><button tabindex="-1"><span class="kind k-${k}" style="margin-right:6px"></span>${KIND[k].label}</button></a>`).join('')}</div></div>`; }
+$('icards').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.target.dataset.rotate; if(p){ const i=INTS.find(x=>x.id===p); i.state=i.state==='paused'?(i.last?'ok':'waiting'):'paused'; paintIntegrations(); paintHealth(); toast(i.name+(i.state==='paused'?' paused':' resumed')); } if(r) toast('New secret generated. Update it on the platform side.'); });
+
+/* ============================ setup ============================ */
+let su=null, wait=null;
+const secretOf=i=>'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
+function field(label,val,id,mask){ return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}">${mask?`<button type="button" data-reveal="${id}">Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}">Copy</button></div></div>`; }
+function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true}; }
+  su=i; const k=i.kind, K=KIND[k], url=`${HOST}/ingest/${k}/${i.id}`;
+  $('su-title').textContent=i.name; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;
+  const steps={
+    github:['In GitHub, open the organization, then Settings, Webhooks, Add webhook.','Paste the payload URL below. Set content type to <code>application/json</code>.','Paste the secret below into the Secret field.','Choose “Let me select individual events” and tick <b>Issues</b>, <b>Pull requests</b> and <b>Check runs</b>.','Save. GitHub sends a ping, and this page ticks the last step when it arrives.'],
+    qa:['Copy the task file below into the QA tool repo and hand it to the agent or developer working there.','It adds <code>brain-town-reporter.ts</code> and one line in <code>playwright.config.ts</code>.','Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> as CI secrets, using the values below.','Wrap the main actions of each spec in <code>test.step(…)</code>. Those names become the steps shown in the QA Lab.','Run one spec. This page ticks the last step when the first run arrives.'],
+    gaos:['Copy the task file below into the GAOS repo and hand it to the agent or developer working there.','It adds an outbound event emitter that posts whenever a product or task changes state.','Set <code>BRAIN_TOWN_URL</code>, <code>BRAIN_TOWN_TOKEN</code> and <code>BRAIN_TOWN_ENABLED=true</code> in GAOS, using the values below.','On Products and visibility, choose which GAOS products are public and which town building each one uses.','Create or move one task in GAOS. This page ticks the last step when it arrives.'],
+    site:['Copy the task file below into the site repo and hand it to the agent or developer working there.','Part 1 adds a feed. Paste its URL in the field below and Brain Town starts pulling every 5 minutes.','Part 2 adds a publish hook and Part 3 a visit beacon that reports only the page and the visitor’s country. Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> in the server secrets.','Check that <code>https://mfardiansyah.id/office</code> loads. The pendopo in town links to it.','Publish one article. This page ticks the last step when it arrives.'],
+  }[k];
+  $('su-steps').innerHTML=steps.map((s,n)=>`<li class="${i.last&&n===steps.length-1?'done':''}"><div>${s}</div></li>`).join('');
+  let extra=field(k==='github'?'Payload URL':'BRAIN_TOWN_URL',url,'su-url')+field(k==='github'?'Webhook secret':'BRAIN_TOWN_TOKEN',secretOf(i),'su-sec',true);
+  if(k==='site') extra+=`<label>Feed URL to pull (optional)<input type="text" id="su-feed" value="https://mfardiansyah.id/feed.json"></label>`;
+  if(k==='qa') extra+=`<div><span class="small muted">playwright.config.ts</span><pre>reporter: [\n  ['list'],\n  ['./brain-town-reporter.ts', { product: 'sipreport', org: 'sismedika' }],\n],</pre></div>`;
+  if(K.task) extra+=`<div class="panel pad" style="box-shadow:none;display:flex;flex-direction:column;gap:8px"><div class="row"><h3 class="grow">Task file for the repo</h3><button type="button" class="primary" data-task="${K.task}">Copy task file</button></div><p class="small muted"><code>${K.task}</code> describes exactly what that repo has to build, with the payload contract and a done checklist.</p><details><summary>Read it here</summary><pre class="md" style="margin-top:8px">${esc(TASKS[K.task]||'')}</pre></details></div>`;
+  $('su-extra').innerHTML=extra;
+  const maps={
+    github:[['Issue opened','issue.opened'],['Issue assigned','issue.assigned'],['Checklist box ticked in the issue','task.done'],['Pull request opened with “Fixes #n”','pr.opened'],['Check run completed','pr.checks'],['Pull request merged','pr.merged'],['Issue closed','issue.closed']],
+    qa:[['First test of a spec begins','qa.run.started'],['A test.step ends','qa.step'],['Last test of a spec ends','qa.run.finished']],
+    gaos:[['Product created or changed','product.upserted'],['Task created','task.created'],['Task moved on the kanban','task.moved'],['Design gate requested','gate.requested'],['Design gate decided','gate.decided'],['Agent claims a task','task.claimed'],['Task finished','task.done']],
+    site:[['Article goes live','article.published'],['Illustration goes live','illustration.published'],['Someone opens the home page or a blog article','site.visit (page and country only)']],
+  }[k];
+  $('su-map').innerHTML=`<h3>What becomes what</h3><table style="margin-top:6px"><thead><tr><th>${K.label} sends</th><th>Town event</th></tr></thead><tbody>${maps.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b}</td></tr>`).join('')}</tbody></table>`;
+  wait=new Strip($('waitcv'),[k],false); wait.add(k,!i.last); setWait(i);
+}
+function setWait(i){ if(i.last){ $('wait-title').textContent='Connected'; $('wait-text').textContent='Last event '+ago(i.last)+'. Each test event sends one more figure through the gate.'; } else { $('wait-title').textContent='Waiting for the first event'; $('wait-text').textContent='The figure stands at the gate until this platform sends something. Send a test event to see it walk in.'; } }
+$('su-test').onclick=()=>{ if(!su) return; const first=!su.last; if(su.draft){ INTS.push(su); delete su.draft; su.id=su.kind+'-'+(INTS.length); paintIntegrations(); fillFilters(); }
+  su.state='ok'; const ev=makeEvent(su,{github:'issue.opened',qa:'qa.run.started',gaos:'task.created',site:'article.published'}[su.kind]); ev.sum='TEST · '+ev.sum; ingest(ev);
+  if(first) wait.release(); else wait.add(su.kind); $('su-steps').lastElementChild.classList.add('done'); const [cl,tx]=stateOf(su); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx; setWait(su); toast('Test event sent and accepted'); };
+$('su-extra').addEventListener('click',e=>{ const t=e.target; if(t.dataset.copy) copy($(t.dataset.copy).value,t.dataset.what); if(t.dataset.reveal){ const f=$(t.dataset.reveal); f.type=f.type==='password'?'text':'password'; t.textContent=f.type==='password'?'Show':'Hide'; } if(t.dataset.task) copy(TASKS[t.dataset.task]||'',t.dataset.task); });
+
+/* ============================ event log ============================ */
+function fillFilters(){ const s=$('f-int'), v=s.value; s.innerHTML='<option value="">All</option>'+INTS.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join(''); s.value=v; }
+const passes=ev=>(!$('f-int').value||ev.int===$('f-int').value)&&(!$('f-type').value||ev.type.startsWith($('f-type').value))&&(!$('f-st').value||ev.st===$('f-st').value)&&(!$('f-q').value||(ev.sum+ev.id+ev.type).toLowerCase().includes($('f-q').value.toLowerCase()));
+function evRow(ev,isNew){ const tr=document.createElement('tr'); tr.className='click'+(isNew?' new':''); tr.dataset.id=ev.id; const i=INTS.find(x=>x.id===ev.int);
+  tr.innerHTML=`<td class="t" data-l="Time">${hhmmss(ev.at)}</td><td data-l="Integration"><span class="kind k-${ev.kind}" style="margin-right:6px"></span>${esc(i?i.name:ev.int)}</td><td class="t" data-l="Type">${esc(ev.type)}</td><td data-l="Summary">${esc(ev.sum)}</td><td data-l="Delivery"><span class="pill ${ev.st==='ok'?'ok':'bad'}"><i></i>${ev.st}</span></td>`; return tr; }
+function paintLog(){ const b=$('ev-body'); b.innerHTML=''; EVENTS.filter(passes).slice(0,80).forEach(ev=>b.append(evRow(ev))); if(!b.children.length) b.innerHTML='<tr><td colspan="5" class="muted">No delivery matches these filters. Clear a filter to see more.</td></tr>'; }
+['f-int','f-type','f-st'].forEach(id=>$(id).onchange=paintLog); $('f-q').oninput=paintLog;
+$('ev-pause').onclick=e=>{ paused=!paused; e.target.setAttribute('aria-pressed',paused); e.target.textContent=paused?'Resume stream':'Pause stream'; $('sse-pill').className='pill '+(paused?'off':'ok'); $('sse-pill').innerHTML='<i></i>'+(paused?'stream paused':'stream connected'); };
+$('ev-body').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-id]'); if(!tr) return; const ev=EVENTS.find(x=>x.id===tr.dataset.id); if(!ev) return; const i=INTS.find(x=>x.id===ev.int);
+  $('dr-title').textContent=ev.type; $('dr-kv').innerHTML=`<dt>Event id</dt><dd>${ev.id}</dd><dt>Integration</dt><dd>${esc(i?i.name:ev.int)}</dd><dt>Received</dt><dd>${new Date(ev.at).toISOString()}</dd><dt>Delivery</dt><dd>${ev.st}${ev.err?' · '+ev.err:''}</dd>`;
+  $('dr-raw').textContent=JSON.stringify(rawView(ev),null,2); $('dr-pub').textContent=ev.st==='ok'?JSON.stringify(publicView(ev),null,2):'Nothing. A rejected delivery never reaches the stream.'; $('drawer').classList.add('on'); $('dr-x').focus(); });
+$('dr-x').onclick=()=>$('drawer').classList.remove('on'); addEventListener('keydown',e=>{ if(e.key==='Escape') $('drawer').classList.remove('on'); });
+
+/* ============================ products ============================ */
+const visSwitch=(kind,id,v)=>`<span class="switch"><button type="button" data-vis="${kind}:${id}:public" aria-pressed="${v==='public'}">Public</button><button type="button" data-vis="${kind}:${id}:hidden" aria-pressed="${v==='hidden'}">Hidden</button></span>`;
+function paintProducts(){
+  $('org-body').innerHTML=ORGS.map(o=>`<tr><td class="lead"><b style="font-weight:600">${o.id}</b></td><td data-l="Visibility">${visSwitch('org',o.id,o.vis)}</td><td data-l="Public name"><input type="text" id="oa-${o.id}" data-alias="org:${o.id}" value="${esc(o.alias)}" aria-label="Public name for ${o.id}" ${o.vis==='public'?'disabled':''}></td><td class="small muted" data-l="Products">${PRODUCTS.filter(p=>p.org===o.id).map(p=>p.key).join(', ')}</td></tr>`).join('');
+  $('prod-body').innerHTML=PRODUCTS.map(p=>{ const o=ORGS.find(o=>o.id===p.org), forced=o.vis==='hidden'; return `<tr><td class="lead"><b style="font-weight:600">${p.key}</b></td><td class="small" data-l="Sources">${p.src}</td><td class="small" data-l="Org">${p.org}</td><td data-l="Visibility">${forced?'<span class="pill off">hidden by its org</span>':visSwitch('prod',p.key,p.vis)}</td><td data-l="Public name"><input type="text" id="pa-${p.key}" data-alias="prod:${p.key}" value="${esc(p.alias)}" aria-label="Public name for ${p.key}" ${!forced&&p.vis==='public'?'disabled':''}></td><td data-l="Town building"><select id="ph-${p.key}" data-hall="${p.key}" aria-label="Town building for ${p.key}">${HALLS.map(h=>`<option ${h===p.hall?'selected':''}>${h}</option>`).join('')}</select></td></tr>`; }).join('');
+  const sample={id:'01JD3X9T2M8Q4W6Z7K5B',type:'issue.opened',int:'gh-sismedika',kind:'github',at:Date.now(),st:'ok',data:{org:'sismedika',repo:'sipreport',number:48,title:'Email bounces for director list'}};
+  $('vis-raw').textContent='stored\n'+JSON.stringify(rawView(sample).data,null,2); $('vis-pub').textContent='public stream\n'+JSON.stringify(publicView(sample).data,null,2); }
+document.querySelector('[data-page=products]').addEventListener('click',e=>{ const v=e.target.dataset.vis; if(!v) return; const [kind,id,val]=v.split(':'); const o=kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id); o.vis=val; if(val==='public') o.alias=kind==='org'?o.id:o.key; else if(o.alias===(o.id||o.key)) o.alias=kind==='org'?'Org '+String.fromCharCode(65+ORGS.indexOf(o)):'Product '+String.fromCharCode(65+PRODUCTS.indexOf(o)); paintProducts(); toast((o.id||o.key)+' is now '+val+' in the town'); });
+document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(a){ const [kind,id]=a.split(':'); (kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id)).alias=e.target.value.trim()||'Hidden'; paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
+
+/* ============================ settings ============================ */
+function paintDb(){ const rows=[['Integration (vertex)',INTS.length],['Org (vertex)',ORGS.length],['Product (vertex)',PRODUCTS.length],['Delivery (vertex)',14210+EVENTS.length],['Event (vertex)',13872+EVENTS.filter(e=>e.st==='ok').length],['PRODUCED (Delivery → Event)',13872+EVENTS.filter(e=>e.st==='ok').length],['ABOUT (Event → Product)',12950+EVENTS.filter(e=>e.st==='ok'&&e.kind!=='site').length],['User, Session (vertex)',3]];
+  $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); }
+$('save-svc').onclick=()=>toast('Saved. Events are kept '+$('keep').value+' days.');
+$('motion').onclick=e=>{ const v=e.target.dataset.v; if(!v) return; document.body.classList.toggle('still',v==='off'); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v)); };
+$('pwform').onsubmit=e=>{ e.preventDefault(); if($('acc-p1').value!==$('acc-p2').value) return toast('The two passwords differ. Type the same one twice.'); toast('Account updated'); };
+
+/* ============================ stream + router ============================ */
+const strip=new Strip($('strip'),['github','qa','gaos','site'],false), loginStrip=new Strip($('logincv'),['github','qa','gaos','site'],true);
+function ingest(ev){ const i=INTS.find(x=>x.id===ev.int); EVENTS.unshift(ev); if(EVENTS.length>300) EVENTS.pop(); $('n-ev').textContent=EVENTS.length;
+  if(ev.st==='ok'){ i.today++; i.last=ev.at; stats.events++; buckets[buckets.length-1]++; if(ev.type==='issue.opened') stats.opened++; if(ev.type==='issue.closed') stats.closed++; if(ev.type==='qa.run.finished'){ stats.qaRuns++; if(ev.data.failed) stats.qaFail++; } if(ev.kind==='gaos'&&ev.type==='task.done') stats.tasks++; if(ev.kind==='site') stats.posts++; strip.add(ev.kind);
+    const dot=$('dot-'+i.id); if(dot){ dot.classList.remove('ping'); void dot.offsetWidth; dot.classList.add('ping'); } }
+  else { i.err++; i.lastErr=ev.at; }
+  paintTiles(); const tl=$('tail'); tl.prepend(tailRow(ev,true)); while(tl.children.length>14) tl.lastChild.remove();
+  if(passes(ev)){ const b=$('ev-body'); if(b.firstChild&&!b.firstChild.dataset.id) b.innerHTML=''; b.prepend(evRow(ev,true)); while(b.children.length>80) b.lastChild.remove(); } }
+function tick(){ if(!paused&&!$('app').hidden){ const live=INTS.filter(i=>i.state==='ok'); if(live.length) ingest(makeEvent(pick(live))); } setTimeout(tick,rnd(700,2100)); }
+setInterval(()=>{ buckets.shift(); buckets.push(0); },10000);
+setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(i.last); }); drawChart(); paintDb(); },1000);
+const ORDER=['dashboard','integrations','setup','events','products','prefs']; let curPage=null, swapT=0;
+const isStill=()=>document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
+function placeMark(){ const a=document.querySelector('#rail nav a[aria-current=page]'), m=$('navmark'); if(!a){ m.style.width='0'; return; } m.style.width=a.offsetWidth+'px'; m.style.height=a.offsetHeight+'px'; m.style.transform=`translate(${a.offsetLeft}px,${a.offsetTop}px)`; }
+function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'dashboard', page=h.startsWith('setup-')?'setup':h; if(!document.querySelector(`.page[data-page="${page}"]`)){ page=h='dashboard'; }
+  const pages=[...document.querySelectorAll('.page')], next=pages.find(p=>p.dataset.page===page), prev=curPage&&pages.find(p=>p.dataset.page===curPage);
+  const dir=!prev?1:(Math.sign(ORDER.indexOf(page)-ORDER.indexOf(curPage))||1), dx=(dir*26)+'px';
+  document.querySelectorAll('#rail nav a').forEach(a=>{ const on=a.getAttribute('href')==='#'+(page==='setup'?'integrations':page); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); placeMark();
+  $('drawer').classList.remove('on'); clearTimeout(swapT);
+  const swap=()=>{ pages.forEach(p=>p.classList.remove('on','leave','enter')); next.style.setProperty('--dx',dx); next.classList.add('on'); void next.offsetWidth; next.classList.add('enter'); curPage=page;
+    if(page==='setup') openSetup(h.slice(6)); if(page==='integrations') paintIntegrations(); if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
+    window.scrollTo(0,0); swapT=setTimeout(()=>next.classList.remove('enter'),1100); };
+  if(prev&&!isStill()){ const w=$('wipe'); w.style.transformOrigin=dir>0?'left':'right'; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); pages.forEach(p=>p.classList.remove('enter')); prev.style.setProperty('--dx',dx); prev.classList.add('leave'); swapT=setTimeout(swap,150); }
+  else swap(); }
+addEventListener('resize',placeMark);
+addEventListener('hashchange',route); addEventListener('resize',drawChart);
+function enter(animated){ const go=()=>{ $('login').hidden=true; $('login').style.display='none'; $('app').hidden=false; route(); };
+  if(!animated) return go(); const gs=document.querySelectorAll('.gate'); gs.forEach(g=>g.classList.add('shut')); setTimeout(()=>{ go(); gs.forEach(g=>g.classList.remove('shut')); },720); }
+$('loginform').onsubmit=e=>{ e.preventDefault(); $('lg-btn').textContent='Opening the gate…'; $('who').textContent=$('lg-email').value; try{ sessionStorage.setItem('bt-in','1'); }catch(_){} enter(!document.body.classList.contains('still')); };
+$('logout').onclick=()=>{ try{ sessionStorage.removeItem('bt-in'); }catch(_){} $('app').hidden=true; $('login').hidden=false; $('login').style.display=''; $('lg-btn').textContent='Sign in'; };
+
+/* boot */
+for(let n=0;n<26;n++){ const ev=makeEvent(pick(INTS.filter(i=>i.state==='ok'))); ev.at=Date.now()-(26-n)*4200; EVENTS.unshift(ev); }
+$('n-ev').textContent=EVENTS.length; paintTiles(true); EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); fillFilters(); paintIntegrations(); paintHealth(); paintDb(); paintLog();
+let inside=false; try{ inside=sessionStorage.getItem('bt-in')==='1'; }catch(_){} if(inside) enter(false);
+let last=performance.now(); (function frame(now){ const dt=Math.min(.05,(now-last)/1000); last=now; const still=document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(!$('login').hidden) loginStrip.draw(still?0:dt); else { if(document.querySelector('.page.on[data-page=dashboard]')) strip.draw(still?5:dt); if(wait&&document.querySelector('.page.on[data-page=setup]')) wait.draw(still?5:dt); } requestAnimationFrame(frame); })(last);
+tick();
+</script>
+</body>
+</html>

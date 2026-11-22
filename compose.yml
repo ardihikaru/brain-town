@@ -1,0 +1,28 @@
+# Brain Town — one static web service. Run one compose project per environment:
+#
+#   ENV_FILE=.env.demo docker compose -p brain-town-demo --env-file .env.demo up -d --build
+#   ENV_FILE=.env.prod docker compose -p brain-town-prod --env-file .env.prod up -d --build
+#
+# Locally, with no env file at all: `docker compose up --build` → http://127.0.0.1:8080
+name: brain-town
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile
+    image: brain-town-web:${BRAIN_TOWN_MODE:-local}
+    restart: unless-stopped
+    # Runtime settings (mode, public URL, ArcadeDB). The static pages do not read them yet;
+    # they are wired here for the ingest/events backend on the roadmap.
+    env_file:
+      - path: ${ENV_FILE:-.env}
+        required: false
+    ports:
+      - "${BIND_ADDR:-127.0.0.1}:${PORT:-8080}:80"
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+    mem_limit: 64m
+    pids_limit: 64
