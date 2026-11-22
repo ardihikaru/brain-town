@@ -32,6 +32,16 @@ export class SetupPage extends BasePage {
     await this.expectLoaded();
   }
 
+  /**
+   * Waits for the page of a freshly created integration. In live mode the hash first reads #setup-new-<kind> and is
+   * replaced by #setup-<kind>-<hex> once the create request returns; the token is only usable after that.
+   */
+  async waitForCreated(kind: string): Promise<void> {
+    await expect(this.page).toHaveURL(new RegExp(`#setup-${kind}-[0-9a-f]{6}$`));
+    await this.expectLoaded();
+    await expect(this.token).not.toHaveValue('');
+  }
+
   /** The integration id from the URL hash (#setup-<id>). */
   integrationId(): string {
     return new URL(this.page.url()).hash.replace(/^#setup-/, '');
