@@ -260,7 +260,7 @@ body.still #navmark{transition:none}
 
 <div id="login">
   <canvas id="logincv" aria-hidden="true"></canvas>
-  <form class="panel pad" id="loginform">
+  <form class="panel pad" id="loginform" data-testid="login-form">
     <div><div class="eyebrow">town.mfardiansyah.id</div><h1>Brain Town back-office</h1></div>
     <p class="muted">Sign in to connect platforms and watch the event stream. This is a static preview: any email and password opens the gate.</p>
     <label>Email<input type="email" id="lg-email" value="me@mfardiansyah.id" autocomplete="username" required></label>
@@ -495,7 +495,7 @@ $('icards').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.ta
 /* ============================ setup ============================ */
 let su=null, wait=null;
 const secretOf=i=>LIVE?(i.token||'bt_live_••••••••••••••••••••'+(i.hint||'')):'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
-function field(label,val,id,mask){ return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}">${mask?`<button type="button" data-reveal="${id}">Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}">Copy</button></div></div>`; }
+function field(label,val,id,mask){ return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}" data-testid="${id}">${mask?`<button type="button" data-reveal="${id}">Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}">Copy</button></div></div>`; }
 function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true}; }
   su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
   $('su-title').textContent=i.name; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;

@@ -1,0 +1,47 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+#  e2e/.gitignore — adapted from the automation-test-project-template.
+#
+#  Pattern rules used below:
+#   • `dir/`          ignores the folder AND everything in it (nothing inside can be re-included)
+#   • `dir/*`         ignores the CONTENTS only, so `!dir/keep-me` can re-include single files
+#   • `!pattern`      re-includes something an earlier rule ignored (last matching rule wins)
+#   • Check any path: git check-ignore -v <path>
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── 1. Dependencies ───────────────────────────────────────────────────────────
+node_modules/
+
+# ── 2. Secrets & per-developer environment files ─────────────────────────────
+#    Real values are generated locally by `npm run env:init` (random passwords).
+#    Only the *.example templates are committed.
+.env
+.env.*
+!.env.example
+!**/.env.*.example
+
+# ── 3. Auth sessions (Playwright storageState) — contain live session cookies ─
+.auth/*
+!.auth/.gitkeep
+!.auth/README.md
+
+# ── 4. Test output — regenerated on every run ────────────────────────────────
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+perf/results/
+
+# ── 5. Local stack runtime files (TLS keys for the feed fixture, served feeds) ─
+.stack/
+
+# ── 6. AI tooling — personal/local only (shared AGENTS.md & CLAUDE.md ARE committed)
+CLAUDE.local.md
+
+# ── 7. OS & editor noise ─────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+*.log
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

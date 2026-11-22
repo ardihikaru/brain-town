@@ -11,5 +11,6 @@ This is the initial documentation, built from the v1 package (22 Nov 2026).
 | [integrations/qa-tool.md](integrations/qa-tool.md) | Contract for the QA Tool: a Playwright reporter that streams test runs. |
 | [integrations/mfardiansyah-id.md](integrations/mfardiansyah-id.md) | Contract for [mfardiansyah.id](https://mfardiansyah.id): feed, publish hook, visit beacon. |
 | [package-notes.md](package-notes.md) | The README that shipped with the v1 package. |
+| [../e2e/README.md](../e2e/README.md) | E2E (Playwright) and performance (k6) tests against the local stack; test catalog and perf baseline. |
 
 The original package is kept unchanged under [`../artifacts/v1/`](../artifacts/v1/).

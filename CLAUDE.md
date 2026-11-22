@@ -12,9 +12,11 @@ are binding.
 - `artifacts/` — frozen v1 package. Never edit.
 - `docs/` — architecture, deployment, integration contracts (`docs/integrations/*.md`).
 - `deploy/` — nginx image, site config, edge vhost reference (live edge config is on `clino`).
-- `backend/` — Go back-office service (ingest, admin API, SSE). Added in a later PR.
 - `.claude/agents/` — lead-engineer, frontend-designer (Opus 5.5); frontend-engineer, backend-engineer
   (Sonnet 5.5). `.claude/skills/` — Emil Kowalski design/motion skills (vendored, see `UPSTREAM.md`).
+- `backend/` — Go back-office service (ingest, admin API, SSE).
+- `e2e/` — E2E (Playwright) and performance (k6) suite against the local stack only. Rules: `e2e/AGENTS.md`
+  and `.claude/rules/e2e-automation.md`.
 
 ## Ground rules
 - Frontend stays **no build step**: single HTML files, inline CSS/JS, no framework or bundler.
@@ -32,7 +34,11 @@ are binding.
 ## Run / test
 - Static: `python3 -m http.server -d web 8080` → `/town/`, `/backoffice/`.
 - Container: `docker compose up --build` (health: `/healthz`).
-- Backend (once present): `cd backend && go vet ./... && go test ./...`.
+- Backend: `cd backend && go vet ./... && go test ./...`.
+- E2E: `cd e2e && npm ci && npm run check && npm run test:local` (stack up → suite → stack down);
+  new/changed specs `npm run test:local -- --repeat-each=3`; perf `npm run perf:local` (k6 in Docker).
+- **After any local E2E or perf run, the local deployment is shut down** (`cd e2e && npm run stack:down`) and
+  `docker ps -a --filter name=brain-town-e2e` shows nothing. Demo and production are never E2E targets.
 
 ## Git workflow
 - **Always work in a git worktree**, PR, then delete the worktree. See

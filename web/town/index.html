@@ -200,11 +200,11 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <aside class="panel" id="feed">
   <header>
     <h2>Live feed</h2>
-    <span class="pill" id="mode"><i></i>connecting</span>
+    <span class="pill" id="mode" data-testid="town-mode"><i></i>connecting</span>
     <button id="feed-toggle" aria-expanded="true" aria-controls="log">Hide</button>
   </header>
   <button id="hl" hidden><i></i><span id="hl-text"></span><em>Go there</em></button>
-  <ol id="log" aria-live="off"></ol>
+  <ol id="log" aria-live="off" data-testid="town-log"></ol>
   <footer>The town only reacts to events. It reads the live stream from <code>/events</code> (SSE) and reconnects by itself. If the stream is not reachable, or the URL has <code>?sim=1</code>, a built-in simulator plays a static demo instead.</footer>
 </aside>
 

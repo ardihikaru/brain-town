@@ -1,0 +1,25 @@
+# E2E-only additions to ../compose.yml. Used only by e2e/scripts/stack.sh (compose project
+# brain-town-e2e, 127.0.0.1 only). Never used for the demo or production deployment.
+#
+#   docker compose -p brain-town-e2e --project-directory . -f compose.yml -f e2e/compose.e2e.yml \
+#     --env-file e2e/env/.env.local --profile db up -d --build
+services:
+  api:
+    environment:
+      # Pull site feeds every few seconds instead of every 5 minutes, so the feed spec needs no long wait.
+      FEED_PULL_INTERVAL_SECONDS: ${FEED_PULL_INTERVAL_SECONDS:-300}
+      # The api image is scratch (no CA bundle). Go's crypto/x509 reads trust roots from SSL_CERT_FILE,
+      # so the throwaway test CA that signed the feed fixture's certificate is trusted without a code change.
+      SSL_CERT_FILE: /e2e-tls/ca.crt
+    volumes:
+      - ./e2e/.stack/tls/ca.crt:/e2e-tls/ca.crt:ro
+
+  # Serves JSON Feed files written by the feed spec over https, inside the compose network only.
+  feed-fixture:
+    image: nginx:1.30.7-alpine3.24
+    volumes:
+      - ./e2e/feed-fixture/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./e2e/.stack/tls:/etc/nginx/tls:ro
+      - ./e2e/.stack/feed:/usr/share/nginx/feed:ro
+    mem_limit: 64m
+    pids_limit: 64

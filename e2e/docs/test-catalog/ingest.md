@@ -1,0 +1,32 @@
+# Ingest (ingest)
+
+**Goal:** GAOS, the QA tool and mfardiansyah.id deliver events with a per-integration Bearer token; bad input is refused and logged.
+
+## User stories
+
+- **US-ING-01** — As GAOS I want my task events accepted once so that the town shows each change exactly once.
+- **US-ING-02** — As the QA tool I want a run (started, steps, finished) accepted in order so that the QA bot walks its steps.
+- **US-ING-03** — As mfardiansyah.id I want articles and visits accepted so that couriers and visitors appear, with no personal data stored.
+- **US-ING-04** — As the owner I want unauthenticated, malformed and flooding senders refused so that the town stays clean.
+
+## Test cases
+
+One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenario = Given / When / Then in one line.
+
+| Done | TC ID      | Story     | Scenario (Given / When / Then)                                                                                                                     | +/- | Level | Pri | Status    | Spec                                          |
+| ---- | ---------- | --------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ----- | --- | --------- | --------------------------------------------- |
+| ☑    | TC-ING-001 | US-ING-01 | Given a GAOS integration, when task.created and task.moved are sent, then 202 and both are stored                                                  | +   | API   | P0  | automated | `tests/api/rest/ingest/gaos.spec.ts`          |
+| ☑    | TC-ING-002 | US-ING-01 | Given an accepted event, when the same id is sent again, then 409 with field id                                                                    | -   | API   | P0  | automated | `tests/api/rest/ingest/gaos.spec.ts`          |
+| ☑    | TC-ING-003 | US-ING-01 | Given an accepted Idempotency-Key, when another body reuses it, then 409                                                                           | -   | API   | P1  | automated | `tests/api/rest/ingest/gaos.spec.ts`          |
+| ☑    | TC-ING-004 | US-ING-01 | Given one missing or invalid required field (id, at, type, product.key, product.visibility, task.id), then 422 naming it; an id of 128 is accepted | -   | API   | P1  | automated | `tests/api/rest/ingest/gaos.spec.ts`          |
+| ☑    | TC-ING-005 | US-ING-01 | Given product.upserted without a task, when sent, then 202                                                                                         | +   | API   | P2  | automated | `tests/api/rest/ingest/gaos.spec.ts`          |
+| ☑    | TC-ING-010 | US-ING-02 | Given a QA integration, when a full run is sent, then every event is 202 and stored in order                                                       | +   | API   | P0  | automated | `tests/api/rest/ingest/qa.spec.ts`            |
+| ☑    | TC-ING-011 | US-ING-02 | Given one missing or invalid field (id, at, type, product, run), then 422 naming it                                                                | -   | API   | P1  | automated | `tests/api/rest/ingest/qa.spec.ts`            |
+| ☑    | TC-ING-020 | US-ING-03 | Given a site integration, when an article or illustration is published, then 202                                                                   | +   | API   | P0  | automated | `tests/api/rest/ingest/site.spec.ts`          |
+| ☑    | TC-ING-021 | US-ING-03 | Given a visit with an IP, user agent and extra data, when stored, then only page, country and title remain                                         | +   | API   | P0  | automated | `tests/api/rest/ingest/site.spec.ts`          |
+| ☑    | TC-ING-022 | US-ING-03 | Given an article without title or url, or a visit with a bad page or country, then 422 naming the field                                            | -   | API   | P1  | automated | `tests/api/rest/ingest/site.spec.ts`          |
+| ☑    | TC-ING-030 | US-ING-04 | Given no token, a wrong token, another integration's token, the wrong source path or an unknown id, then 401                                       | -   | API   | P0  | automated | `tests/api/rest/ingest/auth-and-body.spec.ts` |
+| ☑    | TC-ING-031 | US-ING-04 | Given an unknown source in the path, when posting, then 404                                                                                        | -   | API   | P2  | automated | `tests/api/rest/ingest/auth-and-body.spec.ts` |
+| ☑    | TC-ING-032 | US-ING-04 | Given a body that is not a JSON object or is over 64 KiB, then 422 with field body                                                                 | -   | API   | P1  | automated | `tests/api/rest/ingest/auth-and-body.spec.ts` |
+| ☑    | TC-ING-040 | US-ING-04 | Given INGEST_BURST, when a bigger burst arrives, then the excess gets 429 with Retry-After 1                                                       | -   | API   | P1  | automated | `tests/api/rest/ingest/rate-limit.spec.ts`    |
+| ☑    | TC-ING-041 | US-ING-04 | Given a limited integration, when the bucket refills, then events are accepted again                                                               | +   | API   | P2  | automated | `tests/api/rest/ingest/rate-limit.spec.ts`    |
