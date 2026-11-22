@@ -11,15 +11,16 @@ counts as automated: it passes while the bug exists and turns red when the bug i
 
 <!-- coverage:start -->
 
-| Epic                                   | Cases |   + |   - | automated | planned | blocked | manual-only | wont | Automated % |
-| -------------------------------------- | ----: | --: | --: | --------: | ------: | ------: | ----------: | ---: | ----------: |
-| [Admin API (admin)](admin.md)          |    31 |  18 |  13 |        30 |       0 |       0 |           1 |    0 |         97% |
-| [Feed puller (feed)](feed.md)          |     5 |   2 |   3 |         3 |       0 |       1 |           0 |    1 |         60% |
-| [Ingest (ingest)](ingest.md)           |    29 |  14 |  15 |        29 |       0 |       0 |           0 |    0 |        100% |
-| [Event streams (stream)](stream.md)    |    15 |  13 |   2 |        14 |       0 |       0 |           0 |    1 |         93% |
-| [Back-office (web)](web-backoffice.md) |    17 |  14 |   3 |        17 |       0 |       0 |           0 |    0 |        100% |
-| [Town (web)](web-town.md)              |     9 |   7 |   2 |         9 |       0 |       0 |           0 |    0 |        100% |
-| **Total**                              |   106 |  68 |  38 |       102 |       0 |       1 |           1 |    2 |         96% |
+| Epic                                                          | Cases |   + |   - | automated | planned | blocked | manual-only | wont | Automated % |
+| ------------------------------------------------------------- | ----: | --: | --: | --------: | ------: | ------: | ----------: | ---: | ----------: |
+| [Admin API (admin)](admin.md)                                 |    31 |  18 |  13 |        30 |       0 |       0 |           1 |    0 |         97% |
+| [Feed puller (feed)](feed.md)                                 |     5 |   2 |   3 |         3 |       0 |       1 |           0 |    1 |         60% |
+| [Ingest (ingest)](ingest.md)                                  |    31 |  15 |  16 |        31 |       0 |       0 |           0 |    0 |        100% |
+| [mfardiansyah.id integration (integrations)](integrations.md) |    18 |   8 |  10 |        16 |       0 |       0 |           2 |    0 |         89% |
+| [Event streams (stream)](stream.md)                           |    15 |  13 |   2 |        14 |       0 |       0 |           0 |    1 |         93% |
+| [Back-office (web)](web-backoffice.md)                        |    20 |  17 |   3 |        20 |       0 |       0 |           0 |    0 |        100% |
+| [Town (web)](web-town.md)                                     |     9 |   7 |   2 |         9 |       0 |       0 |           0 |    0 |        100% |
+| **Total**                                                     |   129 |  80 |  49 |       123 |       0 |       1 |           3 |    2 |         95% |
 
 <!-- coverage:end -->
 
@@ -36,13 +37,14 @@ Refresh with `npm run catalog:report`; validate with `npm run catalog`.
 
 ## Epics
 
-| Epic                             | Target                                                                               |
-| -------------------------------- | ------------------------------------------------------------------------------------ |
-| [Admin API](admin.md)            | `/api/admin/*` (REST, cookie session)                                                |
-| [Ingest](ingest.md)              | `/ingest/{gaos,qa,site}/{id}` (REST, Bearer), `/ingest/github/{id}` (signed webhook) |
-| [Event streams](stream.md)       | `/events`, `/admin/events` (SSE)                                                     |
-| [Feed puller](feed.md)           | site JSON Feed → `article.published`                                                 |
-| [Town](web-town.md)              | `/` (web)                                                                            |
-| [Back-office](web-backoffice.md) | `/backoffice/` (web)                                                                 |
+| Epic                                | Target                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------ |
+| [Admin API](admin.md)               | `/api/admin/*` (REST, cookie session)                                                |
+| [Ingest](ingest.md)                 | `/ingest/{gaos,qa,site}/{id}` (REST, Bearer), `/ingest/github/{id}` (signed webhook) |
+| [Event streams](stream.md)          | `/events`, `/admin/events` (SSE)                                                     |
+| [Feed puller](feed.md)              | site JSON Feed → `article.published`                                                 |
+| [Site integration](integrations.md) | the real mfardiansyah.id site, both sides (feed, push, visits, offline)              |
+| [Town](web-town.md)                 | `/` (web)                                                                            |
+| [Back-office](web-backoffice.md)    | `/backoffice/` (web)                                                                 |
 
 New epic: copy [_template.md](_template.md), add it to this table, run `npm run catalog:report`.

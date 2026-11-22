@@ -3,6 +3,23 @@
 #
 #   docker compose -p brain-town-e2e --project-directory . -f compose.yml -f e2e/compose.e2e.yml \
 #     --env-file e2e/env/.env.local --profile db up -d --build
+x-site-api-env: &site-api-env
+  ARCADEDB_URL: http://arcadedb:2480
+  ARCADEDB_USER: root
+  ARCADEDB_PASSWORD: ${ARCADEDB_PASSWORD:-}
+  LISTEN: ':8121'
+  GRPC_LISTEN: 'off'
+  WEB_ORIGIN: http://site-web:8080
+  ADMIN_USER: ${SITE_ADMIN_USER:-e2e-admin}
+  ADMIN_PASSWORD: ${SITE_ADMIN_PASSWORD:-}
+  ADMIN_BASIC_ENABLED: 'true'
+  SESSION_SECURE: 'false'
+  # Local only: trust X-Real-IP from any peer so specs can pick the visitor IP (the site's default trusts one edge).
+  TRUSTED_PROXY_CIDRS: '0.0.0.0/0,::/0'
+  GEOIP_DB: /geo/e2e-country.mmdb
+  SSL_CERT_FILE: /e2e-tls/ca.crt
+  BRAIN_TOWN_ENABLED: 'true'
+
 services:
   api:
     environment:
@@ -23,3 +40,129 @@ services:
       - ./e2e/.stack/feed:/usr/share/nginx/feed:ro
     mem_limit: 64m
     pids_limit: 64
+
+  # ── mfardiansyah.id both-sides services (profile "site") ─────────────────────────────────────────────
+  # The site's real web image and Go api, built from a clean `git archive` of the site repo that scripts/stack.sh
+  # exports to e2e/.stack/site/src. Throwaway databases in the stack's ArcadeDB, no LinkedIn/AI/Redis. Never used outside
+  # the e2e stack. The site runs with a GeoIP file written by site-init, and trusts X-Real-IP from anywhere (local only),
+  # so specs pick the visitor country per worker.
+
+  # One-shot: GeoIP file into the shared volume, site databases (schema, migrations, seed) in ArcadeDB.
+  site-init:
+    profiles: ['site']
+    build:
+      context: ./e2e/site-fixture/init
+    environment:
+      ARCADEDB_URL: http://arcadedb:2480
+      ARCADEDB_PASSWORD: ${ARCADEDB_PASSWORD:-}
+      GEO_OUT: /geo/e2e-country.mmdb
+      SITE_DB_DIR: /site-db
+    volumes:
+      - site-geo:/geo
+      - ./e2e/.stack/site/src/backend/db:/site-db:ro
+    depends_on:
+      - arcadedb
+    restart: 'no'
+    mem_limit: 64m
+
+  site-web:
+    profiles: ['site']
+    build:
+      context: ./e2e/.stack/site/src
+    ports:
+      - '127.0.0.1:18284:8080'
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/cache/nginx
+    mem_limit: 64m
+    pids_limit: 64
+
+  # Push instance: publishes to the stack-owned "e2e-site-push" integration (no feedUrl, so only pushes reach it).
+  site-api:
+    profiles: ['site']
+    build:
+      context: ./e2e/.stack/site/src/backend
+    env_file:
+      - path: ./e2e/.stack/site/push.env
+        required: false
+    environment:
+      <<: *site-api-env
+      ARCADEDB_DB: site_push
+      SITE_URL: http://127.0.0.1:18281
+    ports:
+      - '127.0.0.1:18281:8121'
+    volumes: &site-api-volumes
+      - site-geo:/geo:ro
+      - ./e2e/.stack/tls/ca.crt:/e2e-tls/ca.crt:ro
+    depends_on: &site-api-depends
+      site-init:
+        condition: service_completed_successfully
+      site-web:
+        condition: service_started
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+    pids_limit: 128
+
+  # Pull instance: same pushes to "e2e-site-pull"; Brain Town's puller also reads its real /feed.json over https.
+  site-api-pull:
+    profiles: ['site']
+    build:
+      context: ./e2e/.stack/site/src/backend
+    env_file:
+      - path: ./e2e/.stack/site/pull.env
+        required: false
+    environment:
+      <<: *site-api-env
+      ARCADEDB_DB: site_pull
+      SITE_URL: http://127.0.0.1:18283
+    ports:
+      - '127.0.0.1:18283:8121'
+    volumes: *site-api-volumes
+    depends_on: *site-api-depends
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+    pids_limit: 128
+
+  # Brain Town unreachable: a closed port on the https front (connection refused), placeholder token.
+  site-api-offline:
+    profiles: ['site']
+    build:
+      context: ./e2e/.stack/site/src/backend
+    environment:
+      <<: *site-api-env
+      ARCADEDB_DB: site_offline
+      SITE_URL: http://127.0.0.1:18282
+      BRAIN_TOWN_URL: https://brain-town-tls:9/ingest/site/unreachable
+      BRAIN_TOWN_TOKEN: e2e-placeholder-not-a-secret
+    ports:
+      - '127.0.0.1:18282:8121'
+    volumes: *site-api-volumes
+    depends_on: *site-api-depends
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 128m
+    pids_limit: 128
+
+  # https front: brain-town-tls (site -> Brain Town ingest) and site-pull-tls (Brain Town puller -> real site feed).
+  tls-front:
+    profiles: ['site']
+    image: nginx:1.30.7-alpine3.24
+    networks:
+      default:
+        aliases:
+          - brain-town-tls
+          - site-pull-tls
+    volumes:
+      - ./e2e/site-fixture/tls-front.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./e2e/.stack/tls:/etc/nginx/tls:ro
+    mem_limit: 64m
+    pids_limit: 64
+
+volumes:
+  site-geo:

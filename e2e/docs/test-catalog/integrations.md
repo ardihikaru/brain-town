@@ -1,0 +1,40 @@
+# mfardiansyah.id integration (integrations)
+
+**Goal:** the real mfardiansyah.id site (its Go api and web image, v0.54.x, run by the e2e stack) and Brain Town work together: the feed it serves, the article push on publish, the visit beacon, and the site staying up when the town is down. The site is the system under test here; Brain Town only receives.
+
+## User stories
+
+- **US-INTG-01** — As the site owner I want the site's feed to follow the JSON Feed contract so that Brain Town can pull it.
+- **US-INTG-02** — As the site owner I want one `article.published` per published English note so that a courier walks to the pendopo once.
+- **US-INTG-03** — As the site owner I want a note delivered by both push and pull to be one event so that the town never shows it twice.
+- **US-INTG-04** — As a visitor I want my visit reported with only the page and my country so that my privacy is kept.
+- **US-INTG-05** — As the site owner I want the site to work when Brain Town is down, and `/office` to load, so that the town never breaks the site.
+
+## Test cases
+
+One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenario = Given / When / Then in one line.
+
+| Done | TC ID       | Story      | Scenario (Given / When / Then)                                                                                                          | +/- | Level | Pri | Status      | Spec                                                                |
+| ---- | ----------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------- | --- | ----- | --- | ----------- | ------------------------------------------------------------------- |
+| ☑    | TC-INTG-001 | US-INTG-01 | Given the site, when GET /feed.json, then a JSON Feed 1.1 (feed+json, max-age=300) of at most 20 notes, ids post-<slug>, newest first   | +   | E2E   | P0  | automated   | `tests/api/stream/integrations/mfardiansyah-id/feed.spec.ts`        |
+| ☑    | TC-INTG-002 | US-INTG-01 | Given a published English note, when the feed is read, then it has id post-<slug> and the blog url                                      | +   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/feed.spec.ts`        |
+| ☑    | TC-INTG-003 | US-INTG-01 | Given an Indonesian note, when published, then it is not in the feed and not pushed                                                     | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/feed.spec.ts`        |
+| ☑    | TC-INTG-010 | US-INTG-02 | Given the push integration, when an English note is published, then one article.published with the feed id and {title,url,to:blog}      | +   | E2E   | P0  | automated   | `tests/api/stream/integrations/mfardiansyah-id/publish.spec.ts`     |
+| ☑    | TC-INTG-011 | US-INTG-02 | Given a note already pushed, when it is saved again (PUT and PATCH), then still one event                                               | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/publish.spec.ts`     |
+| ☑    | TC-INTG-020 | US-INTG-03 | Given the pull integration with the site feed as feedUrl, when one note is pushed and one scheduled note goes live, then one event each | +   | E2E   | P0  | automated   | `tests/api/stream/integrations/mfardiansyah-id/pull-dedupe.spec.ts` |
+| ☐    | TC-INTG-021 | US-INTG-03 | Given a note the town already pulled, when the site's minute scan pushes it, then 409 counts as delivered (not visible from outside)    | -   | E2E   | P2  | manual-only |                                                                     |
+| ☑    | TC-INTG-030 | US-INTG-04 | Given a visitor with a known country, when the home page opens, then one site.visit {page:home,country}                                 | +   | E2E   | P0  | automated   | `tests/api/stream/integrations/mfardiansyah-id/visit.spec.ts`       |
+| ☑    | TC-INTG-031 | US-INTG-04 | Given a visitor, when a note opens, then one site.visit {page:blog,country,title}                                                       | +   | E2E   | P0  | automated   | `tests/api/stream/integrations/mfardiansyah-id/visit.spec.ts`       |
+| ☑    | TC-INTG-032 | US-INTG-04 | Given a visit, when stored, then it holds no IP address and no user agent (only id, type, at, page, country, title)                     | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/visit.spec.ts`       |
+| ☑    | TC-INTG-033 | US-INTG-04 | Given a visitor without a country, when the home page opens, then nothing is sent and nothing is rejected                               | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/visit.spec.ts`       |
+| ☑    | TC-INTG-034 | US-INTG-04 | Given a crawler user agent, when the home page opens, then no site.visit                                                                | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/visit-skips.spec.ts` |
+| ☑    | TC-INTG-035 | US-INTG-04 | Given a browser prefetch (Sec-Purpose), when the home page opens, then no site.visit                                                    | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/visit-skips.spec.ts` |
+| ☑    | TC-INTG-036 | US-INTG-04 | Given the owner's admin session cookie, when the home page opens, then no site.visit                                                    | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/visit-skips.spec.ts` |
+| ☑    | TC-INTG-040 | US-INTG-05 | Given Brain Town unreachable, when a note is published, then 201 within the normal timeout                                              | -   | E2E   | P0  | automated   | `tests/api/stream/integrations/mfardiansyah-id/offline.spec.ts`     |
+| ☑    | TC-INTG-041 | US-INTG-05 | Given Brain Town unreachable, when the home page and a note are opened, then both load (200)                                            | -   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/offline.spec.ts`     |
+| ☑    | TC-INTG-050 | US-INTG-05 | Given the site web image, when GET /office, then 200 HTML                                                                               | +   | E2E   | P1  | automated   | `tests/api/stream/integrations/mfardiansyah-id/office.spec.ts`      |
+| ☐    | TC-INTG-060 | US-INTG-01 | Given production, when the feed, /office and the town's site deliveries are read (read-only), then they match the contract              | +   | E2E   | P2  | manual-only |                                                                     |
+
+TC-INTG-021 is `manual-only`: since site v0.54.4 a push answered 409 counts as delivered, but neither Brain Town nor the site api shows that retry. It is covered by the site's unit tests and the manual runbook (skill `mfardiansyah-id-integration`). TC-INTG-060 is the one allowed read-only production check from the same runbook; it is never part of the suite.
+
+Finding by this suite, fixed in site v0.54.5: the site's ArcadeDB client now retries a write on ArcadeDB's concurrent modification (before, a save could return 503 `could not save` and a push could be late). Writes are sent once and pushes are awaited once; the specs expect the site's real behaviour.
