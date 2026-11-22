@@ -1,3 +1,5 @@
+<img src="web/brand/mark-day.svg" alt="" width="88" align="right">
+
 # Brain Town
 
 **A living, hand-drawn town where real work becomes people.** Brain Town turns events from the
@@ -18,6 +20,8 @@ back-office for managing integrations.
 > contracts it will accept are already written: see [`docs/integrations/`](docs/integrations/).
 
 <!-- Screenshot: add docs/img/town.png and docs/img/backoffice.png -->
+
+The brand mark and its three treatments (live, demo, back-office) are in [`web/brand/`](web/brand/).
 
 ---
 

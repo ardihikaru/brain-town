@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Brain Town">
+  <title>Brain Town: back-office</title>
+  <rect x="1" y="1" width="62" height="62" rx="13" fill="#1f2b3a" stroke="#647282" stroke-width="2"/>
+  <path d="M5 41l34 17 20-10-34-17z" fill="#f6f7f1" fill-opacity=".06"/>
+  <g stroke="#f6f7f1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M11 41l28 14V39L11 25z" fill="#3a4452"/>
+    <path d="M39 55l14-7V32l-7-6.5-7 13.5z" fill="#2c3846"/>
+    <path d="M8 26l32 16 8-15.5-32-16z" fill="#c8472f"/>
+  </g>
+  <path d="M14 31.5l5 2.5v7l-5-2.5zM22 35.5l5 2.5v7l-5-2.5z" fill="#1f2b3a"/>
+  <path class="bt-win" d="M27.5 35.75l10 5v12l-10-5z" fill="#ffd66b" fill-opacity=".25"/>
+  <g stroke="#f6f7f1" stroke-width="1.5" stroke-linejoin="round">
+    <path class="bt-win" d="M30 39.5l5 2.5v7l-5-2.5z" fill="#ffd66b"/>
+    <path class="bt-spark" d="M51 5.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7z" fill="#ffd66b"/>
+  </g>
+</svg>

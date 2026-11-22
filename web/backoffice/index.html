@@ -5,6 +5,11 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#f6f7f1">
 <title>Brain Town Back-office</title>
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect x='.5' y='.5' width='15' height='15' rx='3.5' fill='%231f2b3a' stroke='%23647282'/%3E%3Cpath d='M3 10.5l7 3.5V9L3 5.5z' fill='%23f6f7f1'/%3E%3Cpath d='M10 14l4-2V7l-2-1.5L10 9z' fill='%23647282'/%3E%3Cpath d='M2 6l8 4 2.5-5-8-4z' fill='%23c8472f'/%3E%3Cpath d='M5 8l3 1.5v2.5l-3-1.5z' fill='%23dcae45'/%3E%3C/svg%3E">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="Brain Town back-office">
+<meta property="og:image" content="https://town.mfardiansyah.id/brand/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -51,6 +56,7 @@ label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;ga
 #login canvas{position:absolute;left:0;right:0;bottom:0;width:100%;height:190px}
 #login form{position:relative;width:min(380px,100%);display:flex;flex-direction:column;gap:12px}
 #login h1{font-size:30px}
+#login .bt-login{align-self:flex-start}
 .gate{position:fixed;top:0;bottom:0;width:50%;background:var(--ink);z-index:30;transition:transform .7s cubic-bezier(.7,0,.2,1)}
 .gate.l{left:0;transform:translateX(-101%)} .gate.r{right:0;transform:translateX(101%)}
 .gate.shut{transform:none}
@@ -58,7 +64,8 @@ label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;ga
 /* ---------- shell ---------- */
 #app{display:grid;grid-template-columns:216px 1fr;min-height:100%}
 #rail{border-right:1px solid var(--ink);background:var(--ground);padding:16px 12px;display:flex;flex-direction:column;gap:4px;position:sticky;top:0;height:100vh}
-#rail .brand{font-family:var(--font-display);font-weight:700;font-size:19px;line-height:1.05;padding:2px 8px 12px}
+#rail .brand{font-family:var(--font-display);font-weight:700;font-size:19px;line-height:1.05;padding:2px 8px 12px;display:flex;align-items:center;gap:10px;letter-spacing:-.02em}
+.bt-mark{flex:none;display:block}
 #rail .brand span{display:block;font-family:var(--font-mono);font-weight:400;font-size:10.5px;color:var(--ink-soft);letter-spacing:.06em;text-transform:uppercase;margin-top:4px}
 #rail nav{display:flex;flex-direction:column;gap:2px}
 #rail nav a{display:flex;align-items:center;gap:9px;padding:7px 8px;border-radius:3px;text-decoration:none;border:1px solid transparent}
@@ -180,9 +187,8 @@ body{overflow-x:clip}
 @media (max-width:1040px) and (min-width:761px){
   #app{grid-template-columns:68px minmax(0,1fr)}
   #rail{padding:14px 8px;align-items:stretch}
-  #rail .brand{font-size:0;padding:0 0 10px;text-align:center}
-  #rail .brand::before{content:"BT";font-size:19px}
-  #rail .brand span{display:none}
+  #rail .brand{justify-content:center;padding:0 0 10px}
+  #rail .brand .brand-text{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
   #rail nav a{justify-content:center;padding:11px 0}
   #rail nav a .full,#rail nav a b,#rail .foot .muted{display:none}
   #rail .foot{padding:8px 0;align-items:center;font-size:11px;text-align:center}
@@ -198,6 +204,9 @@ body{overflow-x:clip}
   #rail{position:sticky;top:0;z-index:6;height:auto;flex-direction:row;align-items:center;gap:10px;padding:8px 14px;border-right:0;border-bottom:1px solid var(--ink)}
   #rail .brand{padding:0;font-size:17px;flex:1}
   #rail .brand span{display:inline;margin:0 0 0 8px}
+  #rail .brand{gap:8px} #rail .brand .bt-mark{width:26px;height:26px}
+  #rail .brand-text{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #login .bt-login{width:40px;height:40px}
   #rail .foot{margin:0;padding:0;border:0;flex-direction:row;align-items:center;gap:10px}
   #rail .foot .muted{display:none}
   #rail .foot button{min-height:36px;padding:4px 10px}
@@ -250,6 +259,14 @@ body{overflow-x:clip}
   #pwform .row{flex-direction:column;align-items:stretch}
   pre{font-size:11px}
 }
+@media (max-width:420px){ #rail .brand span{display:none} }
+@keyframes bt-in{from{opacity:0;transform:scale(.95)}}
+@keyframes bt-light{from{opacity:0}}
+@keyframes bt-fade{from{opacity:0}}
+#login .bt-login{transform-origin:50% 50%;animation:bt-in 300ms cubic-bezier(.23,1,.32,1) both}
+#login .bt-login .bt-win{animation:bt-light 200ms ease 240ms both}
+@media (prefers-reduced-motion:reduce){ #login .bt-login{animation:bt-fade 200ms ease both} #login .bt-login .bt-win{animation:none} }
+body.still #login .bt-login,body.still #login .bt-login .bt-win{animation:none}
 @media (prefers-reduced-motion:reduce){ .page.enter>*,.page.enter *,.page.leave,.tail li.new,tr.new,.tile b.bump,.hcard .dot.ping,#wipe.go{animation:none!important} .gate,#drawer,#navmark{transition:none} }
 body.still .page.enter>*,body.still .page.enter *,body.still .page.leave,body.still .tail li.new,body.still tr.new,body.still .tile b.bump,body.still .hcard .dot.ping,body.still #wipe.go{animation:none!important}
 body.still #navmark{transition:none}
@@ -261,6 +278,7 @@ body.still #navmark{transition:none}
 <div id="login">
   <canvas id="logincv" aria-hidden="true"></canvas>
   <form class="panel pad" id="loginform" data-testid="login-form">
+    <svg class="bt-mark bt-login" viewBox="0 0 64 64" width="48" height="48" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#1f2b3a"/><path d="M5 41l34 17 20-10-34-17z" fill="#f6f7f1" fill-opacity=".06"/><g stroke="#f6f7f1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M11 41l28 14V39L11 25z" fill="#3a4452"/><path d="M39 55l14-7V32l-7-6.5-7 13.5z" fill="#2c3846"/><path d="M8 26l32 16 8-15.5-32-16z" fill="#c8472f"/></g><path d="M14 31.5l5 2.5v7l-5-2.5zM22 35.5l5 2.5v7l-5-2.5z" fill="#1f2b3a"/><path class="bt-win" d="M27.5 35.75l10 5v12l-10-5z" fill="#ffd66b" fill-opacity=".25"/><g stroke="#f6f7f1" stroke-width="1.5" stroke-linejoin="round"><path class="bt-win" d="M30 39.5l5 2.5v7l-5-2.5z" fill="#ffd66b"/><path class="bt-spark" d="M51 5.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7z" fill="#ffd66b"/></g></svg>
     <div><div class="eyebrow">town.mfardiansyah.id</div><h1>Brain Town back-office</h1></div>
     <p class="muted">Sign in to connect platforms and watch the event stream. This is a static preview: any email and password opens the gate.</p>
     <label>Email<input type="email" id="lg-email" value="me@mfardiansyah.id" autocomplete="username" required></label>
@@ -271,7 +289,7 @@ body.still #navmark{transition:none}
 
 <div id="app" hidden>
   <aside id="rail">
-    <div class="brand">Brain Town<span>Back-office</span></div>
+    <div class="brand"><svg class="bt-mark" viewBox="0 0 64 64" width="32" height="32" aria-hidden="true" focusable="false"><rect width="64" height="64" rx="14" fill="#1f2b3a"/><path d="M5 41l34 17 20-10-34-17z" fill="#f6f7f1" fill-opacity=".06"/><g stroke="#f6f7f1" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"><path d="M11 41l28 14V39L11 25z" fill="#3a4452"/><path d="M39 55l14-7V32l-7-6.5-7 13.5z" fill="#2c3846"/><path d="M8 26l32 16 8-15.5-32-16z" fill="#c8472f"/></g><path d="M14 31.5l5 2.5v7l-5-2.5zM22 35.5l5 2.5v7l-5-2.5z" fill="#1f2b3a"/><path class="bt-win" d="M27.5 35.75l10 5v12l-10-5z" fill="#ffd66b" fill-opacity=".25"/><g stroke="#f6f7f1" stroke-width="1.5" stroke-linejoin="round"><path class="bt-win" d="M30 39.5l5 2.5v7l-5-2.5z" fill="#ffd66b"/><path class="bt-spark" d="M51 5.5l1.7 4.8 4.8 1.7-4.8 1.7-1.7 4.8-1.7-4.8-4.8-1.7 4.8-1.7z" fill="#ffd66b"/></g></svg><div class="brand-text">Brain Town<span>Back-office</span></div></div>
     <nav aria-label="Pages"><span id="navmark" aria-hidden="true"></span>
       <a href="#dashboard"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 3h6v8H3zM11 3h6v4h-6zM11 9h6v8h-6zM3 13h6v4H3z'/></svg><span class="full">Dashboard</span><span class="short">Home</span></a>
       <a href="#integrations"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='5' cy='10' r='2.5'/><circle cx='15' cy='5' r='2.5'/><circle cx='15' cy='15' r='2.5'/><path d='M7.3 9l5.5-3M7.3 11l5.5 3'/></svg><span class="full">Integrations</span><span class="short">Connect</span><b id="n-int"></b></a>
