@@ -271,6 +271,76 @@ body.still #login .bt-login,body.still #login .bt-login .bt-win{animation:none}
 @media (prefers-reduced-motion:reduce){ .page.enter>*,.page.enter *,.page.leave,.tail li.new,tr.new,.tile b.bump,.hcard .dot.ping,#wipe.go{animation:none!important} .gate,#drawer,#navmark{transition:none} }
 body.still .page.enter>*,body.still .page.enter *,body.still .page.leave,body.still .tail li.new,body.still tr.new,body.still .tile b.bump,body.still .hcard .dot.ping,body.still #wipe.go{animation:none!important}
 body.still #navmark{transition:none}
+/* ---------- GitHub setup: event checklist, popover, preview ---------- */
+:root{--ease-out:cubic-bezier(.23,1,.32,1);--ease-drawer:cubic-bezier(.32,.72,0,1);--wood:#b06a42;--cn-wall:#e9b0a2;--cn-roof:#dcae45;--cn-tint:#f6ead0;--lit:#ffd66b;--road:#e2e5df}
+#su-test[hidden],#su-test-row[hidden],#gh-wait-extra[hidden],#gh-preview[hidden],.pill[hidden]{display:none!important}
+.steps li>div{min-width:0}
+.ghx{display:flex;flex-direction:column;gap:12px;margin-top:10px}
+.ghg{display:flex;flex-direction:column;gap:4px}
+.ghg h4{margin:0}
+.ghchips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:2px}
+.ghc{display:inline-flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:3px;font-size:13px;background:var(--ground);border:1px solid var(--ink);transition:background-color 200ms ease,border-color 200ms ease,transform 160ms var(--ease-out);max-width:100%}
+.ghc-ico{font-size:12px;line-height:1}
+.ghc-ico:empty{display:none}
+.ghc-name{overflow-wrap:anywhere;text-align:left}
+.ghc-more{font-family:var(--font-mono);padding:0 4px;border-left:1px solid var(--rule);margin-left:2px;color:var(--ink-soft)}
+.ghc[data-state=subscribed]{border-color:var(--good);background:rgba(47,143,107,.08)}
+.ghc[data-state=subscribed] .ghc-ico{color:var(--good)}
+.ghc[data-state=missing]{border:1px dashed var(--warn);background:rgba(185,138,46,.10)}
+.ghc[data-state=missing] .ghc-ico{color:#8a6516}
+.ghc[data-state=off],.ghc[data-state=alt]{border-color:var(--rule);background:transparent}
+.ghc[data-state=off] .ghc-ico,.ghc[data-state=alt] .ghc-ico,.ghc[data-state=off] .ghc-name,.ghc[data-state=alt] .ghc-name{color:var(--ink-soft)}
+@media (hover:hover) and (pointer:fine){ .ghc:hover{background-image:linear-gradient(rgba(31,43,58,.07),rgba(31,43,58,.07))} }
+.ghc:active,#gh-copy-list:active{transform:scale(.97)}
+#gh-copy-list{transition:transform 160ms var(--ease-out)}
+.ghc[aria-expanded=true]{box-shadow:inset 0 0 0 1px var(--ink)}
+.ghor{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em}
+.ghwarn{border:1px solid var(--warn);border-left-width:4px;background:rgba(185,138,46,.10);padding:10px 12px;border-radius:3px;overflow-wrap:anywhere}
+.ghwarn p{margin-top:2px}
+.ghrec{margin-top:4px;overflow-wrap:anywhere}
+.ghrec.warn{color:#8a6516}
+.ghtiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:8px;margin-top:8px}
+.ghtile{margin:0;border:1px solid var(--rule);border-radius:3px;background:var(--ground);padding:6px 4px;text-align:center;min-width:0}
+.ghtile svg{display:block;margin:0 auto;max-width:100%;height:auto}
+.ghtile figcaption{font-size:11.5px;overflow-wrap:anywhere;margin-top:2px}
+.ghtile[data-ghost=true]{border-style:dashed;border-color:var(--warn)}
+.ghtile[data-ghost=true] svg{opacity:.35}
+#gh-preview-note{margin-top:4px}
+#su-map td{overflow-wrap:anywhere} #su-map td.t{white-space:normal}
+#gh-wait-extra{display:flex;flex-direction:column;gap:8px}
+/* popover (bottom sheet on phones) */
+.ghpop{position:absolute;left:0;top:0;width:min(340px,calc(100vw - 24px));background:var(--panel);border:1px solid var(--ink);border-radius:3px;box-shadow:3px 3px 0 rgba(31,43,58,.1);z-index:12;opacity:0;visibility:hidden;transform:scale(.96);transform-origin:var(--o,50% 0);transition:opacity 120ms var(--ease-out),transform 120ms var(--ease-out),visibility 0s 120ms}
+.ghpop.on{opacity:1;visibility:visible;transform:none;transition:opacity 160ms var(--ease-out),transform 160ms var(--ease-out),visibility 0s}
+.ghpop-fig{background:var(--ground);border-bottom:1px solid var(--rule);padding:8px;display:grid;place-items:center}
+.ghpop-fig svg{display:block}
+.ghpop-body{padding:12px 14px;display:flex;flex-direction:column;gap:10px}
+.ghpop-dl{display:grid;grid-template-columns:110px 1fr;gap:6px 12px;font-size:13px;margin:0}
+.ghpop-dl dt{color:var(--ink-soft)} .ghpop-dl dd{margin:0;overflow-wrap:anywhere}
+.ghpop-grab{display:none}
+#gh-pop-scrim{position:fixed;inset:0;background:rgba(31,43,58,.28);z-index:11;opacity:0;transition:opacity 200ms ease}
+#gh-pop-scrim.on{opacity:1;transition-duration:300ms}
+@media (max-width:600px){
+  .ghpop{position:fixed;left:0;right:0;bottom:0;top:auto;width:auto;max-height:80dvh;overflow:auto;overscroll-behavior:contain;border:0;border-top:1px solid var(--ink);border-radius:0;box-shadow:0 -6px 0 rgba(31,43,58,.08);padding:0 0 calc(14px + env(safe-area-inset-bottom));transform:translateY(100%);transition:transform 200ms var(--ease-drawer),opacity 200ms var(--ease-drawer),visibility 0s 200ms}
+  .ghpop.on{transform:none;transition:transform 300ms var(--ease-drawer),opacity 300ms var(--ease-drawer),visibility 0s}
+  .ghpop-grab{display:block;position:absolute;top:6px;left:50%;width:36px;height:4px;margin-left:-18px;background:var(--rule);border-radius:2px}
+  .ghpop-dl{grid-template-columns:minmax(0,1fr);gap:2px}
+  .ghpop-dl dt{font-family:var(--font-mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;margin-top:8px}
+  .ghpop-body .row button{width:42px;height:42px;padding:0}
+  .ghg>p{font-size:12px}
+  .ghx>.row{flex-direction:column;align-items:stretch}
+  #gh-copy-list{width:100%}
+  .ghtiles{grid-template-columns:repeat(auto-fill,minmax(76px,1fr))}
+}
+@media (prefers-reduced-motion:reduce){
+  .ghc,#gh-copy-list{transition:none} .ghc:active,#gh-copy-list:active{transform:none}
+  .ghpop,.ghpop.on{transform:none}
+  .ghpop{transition:opacity 150ms ease,visibility 0s 150ms} .ghpop.on{transition:opacity 150ms ease,visibility 0s}
+  #gh-pop-scrim,#gh-pop-scrim.on{transition:opacity 150ms ease}
+}
+body.still .ghc,body.still #gh-copy-list{transition:none} body.still .ghc:active,body.still #gh-copy-list:active{transform:none}
+body.still .ghpop,body.still .ghpop.on{transform:none}
+body.still .ghpop{transition:opacity 150ms ease,visibility 0s 150ms} body.still .ghpop.on{transition:opacity 150ms ease,visibility 0s}
+body.still #gh-pop-scrim,body.still #gh-pop-scrim.on{transition:opacity 150ms ease}
 </style>
 </head>
 <body>
@@ -341,9 +411,11 @@ body.still #navmark{transition:none}
             <div class="pad" style="display:flex;flex-direction:column;gap:8px">
               <h3 id="wait-title">Waiting for the first event</h3>
               <p class="small muted" id="wait-text">The figure stands at the gate until this platform sends something. Send a test event to see it walk in.</p>
-              <div class="row"><button class="primary" id="su-test">Send test event</button><a class="small" href="#events">See deliveries</a></div>
+              <div class="row" id="su-test-row"><button class="primary" id="su-test">Send test event</button><a class="small" href="#events">See deliveries</a></div>
+              <div id="gh-wait-extra" hidden><p class="small" data-testid="gh-test-help">GitHub tests itself: saving the webhook sends a ping, and this page ticks when it lands. To see the town move, open an issue or star a repo in this org. Redelivering an old delivery from GitHub answers 409 (already received); that is expected.</p><div class="row" id="gh-wait-links"></div></div>
             </div>
           </div>
+          <div class="panel pad" id="gh-preview" data-testid="gh-preview" data-mode="recommended" hidden></div>
           <div class="panel pad" id="su-map"></div>
         </div>
       </div>
@@ -398,6 +470,18 @@ body.still #navmark{transition:none}
 <aside id="drawer" aria-label="Event detail"><div class="row"><h2 class="grow" id="dr-title"></h2><button id="dr-x" aria-label="Close">Close</button></div>
   <dl class="kv" id="dr-kv"></dl><h3>Raw delivery</h3><pre id="dr-raw"></pre><h3>Sent on the public stream</h3><pre id="dr-pub"></pre></aside>
 <div id="toast" role="status"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false"><defs>
+  <g id="gh-ground"><rect x="0" y="40" width="64" height="8" fill="#e2e5df"/><path d="M0 40H64" stroke="rgba(31,43,58,.18)" stroke-width="1"/></g>
+  <symbol id="gh-person" viewBox="-1 -1 16 33"><g stroke="#1f2b3a" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="7" cy="31.5" rx="5" ry="1.5" fill="rgba(31,43,58,.14)" stroke="none"/><path d="M4.8 22.6V31M9.2 22.6V31" stroke-width="2.2" fill="none"/><polygon points="1.2,23.8 12.8,23.8 11.2,10.6 2.8,10.6" fill="currentColor" stroke-width="1.3"/><path d="M2.8 12.2L.4 20M11.2 12.2L13.6 20" stroke-width="1.3" fill="none"/><circle cx="7" cy="5" r="4.6" fill="#fff" stroke-width="1.3"/></g></symbol>
+</defs></svg>
+<div id="gh-pop" class="ghpop" role="dialog" aria-modal="false" aria-labelledby="gh-pop-title" data-testid="gh-pop" hidden>
+  <div class="ghpop-grab" aria-hidden="true"></div>
+  <div class="ghpop-fig" id="gh-pop-fig" data-testid="gh-pop-fig" data-fig="person"></div>
+  <div class="ghpop-body"><div class="row"><h3 id="gh-pop-title" class="grow" data-testid="gh-pop-title"></h3><span class="pill" id="gh-pop-tier"></span><span class="pill" id="gh-pop-state" hidden></span><button type="button" class="quiet" id="gh-pop-close" data-testid="gh-pop-close" aria-label="Close">×</button></div>
+    <dl class="ghpop-dl"><dt>GitHub sends</dt><dd id="gh-pop-sends" data-testid="gh-pop-sends"></dd><dt>Brain Town keeps</dt><dd id="gh-pop-keeps" data-testid="gh-pop-keeps"></dd><dt>In town</dt><dd id="gh-pop-town" data-testid="gh-pop-town"></dd><dt>Bursts</dt><dd id="gh-pop-group" data-testid="gh-pop-group"></dd></dl>
+    <p class="small muted">Webhook event: <code id="gh-pop-evid"></code></p></div>
+</div>
+<div id="gh-pop-scrim" hidden></div>
 
 <script>
 "use strict";
@@ -429,9 +513,9 @@ const PRODUCTS=[
 ];
 const HALLS=['GitHub Valley hall','Video Generator','Magazine House','Article Bureau','Imago','LinkedIn Hall'];
 const INTS=[
-  {id:'gh-sismedika',kind:'github',name:'GitHub · sismedika',org:'sismedika',state:'ok',today:212,err:0,last:Date.now()-4000},
-  {id:'gh-mf-labs',kind:'github',name:'GitHub · mf-labs',org:'mf-labs',state:'ok',today:148,err:1,last:Date.now()-9000},
-  {id:'gh-mf-media',kind:'github',name:'GitHub · mf-media',org:'mf-media',state:'ok',today:97,err:0,last:Date.now()-21000},
+  {id:'gh-sismedika',kind:'github',name:'GitHub · sismedika',org:'sismedika',state:'ok',today:212,err:0,last:Date.now()-4000,events:['issues','issue_comment','check_run','push','star','create','discussion']},
+  {id:'gh-mf-labs',kind:'github',name:'GitHub · mf-labs',org:'mf-labs',state:'ok',today:148,err:1,last:Date.now()-9000,events:['issues','issue_comment','check_run','push','star','create','discussion']},
+  {id:'gh-mf-media',kind:'github',name:'GitHub · mf-media',org:'mf-media',state:'ok',today:97,err:0,last:Date.now()-21000,events:['issues','issue_comment','check_run','push','star','create','discussion']},
   {id:'qa-main',kind:'qa',name:'QA tool',state:'ok',today:324,err:0,last:Date.now()-2000},
   {id:'gaos-main',kind:'gaos',name:'GAOS',state:'ok',today:186,err:2,last:Date.now()-6000},
   {id:'site-main',kind:'site',name:'mfardiansyah.id',state:'waiting',today:0,err:0,last:0},
@@ -513,43 +597,48 @@ $('icards').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.ta
 
 /* ============================ setup ============================ */
 let su=null, wait=null;
-const secretOf=i=>LIVE?(i.token||''):'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
+const secretOf=i=>LIVE?(i.token||''):i.kind==='github'?'whsec_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9pL':'bt_live_'+btoa(i.id).replace(/=/g,'').slice(0,10)+'k7Qm2xV9';
 function field(label,val,id,mask){ const sec=id==='su-sec', tt=n=>sec?` data-testid="${id}-${n}"`:'';
   return `<div><span class="small muted">${label}</span><div class="copy"><input type="${mask?'password':'text'}" readonly value="${esc(val)}" id="${id}" data-testid="${id}">${mask?`<button type="button" data-reveal="${id}"${tt('show')}>Show</button>`:''}<button type="button" data-copy="${id}" data-what="${label}"${tt('copy')}>Copy</button></div></div>`; }
 const secLabel=i=>i.kind==='github'?'Webhook secret':'BRAIN_TOWN_TOKEN';
 const secRowHidden=i=>`<span class="small muted sec-note" data-testid="su-sec-hidden">Hidden. Shown once when created.${i.hint?' Ends in '+esc(i.hint)+'.':''}</span><button type="button" data-rotate-sec data-testid="su-sec-rotate">Rotate and copy</button>`;
 const secRowConfirm=()=>`<span class="small muted sec-note" id="su-sec-warn">The current secret stops working right away.</span><button type="button" class="primary" aria-describedby="su-sec-warn" data-rotate-go data-testid="su-sec-rotate-confirm">Rotate now</button><button type="button" aria-describedby="su-sec-warn" data-rotate-cancel data-testid="su-sec-rotate-cancel">Cancel</button>`;
 function secHTML(i){ const label=secLabel(i);
+  if(i.kind==='github'&&!i.token) return ghSecHTML(label);
   if(LIVE&&!i.token) return `<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row">${secRowHidden(i)}</div></div>`;
   return field(label,secretOf(i),'su-sec',true); }
-function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true}; }
-  su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
+function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true,events:[]}; }
+  ghSecClear(); ghPopClose(false); su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
   $('su-title').textContent=i.name; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;
   const steps={
-    github:['In GitHub, open the organization, then Settings, Webhooks, Add webhook.','Paste the payload URL below. Set content type to <code>application/json</code>.','Paste the secret below into the Secret field.','Choose “Let me select individual events” and tick <b>Issues</b>, <b>Pull requests</b> and <b>Check runs</b>.','Save. GitHub sends a ping, and this page ticks the last step when it arrives.'],
+    github:['In GitHub, open the organization, then Settings, Webhooks, Add webhook.','Paste the payload URL below. Set content type to <code>application/json</code>.','Paste the secret below into the Secret field.','Choose “Let me select individual events” and tick the events below. Tap ⋯ on any event to see what it becomes in town.','Click Add webhook. GitHub sends a ping; this step ticks and each event below shows ✓ or ⚠.'],
     qa:['Copy the task file below into the QA tool repo and hand it to the agent or developer working there.','It adds <code>brain-town-reporter.ts</code> and one line in <code>playwright.config.ts</code>.','Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> as CI secrets, using the values below.','Wrap the main actions of each spec in <code>test.step(…)</code>. Those names become the steps shown in the QA Lab.','Run one spec. This page ticks the last step when the first run arrives.'],
     gaos:['Copy the task file below into the GAOS repo and hand it to the agent or developer working there.','It adds an outbound event emitter that posts whenever a product or task changes state.','Set <code>BRAIN_TOWN_URL</code>, <code>BRAIN_TOWN_TOKEN</code> and <code>BRAIN_TOWN_ENABLED=true</code> in GAOS, using the values below.','On Products and visibility, choose which GAOS products are public and which town building each one uses.','Create or move one task in GAOS. This page ticks the last step when it arrives.'],
     site:['Copy the task file below into the site repo and hand it to the agent or developer working there.','Part 1 adds a feed. Paste its URL in the field below and Brain Town starts pulling every 5 minutes.','Part 2 adds a publish hook and Part 3 a visit beacon that reports only the page and the visitor’s country. Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> in the server secrets.','Check that <code>https://mfardiansyah.id/office</code> loads. The pendopo in town links to it.','Publish one article. This page ticks the last step when it arrives.'],
   }[k];
-  $('su-steps').innerHTML=steps.map((s,n)=>`<li class="${i.last&&n===steps.length-1?'done':''}"><div>${s}</div></li>`).join('');
+  $('su-steps').innerHTML=steps.map((s,n)=>`<li class="${(i.last||(k==='github'&&i.events&&i.events.length))&&n===steps.length-1?'done':''}"><div>${s}${k==='github'&&n===3?ghBoxHTML(i):''}</div></li>`).join('');
   let extra=field(k==='github'?'Payload URL':'BRAIN_TOWN_URL',url,'su-url')+`<div id="su-sec-wrap">${secHTML(i)}</div>`;
   if(k==='site') extra+=`<label>Feed URL to pull (optional)<input type="text" id="su-feed" value="https://mfardiansyah.id/feed.json"></label>`;
   if(k==='qa') extra+=`<div><span class="small muted">playwright.config.ts</span><pre>reporter: [\n  ['list'],\n  ['./brain-town-reporter.ts', { product: 'sipreport', org: 'sismedika' }],\n],</pre></div>`;
   if(K.task) extra+=`<div class="panel pad" style="box-shadow:none;display:flex;flex-direction:column;gap:8px"><div class="row"><h3 class="grow">Task file for the repo</h3><button type="button" class="primary" data-task="${K.task}">Copy task file</button></div><p class="small muted"><code>${K.task}</code> describes exactly what that repo has to build, with the payload contract and a done checklist.</p><details><summary>Read it here</summary><pre class="md" style="margin-top:8px">${esc(TASKS[K.task]||'')}</pre></details></div>`;
   $('su-extra').innerHTML=extra;
   const maps={
-    github:[['Issue opened','issue.opened'],['Issue assigned','issue.assigned'],['Checklist box ticked in the issue','task.done'],['Pull request opened with “Fixes #n”','pr.opened'],['Check run completed','pr.checks'],['Pull request merged','pr.merged'],['Issue closed','issue.closed']],
+    github:[['Issue opened or reopened','issue.opened'],['Issue assigned','issue.assigned'],['Checklist box ticked in an issue','task.done'],['Issue labeled','issue.labeled',1],['Issue closed','issue.closed'],['Sub-issue added or removed','issue.subissues',1],['Pull request opened, reopened or ready for review','pr.opened'],['Pull request merged','pr.merged'],['Pull request closed without merging','pr.closed'],['Review submitted','pr.reviewed',1],['Comment on an issue or pull request','issue.commented',1],['Check run finished on a pull request','pr.checks'],['Workflow run or job changes','ci.run',1],['Push','repo.pushed',1],['Branch or tag created','ref.created',1],['Branch or tag deleted','ref.deleted',1],['Repo label created, edited or deleted','repo.labels',1],['Discussion created','discussion.opened'],['Discussion answered','discussion.answered'],['Discussion comment','discussion.commented',1],['Repo starred','repo.starred',1],['Webhook saved (ping)','ping, no town object']],
     qa:[['First test of a spec begins','qa.run.started'],['A test.step ends','qa.step'],['Last test of a spec ends','qa.run.finished']],
     gaos:[['Product created or changed','product.upserted'],['Task created','task.created'],['Task moved on the kanban','task.moved'],['Design gate requested','gate.requested'],['Design gate decided','gate.decided'],['Agent claims a task','task.claimed'],['Task finished','task.done']],
     site:[['Article goes live','article.published'],['Illustration goes live','illustration.published'],['Someone opens the home page or a blog article','site.visit (page and country only)']],
   }[k];
-  $('su-map').innerHTML=`<h3>What becomes what</h3><table style="margin-top:6px"><thead><tr><th>${K.label} sends</th><th>Town event</th></tr></thead><tbody>${maps.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b}</td></tr>`).join('')}</tbody></table>`;
+  $('su-map').innerHTML=`<h3>What becomes what</h3><table style="margin-top:6px"><thead><tr><th>${K.label} sends</th><th>Town event</th></tr></thead><tbody>${maps.map(([a,b,g])=>`<tr><td>${a}</td><td class="t">${b}${g?'<span class="muted"> · grouped</span>':''}</td></tr>`).join('')}</tbody></table>${k==='github'?'<p class="small muted" style="margin-top:8px">Grouped: deliveries for the same thing within 15 s become one town event with a count. Comment text, commit messages and logins are never stored.</p>':''}`;
+  const gh=k==='github'; $('su-test').hidden=gh&&LIVE; $('su-test-row').hidden=gh&&LIVE; $('gh-wait-extra').hidden=!(gh&&LIVE); $('su-test').textContent=gh&&!LIVE?'Simulate a ping (demo)':'Send test event';
+  $('gh-wait-links').innerHTML=gh?(i.org?`<a class="small" href="https://github.com/organizations/${encodeURIComponent(i.org)}/settings/hooks" target="_blank" rel="noopener" data-testid="gh-open-hooks">Open webhooks in GitHub</a>`:'')+'<a class="small" href="#events">See deliveries</a>':'';
+  if(gh){ ghPaint(false); ghPreviewInit(i); } else $('gh-preview').hidden=true;
   wait=new Strip($('waitcv'),[k],false); wait.add(k,!i.last); setWait(i);
 }
-function setWait(i){ if(i.last){ $('wait-title').textContent='Connected'; $('wait-text').textContent='Last event '+ago(i.last)+'. Each test event sends one more figure through the gate.'; } else { $('wait-title').textContent='Waiting for the first event'; $('wait-text').textContent='The figure stands at the gate until this platform sends something. Send a test event to see it walk in.'; } }
+function setWait(i){ if(i.kind==='github'){ if(i.last){ $('wait-title').textContent='Connected'; $('wait-text').textContent='Last delivery '+ago(i.last)+'. Each delivery sends one more figure through the gate.'; } else { $('wait-title').textContent='Waiting for GitHub’s ping'; $('wait-text').textContent='Save the webhook in GitHub and the figure walks in.'; } return; }
+  if(i.last){ $('wait-title').textContent='Connected'; $('wait-text').textContent='Last event '+ago(i.last)+'. Each test event sends one more figure through the gate.'; } else { $('wait-title').textContent='Waiting for the first event'; $('wait-text').textContent='The figure stands at the gate until this platform sends something. Send a test event to see it walk in.'; } }
 $('su-test').onclick=()=>{ if(!su) return; if(LIVE){ liveTest(su); return; } const first=!su.last; if(su.draft){ INTS.push(su); delete su.draft; su.id=su.kind+'-'+(INTS.length); paintIntegrations(); fillFilters(); }
-  su.state='ok'; const ev=makeEvent(su,{github:'issue.opened',qa:'qa.run.started',gaos:'task.created',site:'article.published'}[su.kind]); ev.sum='TEST · '+ev.sum; ingest(ev);
-  if(first) wait.release(); else wait.add(su.kind); $('su-steps').lastElementChild.classList.add('done'); const [cl,tx]=stateOf(su); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx; setWait(su); toast('Test event sent and accepted'); };
+  su.state='ok'; let ev; if(su.kind==='github'){ su.events=[...GH_DEMO]; ev={id:ulid(),type:'ping',int:su.id,kind:'github',at:Date.now(),data:{type:'ping',org:su.org,data:{events:su.events}},sum:'TEST · ping '+su.events.length+' events',st:'ok',err:''}; } else { ev=makeEvent(su,{qa:'qa.run.started',gaos:'task.created',site:'article.published'}[su.kind]); ev.sum='TEST · '+ev.sum; } ingest(ev);
+  if(first) wait.release(); else wait.add(su.kind); $('su-steps').lastElementChild.classList.add('done'); const [cl,tx]=stateOf(su); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx; setWait(su); if(su.kind==='github'){ ghRepaint(true); toast('Ping simulated: '+su.events.length+' events ticked (demo)'); } else toast('Test event sent and accepted'); };
 function secRow(state,focus){ const row=$('su-sec-row'); if(!row||!su) return; row.innerHTML=state==='confirm'?secRowConfirm():secRowHidden(su); const b=row.querySelector(focus); if(b) b.focus(); }
 async function secRotate(){ const i=su, row=$('su-sec-row'); if(!i||!row) return;
   row.querySelectorAll('button').forEach(b=>b.disabled=true); const go=row.querySelector('[data-rotate-go]'); if(go) go.textContent='Rotating…';
@@ -563,6 +652,8 @@ async function secRotate(){ const i=su, row=$('su-sec-row'); if(!i||!row) return
   toast(ok?(i.kind==='github'?'New secret copied. Update it in GitHub.':`New token copied. Update BRAIN_TOWN_TOKEN in ${KIND[i.kind].label}.`):'New secret is ready, but copy was blocked. Press Copy to copy it.'); }
 $('su-extra').addEventListener('keydown',e=>{ if(e.key==='Escape'&&e.target.closest&&e.target.closest('#su-sec-row')&&$('su-sec-row').querySelector('[data-rotate-cancel]:not(:disabled)')){ e.preventDefault(); secRow('hidden','[data-rotate-sec]'); } });
 $('su-extra').addEventListener('click',e=>{ const t=e.target; if(!t.dataset) return;
+  if(t.dataset.ghShow!==undefined){ ghSecShow(t); return; }
+  if(t.dataset.ghCopy!==undefined){ ghSecCopy(); return; }
   if(t.dataset.rotateSec!==undefined){ secRow('confirm','[data-rotate-cancel]'); return; }
   if(t.dataset.rotateCancel!==undefined){ secRow('hidden','[data-rotate-sec]'); return; }
   if(t.dataset.rotateGo!==undefined){ secRotate(); return; }
@@ -570,6 +661,178 @@ $('su-extra').addEventListener('click',e=>{ const t=e.target; if(!t.dataset) ret
     if(t.dataset.copy){ const v=isSec&&LIVE?su.token:f.value; if(!v||v.includes('•')) return; copy(v,t.dataset.what); }
     else { f.type=f.type==='password'?'text':'password'; t.textContent=f.type==='password'?'Show':'Hide'; } }
   if(t.dataset.task) copy(TASKS[t.dataset.task]||'',t.dataset.task); });
+
+/* ============================ GitHub setup page ============================ */
+/* GH_EVENTS is the single source for the checklist, the popover, the preview and the copy list.
+   id = GitHub's hook.events value, name = the checkbox label in GitHub. tier: m mandatory, r recommended, o optional. */
+const GH_EVENTS=[
+ ["issues","Issues","m","person","A delivery when an issue is opened, reopened, assigned, edited, labeled or closed.","Repo, issue number, title, label colours and the checklist count. No body, no logins. Titles are removed for private repos.","A person queues at the org gate, walks into the repo’s hall when assigned, shows progress pips as checklist boxes are ticked, and leaves when closed. Labels add a coloured ribbon.","One event per change. Label changes within 15 s are grouped."],
+ ["pull_request","Pull requests","m","scroll","A delivery when a pull request is opened, reopened, marked ready, merged or closed.","Repo, PR number, title, draft flag and the first “Fixes #n” issue number. No body, no diff, no logins.","A scroll is carried into the hall. Merged: the scroll is stamped and the linked issue’s person heads out. Closed without merging: the scroll is dropped.","Not grouped."],
+ ["workflow_run","Workflow runs","r","cart","A delivery when a GitHub Actions run is requested, starts and finishes.","Run id, workflow name, status and the PR number when known. No logs, no commit messages.","A cart on the hall’s track. It turns green when the run passes and red when it fails.","Deliveries for one run within 15 s become one update with the latest status."],
+ ["workflow_job","Workflow jobs","r","cart","A delivery when each job of a run is queued, starts and finishes.","Counts only: jobs total, done and failed. No job names, no logs.","One box per job behind the run’s cart. Boxes fill as jobs finish.","Grouped with its run, 15 s."],
+ ["check_run","Check runs","r","checks","A delivery when a check finishes on a pull request.","PR number, check name, and passed or failed.","A check pad on the PR’s scroll in the hall: green for passed, red for failed.","Not grouped. When Workflow runs or Workflow jobs are ticked, checks from GitHub Actions are skipped so CI is counted once. Checks without a pull request are ignored."],
+ ["issue_comment","Issue comments","o","bubble","A delivery for each new comment on an issue or pull request.","Only that someone commented, and how many times. Comment text and authors are never stored. Bot comments are skipped.","A speech bubble with the count over the issue’s person, with small kids following. For a pull request, over the hall.","Comments on one issue within 15 s become one bubble: ten comments, one “10”."],
+ ["pull_request_review","Pull request reviews","o","inspector","A delivery when a review is submitted.","Counts of approvals, change requests and comments. No review text, no reviewers. Bot reviews are skipped.","An inspector at the hall door stamps ✓ for approvals and ✗ for change requests.","Reviews on one PR within 15 s become one visit."],
+ ["pull_request_review_comment","Pull request review comments","o","bubble","A delivery for each new line comment in a pull request’s diff.","Only the count. No text, no code, no authors. Bot comments are skipped.","Adds to the pull request’s speech bubble over the hall.","Grouped with that PR’s comments, 15 s."],
+ ["sub_issues","Sub issues","o","family","A delivery when a sub-issue is added to or removed from a parent issue.","The parent’s sub-issue count and how many are done.","A family: the parent issue walks with up to 4 kids, with a “+n” badge beyond.","Changes to one parent within 15 s become one update with the latest counts."],
+ ["push","Pushes","o","courier","A delivery for each push to a branch.","Commit count and branch name. No commit messages, authors or code. Branch names are removed for private repos.","A courier carries one parcel per commit into the hall.","Pushes to one branch within 15 s become one courier with all the parcels."],
+ ["label","Labels","o","painter","A delivery when a repo label is created, edited or deleted.","Only how many labels changed.","A sign painter touches up the hall’s signboard.","Label edits in one repo within 15 s become one visit."],
+ ["create","Branch or tag creation","o","hang","A delivery when a branch or tag is created.","Branch or tag, a count and the last name. Names are removed for private repos.","A lantern (branch) or a banner (tag) is hung on the hall’s eaves.","New branches (or tags) in one repo within 15 s become one event with a count."],
+ ["delete","Branch or tag deletion","o","unhang","A delivery when a branch or tag is deleted.","Branch or tag, a count and the last name. Names are removed for private repos.","A lantern or banner is taken down from the hall’s eaves.","Same as creation, 15 s."],
+ ["discussion","Discussions","o","teahouse","A delivery when a discussion is created or answered.","Repo, discussion number and title. No body, no authors. Titles are removed for private repos.","A guest arrives at the Tea House in GitHub Valley. When the discussion is answered, the guest bows and leaves.","Not grouped."],
+ ["discussion_comment","Discussion comments","o","tabletalk","A delivery for each new comment in a discussion.","Only the count. No text, no authors. Bot comments are skipped.","Bubbles and kids at the guest’s table in the Tea House.","Comments on one discussion within 15 s become one bubble."],
+ ["star","Stars","o","stars","A delivery when someone stars a repo. Unstarring is ignored.","How many new stars and the repo’s total. Not who starred.","Star lanterns rise above the org gate. The total shows on the org card.","Stars on one repo within 15 s rise together."],
+].map(([id,name,tier,fig,sends,keeps,town,group])=>({id,name,tier,fig,sends,keeps,town,group}));
+const GH_BY=Object.fromEntries(GH_EVENTS.map(e=>[e.id,e]));
+const GH_TIER={m:'mandatory',r:'recommended',o:'optional'};
+const GH_CAP={person:'Issue person',scroll:'PR scroll',cart:'CI cart',checks:'Check pad',bubble:'Comment bubble',inspector:'Review inspector',family:'Issue family',courier:'Push courier',painter:'Sign painter',hang:'Lanterns up',unhang:'Lanterns down',teahouse:'Tea House guest',tabletalk:'Table talk',stars:'Star lanterns'};
+const GH_DEMO=['issues','issue_comment','check_run','push','star','create','discussion'];
+const GH_ICO={neutral:'',subscribed:'✓',missing:'⚠',off:'–',alt:'–'};
+const GH_SW={neutral:'',subscribed:', subscribed',missing:', missing',off:', not ticked',alt:', not needed'};
+function ghHas(events,id){ return events.includes('*')||events.includes(id); }
+function ghRecOK(events){ return (ghHas(events,'workflow_run')&&ghHas(events,'workflow_job'))||ghHas(events,'check_run'); }
+function ghState(id,events){ events=events||[]; if(!events.length) return 'neutral'; if(ghHas(events,id)) return 'subscribed'; const e=GH_BY[id];
+  if(e.tier==='m') return 'missing'; if(e.tier==='r') return ghRecOK(events)?'alt':'missing'; return 'off'; }
+const ghLabel=(e,s)=>e.name+', '+GH_TIER[e.tier]+(e.id==='check_run'?', alternative to Workflow runs and jobs':'')+GH_SW[s]+'. Details';
+
+/* mini illustrations: 64x48, static, built from the town's own palette */
+const ghA=(x,c)=>`<use href="#gh-person" x="${x}" y="18" width="10" height="22" style="color:${c}"/>`;
+const ghK=(x,c)=>`<use href="#gh-person" x="${x}" y="27" width="6" height="13" style="color:${c}"/>`;
+const ghBub=(dx,n)=>`<rect x="${30+dx}" y="4" width="28" height="16" rx="4" fill="#fff"/><path d="M${36+dx} 20l-3 5l8-5" fill="#fff"/><text x="${50+dx}" y="15" font-family="IBM Plex Mono,monospace" font-size="9" fill="#1f2b3a" stroke="none">${n}</text><circle cx="${37+dx}" cy="12" r="1.2" fill="#1f2b3a" stroke="none"/><circle cx="${41+dx}" cy="12" r="1.2" fill="#1f2b3a" stroke="none"/><circle cx="${45+dx}" cy="12" r="1.2" fill="#1f2b3a" stroke="none"/>`;
+const ghGate='<rect x="6" y="14" width="3" height="26" fill="#c8472f"/><rect x="17" y="14" width="3" height="26" fill="#c8472f"/><rect x="3" y="10" width="20" height="4" fill="#dcae45"/>';
+const ghScrollBits=x=>ghA(x,'#e9b0a2')+'<rect x="22" y="22" width="24" height="12" fill="#f6ead0"/><rect x="19" y="20" width="4" height="16" rx="2" fill="#dcae45"/><rect x="45" y="20" width="4" height="16" rx="2" fill="#dcae45"/><path d="M26 26H42M26 30H38" stroke="#647282"/>';
+const ghEaves='<rect x="2" y="8" width="60" height="5" fill="#dcae45"/><path d="M18 13V18M44 13V16"/>';
+const ghTea='<rect x="8" y="20" width="40" height="20" fill="#e9b0a2"/><polygon points="2,21 12,11 44,11 54,21" fill="#dcae45"/><path d="M12 11H44" stroke-width="2"/><rect x="22" y="26" width="12" height="14" fill="#f6ead0"/>';
+const ghTick=(x,y)=>`<rect x="${x}" y="${y}" width="8" height="8" fill="#2f8f6b"/><path d="M${x+2} ${y+4}l2 2l3-4" stroke="#fff" stroke-width="1.2"/>`;
+const GH_FIG={
+ person:ghGate+ghA(30,'#e9b0a2')+'<rect x="33" y="22" width="4" height="3" fill="#6f8fb3"/>',
+ scroll:ghScrollBits(8),
+ cart:'<path d="M2 41H62"/><rect x="4" y="26" width="16" height="10" fill="#b06a42"/><circle cx="8" cy="38" r="2.5" fill="#fff"/><circle cx="16" cy="38" r="2.5" fill="#fff"/><path d="M20 32H24"/>'+[[24,'#2f8f6b'],[37,'#dcae45'],[50,'#fbfcf8']].map(([x,c])=>`<rect x="${x}" y="29" width="10" height="8" fill="${c}"/><circle cx="${x+2.5}" cy="38.5" r="1.5" fill="#fff"/><circle cx="${x+7.5}" cy="38.5" r="1.5" fill="#fff"/>`).join(''),
+ checks:`<g transform="translate(-4,12) scale(.7)">${ghScrollBits(8)}</g><rect x="36" y="14" width="22" height="22" fill="#fbfcf8"/>`+ghTick(38,16)+ghTick(48,16)+ghTick(38,26)+'<rect x="48" y="26" width="8" height="8" fill="#c8472f"/><path d="M50 28l4 4M54 28l-4 4" stroke="#fff" stroke-width="1.2"/>',
+ bubble:ghA(8,'#e9b0a2')+ghK(22,'#f6ead0')+ghK(29,'#f6ead0')+ghBub(0,4),
+ inspector:'<rect x="40" y="14" width="20" height="26" fill="#e9b0a2"/><polygon points="36,15 64,15 60,9 40,9" fill="#dcae45"/><rect x="46" y="26" width="8" height="14" fill="#1f2b3a"/>'+ghA(26,'#59636e')+'<rect x="28.5" y="16" width="5" height="2.5" fill="#1f2b3a"/><circle cx="14" cy="12" r="6" stroke="#2f8f6b" stroke-width="1.6"/><path d="M11 12l2 2l4-4" stroke="#2f8f6b" stroke-width="1.6"/><circle cx="10" cy="27" r="5" stroke="#c8472f" stroke-width="1.6"/><path d="M8 25l4 4M12 25l-4 4" stroke="#c8472f" stroke-width="1.6"/>',
+ family:ghA(6,'#e9b0a2')+[20,28,36,44].map((x,n)=>ghK(x,n%2?'#f6ead0':'#e9b0a2')).join('')+'<rect x="50" y="8" width="13" height="9" rx="4.5" fill="#1f2b3a"/><text x="56.5" y="14.8" text-anchor="middle" font-family="IBM Plex Mono,monospace" font-size="6.5" fill="#fff" stroke="none">+2</text>',
+ courier:ghA(10,'#b06a42')+[16,23,30].map(y=>`<rect x="22" y="${y}" width="9" height="7" fill="#dcae45"/><path d="M26.5 ${y}V${y+7}"/>`).join('')+'<rect x="50" y="12" width="14" height="28" fill="#e9b0a2"/><rect x="54" y="26" width="6" height="14" fill="#1f2b3a"/>',
+ painter:'<rect x="30" y="8" width="30" height="12" fill="#f6ead0"/><rect x="34" y="11" width="6" height="6" fill="#d73a4a"/><rect x="42" y="11" width="6" height="6" fill="#0e8a16"/><rect x="50" y="11" width="6" height="6" fill="#1d76db"/><path d="M45 20V40"/>'+ghA(14,'#e9b0a2')+'<path d="M26 28L31 19"/><circle cx="31" cy="19" r="1.5" fill="#d73a4a"/>',
+ hang:ghEaves+'<circle cx="18" cy="26" r="9" fill="#ffd66b" opacity=".45" stroke="none"/><ellipse cx="18" cy="26" rx="5" ry="7" fill="#c8472f"/><path d="M15 19H21M15 33H21"/><polygon points="39,16 49,16 49,36 44,32 39,36" fill="#fbfcf8"/><rect x="39" y="20" width="10" height="3" fill="#c8472f"/>',
+ unhang:ghEaves+'<ellipse cx="18" cy="26" rx="5" ry="7" fill="none" stroke-dasharray="2 2"/><path d="M15 19H21M15 33H21M18 36V44M15 41l3 3l3-3"/><g opacity=".35"><polygon points="39,16 49,16 49,36 44,32 39,36" fill="#fbfcf8"/><rect x="39" y="20" width="10" height="3" fill="#c8472f"/></g>',
+ teahouse:ghTea+ghA(50,'#6f8fb3'),
+ tabletalk:`<svg x="0" y="0" width="64" height="48" viewBox="0 0 64 48"><g transform="translate(-20,0)">${ghTea}</g></svg><rect x="30" y="32" width="16" height="3" fill="#b06a42"/><path d="M33 35V40M43 35V40"/>`+ghK(46,'#f6ead0')+ghBub(4,3),
+ stars:ghGate+[[36,30,3],[46,20,3.5],[56,9,4]].map(([x,y,r])=>`<path d="M${x} ${y-r}V${y-r-5}"/><circle cx="${x}" cy="${y}" r="${r+3}" fill="#ffd66b" opacity=".35" stroke="none"/><circle cx="${x}" cy="${y}" r="${r}" fill="#ffd66b"/>`).join(''),
+};
+function ghFig(f,w,h,deco){ return `<svg viewBox="0 0 64 48" width="${w}" height="${h}" ${deco?'aria-hidden="true"':`role="img" aria-label="${GH_CAP[f]}"`} focusable="false"><use href="#gh-ground"/><g stroke="#1f2b3a" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round" fill="none">${GH_FIG[f]}</g></svg>`; }
+
+/* checklist */
+const ghChip=e=>`<button type="button" class="ghc" data-ev="${e.id}" data-state="neutral" data-testid="gh-chip-${e.id}" aria-haspopup="dialog" aria-expanded="false" aria-controls="gh-pop" aria-label="${esc(ghLabel(e,'neutral'))}"><span class="ghc-ico" aria-hidden="true"></span><span class="ghc-name">${esc(e.name)}</span><span class="ghc-more" aria-hidden="true">⋯</span></button>`;
+function ghBoxHTML(i){ const tier=t=>GH_EVENTS.filter(e=>e.tier===t).map(ghChip).join(''), g=(k,id,title,desc,body,after='')=>`<section class="ghg" role="group" aria-labelledby="ghg-${k}" data-testid="gh-group-${id}"><h4 id="ghg-${k}" class="eyebrow">${title}</h4><p class="small muted">${desc}</p><div class="ghchips">${body}</div>${after}</section>`;
+  const r=GH_BY, rec=ghChip(r.workflow_run)+ghChip(r.workflow_job)+'<span class="ghor" aria-hidden="true">or</span>'+ghChip(r.check_run);
+  return `<div class="ghx" id="gh-events" data-testid="gh-events" data-events="${esc((i.events||[]).join(','))}"><div id="gh-callout"></div>`
+   +g('m','mandatory','Mandatory','The gate stays empty without these.',tier('m'))
+   +g('r','recommended','Recommended','CI carts on the halls. Tick one option.',rec,'<div id="gh-recnote"></div>')
+   +g('o','optional','Optional','Extra life in the valley. Bursts are grouped.',tier('o'))
+   +`<div class="row"><button type="button" class="quiet" id="gh-copy-list" data-testid="gh-copy-list">Copy list</button><span class="small muted">GitHub’s own names, ready to tick.</span></div></div>`; }
+function ghListText(events){ const nm=t=>GH_EVENTS.filter(e=>e.tier===t).map(e=>e.name).join(', ');
+  let s=`Brain Town: GitHub webhook events (Let me select individual events)\nMandatory: ${nm('m')}\nRecommended: ${GH_BY.workflow_run.name}, ${GH_BY.workflow_job.name} (or ${GH_BY.check_run.name})\nOptional: ${nm('o')}`;
+  const miss=(events&&events.length)?GH_EVENTS.filter(e=>ghState(e.id,events)==='missing').map(e=>e.name):[]; if(miss.length) s+='\nMissing now: '+miss.join(', '); return s; }
+function ghRecNote(ev){ if(!ev.length) return ''; const run=ghHas(ev,'workflow_run'), job=ghHas(ev,'workflow_job'), chk=ghHas(ev,'check_run');
+  if(chk&&(run||job)) return '<p class="small muted ghrec" data-testid="gh-rec-note">Checks from GitHub Actions are skipped, so CI is counted once.</p>';
+  const w=t=>`<p class="small ghrec warn" data-testid="gh-rec-note">⚠ ${t}</p>`;
+  if(!run&&!job&&!chk) return w('No CI events ticked. Tick Workflow runs and Workflow jobs (or Check runs) to see CI carts.');
+  if(run&&!job) return w('Tick Workflow jobs too, or the cart runs without its boxes.');
+  if(job&&!run) return w('Tick Workflow runs too, so the cart shows the run’s status.');
+  return ''; }
+/* repaint the checklist in place (so chip colours transition); animate only live changes */
+function ghPaint(animate){ const i=su, box=$('gh-events'); if(!i||!box) return; const ev=i.events||[]; box.dataset.events=ev.join(',');
+  let n=0; box.querySelectorAll('.ghc').forEach(c=>{ const e=GH_BY[c.dataset.ev], s=ghState(e.id,ev); if(c.dataset.state===s) return;
+    c.dataset.state=s; const ico=c.querySelector('.ghc-ico'); ico.textContent=GH_ICO[s]; c.setAttribute('aria-label',ghLabel(e,s)); if(s==='alt') c.title='Not needed: the other option is ticked'; else c.removeAttribute('title');
+    if(animate&&!isStill()&&GH_ICO[s]) ico.animate([{opacity:0,transform:'scale(.8)'},{opacity:1,transform:'none'}],{duration:200,delay:Math.min(n,6)*20,easing:'cubic-bezier(.23,1,.32,1)',fill:'backwards'}); n++; });
+  const miss=GH_EVENTS.filter(e=>e.tier==='m'&&ghState(e.id,ev)==='missing'), key=miss.map(e=>e.id).join(','), co=$('gh-callout');
+  if(!key) co.innerHTML=''; else if(!co.firstElementChild||co.firstElementChild.dataset.missing!==key){ const names=miss.map(e=>e.name), many=names.length>1, list=names.join(' and ');
+    co.innerHTML=`<div class="ghwarn" role="status" data-testid="gh-missing" data-missing="${key}"><b>${list} ${many?'are':'is'} not ticked in GitHub.</b><p class="small">Without ${many?'them':'it'} the ${esc(i.org||'org')} gate stays empty. In GitHub, open the webhook, tick ${list} and click Update webhook. This page marks ${many?'them':'it'} ✓ when ${many?'their first deliveries':'its first delivery'} arrive${many?'':'s'}.</p></div>`;
+    if(animate&&!isStill()) co.firstElementChild.animate([{opacity:0},{opacity:1}],{duration:200,easing:'ease'}); }
+  const rn=ghRecNote(ev); if($('gh-recnote').innerHTML!==rn) $('gh-recnote').innerHTML=rn; }
+
+/* preview in town */
+let ghMode='recommended';
+function ghTiles(i){ const ev=i.events||[]; if(!ev.length) return (ghMode==='all'?[...new Set(GH_EVENTS.map(e=>e.fig))]:['person','scroll','cart']).map(fig=>({fig,ghost:false}));
+  const real=[...new Set(GH_EVENTS.filter(e=>ghHas(ev,e.id)).map(e=>e.fig))], ghost=[...new Set(GH_EVENTS.filter(e=>ghState(e.id,ev)==='missing').map(e=>e.fig))].filter(f=>!real.includes(f));
+  return real.map(fig=>({fig,ghost:false})).concat(ghost.map(fig=>({fig,ghost:true}))); }
+function ghTileEl(t){ const f=document.createElement('figure'); f.className='ghtile'; f.dataset.key=t.fig+(t.ghost?':g':''); f.dataset.testid='gh-tile-'+t.fig; f.setAttribute('data-testid','gh-tile-'+t.fig); f.dataset.ghost=String(t.ghost);
+  f.innerHTML=ghFig(t.fig,72,54,true)+`<figcaption>${GH_CAP[t.fig]}${t.ghost?' · missing':''}</figcaption>`; return f; }
+function ghPreviewInit(i){ ghMode='recommended'; const p=$('gh-preview'); p.hidden=false; const neutral=!(i.events&&i.events.length);
+  p.innerHTML=`<div class="row"><h3 class="grow">Preview in town</h3>${neutral?'<span class="switch" id="gh-preview-mode"><button type="button" aria-pressed="true" data-mode="recommended" data-testid="gh-preview-rec">Recommended</button><button type="button" aria-pressed="false" data-mode="all" data-testid="gh-preview-all">Everything</button></span>':''}</div><p class="small muted" id="gh-preview-note"></p><div class="ghtiles" id="gh-tiles"></div>`; ghPreviewPaint(false); }
+function ghPreviewPaint(animate){ const i=su, p=$('gh-preview'); if(!i||!p||p.hidden) return; const ev=i.events||[], neutral=!ev.length; p.dataset.mode=neutral?ghMode:'subscribed';
+  const sw=$('gh-preview-mode'); if(!neutral&&sw) sw.remove(); else if(sw) sw.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.mode===ghMode)));
+  let note; if(neutral) note=ghMode==='all'?'Everything Brain Town can show from GitHub.':'What the mandatory and recommended events add to GitHub Valley.';
+  else { note=ev.includes('*')?'GitHub sends everything; Brain Town keeps only the events above and ignores the rest.':'What this webhook adds to GitHub Valley, from GitHub’s ping.'; const x=ev.filter(v=>v!=='*'&&!GH_BY[v]).length; if(x) note+=' Also ticked in GitHub, ignored by Brain Town: '+x+'.'; }
+  $('gh-preview-note').textContent=note;
+  const box=$('gh-tiles'); box.querySelectorAll('.ghtile').forEach(el=>el.getAnimations().forEach(a=>a.cancel()));
+  const old=new Map([...box.children].map(c=>[c.dataset.key,c])), fresh=[], nodes=ghTiles(i).map(t=>{ let el=old.get(t.fig+(t.ghost?':g':'')); if(!el){ el=ghTileEl(t); fresh.push(el); } return el; });
+  box.replaceChildren(...nodes);
+  if(animate&&!isStill()) fresh.forEach((el,n)=>el.animate([{opacity:0,transform:'translateY(4px)'},{opacity:1,transform:'none'}],{duration:200,delay:Math.min(n,8)*30,easing:'cubic-bezier(.23,1,.32,1)',fill:'backwards'})); }
+$('gh-preview').addEventListener('click',e=>{ const b=e.target.closest('[data-mode]'); if(!b||b.dataset.mode===ghMode) return; ghMode=b.dataset.mode; ghPreviewPaint(true); });
+
+/* everything on the page that depends on the integration's events */
+function ghRepaint(animate){ const i=su; if(!i||i.kind!=='github'||!$('gh-events')) return; ghPaint(animate); ghPreviewPaint(animate);
+  $('su-steps').lastElementChild.classList.toggle('done',!!((i.events&&i.events.length)||i.last)); const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx; setWait(i); }
+
+/* popover (bottom sheet on phones) */
+const ghp={open:false,chip:null,t:0}, ghMobile=()=>matchMedia('(max-width:600px)').matches;
+function ghFillPop(id){ const e=GH_BY[id], s=ghState(id,su&&su.events), fig=$('gh-pop-fig');
+  fig.dataset.fig=e.fig; fig.innerHTML=ghFig(e.fig,96,72,false); $('gh-pop-title').textContent=e.name; $('gh-pop-tier').textContent=GH_TIER[e.tier];
+  const st=$('gh-pop-state'); st.hidden=s==='neutral'; st.className='pill '+({subscribed:'ok',missing:'warn',off:'off',alt:'off'}[s]||''); st.textContent={subscribed:'subscribed',missing:'missing',off:'not ticked',alt:'not needed'}[s]||'';
+  $('gh-pop-sends').textContent=e.sends; $('gh-pop-keeps').textContent=e.keeps; $('gh-pop-town').textContent=e.town; $('gh-pop-group').textContent=e.group; $('gh-pop-evid').textContent=e.id; }
+function ghPlace(){ const pop=$('gh-pop'), c=ghp.chip; if(!c) return; pop.setAttribute('aria-modal',ghMobile()?'true':'false');
+  if(ghMobile()){ pop.style.left=pop.style.top=''; pop.style.removeProperty('--o'); return; }
+  const r=c.getBoundingClientRect(), pw=pop.offsetWidth, ph=pop.offsetHeight, vw=document.documentElement.clientWidth, vh=innerHeight;
+  const left=Math.max(12,Math.min(r.left,vw-pw-12)); let top=r.bottom+8, o='top'; if(top+ph>vh-12&&r.top-8-ph>=12){ top=r.top-8-ph; o='bottom'; }
+  pop.style.left=(left+scrollX)+'px'; pop.style.top=(top+scrollY)+'px'; pop.style.setProperty('--o',`${r.left+r.width/2-left}px ${o}`); }
+function ghPopOpen(chip){ if(ghp.open&&ghp.chip===chip){ ghPopClose(true); return; }
+  if(ghp.chip&&ghp.chip!==chip) ghp.chip.setAttribute('aria-expanded','false');
+  ghp.chip=chip; chip.setAttribute('aria-expanded','true'); ghFillPop(chip.dataset.ev); const pop=$('gh-pop'), sc=$('gh-pop-scrim'), swap=ghp.open; clearTimeout(ghp.t);
+  if(!swap){ pop.hidden=false; if(ghMobile()){ sc.hidden=false; $('app').inert=true; document.documentElement.style.overflow='hidden'; } ghPlace(); void pop.offsetWidth; pop.classList.add('on'); if(!sc.hidden){ void sc.offsetWidth; sc.classList.add('on'); } ghp.open=true; }
+  else ghPlace();
+  $('gh-pop-close').focus({preventScroll:true}); }
+function ghPopClose(refocus){ if(!ghp.open) return; ghp.open=false; const pop=$('gh-pop'), sc=$('gh-pop-scrim'), chip=ghp.chip; if(chip) chip.setAttribute('aria-expanded','false');
+  $('app').inert=false; document.documentElement.style.overflow=''; pop.classList.remove('on'); sc.classList.remove('on');
+  const done=()=>{ if(ghp.open) return; pop.hidden=true; sc.hidden=true; }; clearTimeout(ghp.t);
+  if(isStill()) done(); else ghp.t=setTimeout(done,420);
+  if(refocus&&chip) chip.focus(); }
+$('gh-pop').addEventListener('transitionend',e=>{ if(e.target===$('gh-pop')&&e.propertyName==='opacity'&&!ghp.open){ clearTimeout(ghp.t); $('gh-pop').hidden=true; $('gh-pop-scrim').hidden=true; } });
+$('gh-pop-close').onclick=()=>ghPopClose(true);
+$('gh-pop-scrim').addEventListener('click',()=>ghPopClose(true));
+$('gh-pop').addEventListener('focusout',e=>{ const n=e.relatedTarget; if(!ghp.open||ghMobile()||!n||$('gh-pop').contains(n)||n===ghp.chip) return; ghPopClose(false); });
+document.addEventListener('pointerdown',e=>{ if(ghp.open&&!ghMobile()&&!e.target.closest('#gh-pop,.ghc')) ghPopClose(false); });
+addEventListener('resize',()=>ghPopClose(false));
+$('su-steps').addEventListener('click',e=>{ const c=e.target.closest('.ghc'); if(c){ ghPopOpen(c); return; } if(e.target.closest('#gh-copy-list')) copy(ghListText(su&&su.events),'Event list'); });
+
+/* live arrival: the ping carries the ticked events; any other accepted delivery re-reads them (at most every 2 s) */
+const ghFetchAt={}, ghFetchT={};
+function ghAfter(i,ping){ if(su!==i||curPage!=='setup'||!$('gh-events')) return; ghRepaint(true);
+  if(ping){ const n=i.events.length; toast(i.events.includes('*')?'GitHub ping received: every event ticked':`GitHub ping received: ${n} event${n===1?'':'s'} ticked`); } }
+async function ghRefetch(i,ping){ const wait=2000-(Date.now()-(ghFetchAt[i.id]||0)); if(!ping&&wait>0){ if(!ghFetchT[i.id]) ghFetchT[i.id]=setTimeout(()=>{ ghFetchT[i.id]=0; ghRefetch(i,false); },wait); return; }
+  ghFetchAt[i.id]=Date.now(); const r=await apiCall('GET','/api/admin/integrations'); if(!r.ok||!Array.isArray(r.data)) return; const m=r.data.find(x=>x.id===i.id); if(!m) return;
+  const evs=m.events||[]; if(!ping&&evs.join()===(i.events||[]).join()) return; i.events=evs; ghAfter(i,ping); }
+function ghLive(e,i){ if(e.st!=='ok') return; if(e.type!=='ping'){ ghRefetch(i,false); return; }
+  const evs=e.data&&e.data.data&&e.data.data.events; if(Array.isArray(evs)){ i.events=evs.slice(); ghAfter(i,true); } else ghRefetch(i,true); }
+
+/* github secret: never in the DOM before Show or Copy */
+const GH_PH='whsec_•••••••••••••••• (hidden)'; let ghSecT=0;
+const ghSecHTML=label=>`<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row"><input type="text" readonly value="" placeholder="${GH_PH}" id="su-sec" data-testid="su-sec" aria-label="Webhook secret, hidden"><button type="button" data-gh-show aria-pressed="false" data-testid="su-sec-show">Show</button><button type="button" data-gh-copy data-testid="su-sec-copy">Copy</button></div></div>`;
+function ghSecClear(){ clearTimeout(ghSecT); const f=$('su-sec'), b=document.querySelector('[data-gh-show]'); if(!f||!b) return; f.value=''; f.placeholder=GH_PH; f.setAttribute('aria-label','Webhook secret, hidden'); b.textContent='Show'; b.setAttribute('aria-pressed','false'); b.removeAttribute('aria-busy'); b.disabled=false; }
+async function ghFetchSecret(){ const i=su; if(!LIVE) return secretOf(i); const r=await apiCall('GET','/api/admin/integrations/'+encodeURIComponent(i.id)+'/secret');
+  if(r.ok&&r.data&&typeof r.data.secret==='string'&&r.data.secret&&!r.data.secret.includes('•')) return r.data.secret; throw r.status||0; }
+function ghSecFail(st){ if(st===503){ const row=$('su-sec-row'); if(!row||!su) return; row.innerHTML=secRowHidden(su); if(!row.parentElement.querySelector('[data-testid=su-sec-503]')) row.insertAdjacentHTML('afterend','<p class="small muted" data-testid="su-sec-503">The server has no secret key set, so this secret can’t be shown again. Rotate to get a new one, then paste it into GitHub.</p>'); return; }
+  toast(st===401?'Your session ended. Sign in again to see the secret.':'Could not load the secret. Try again.'); }
+async function ghSecShow(b){ if(b.getAttribute('aria-pressed')==='true'){ ghSecClear(); return; }
+  const i=su; b.setAttribute('aria-busy','true'); b.disabled=true; b.textContent='Loading…';
+  try{ const s=await ghFetchSecret(), f=$('su-sec'); if(su!==i||!f||!b.isConnected) return; f.value=s; f.setAttribute('aria-label','Webhook secret'); b.textContent='Hide'; b.setAttribute('aria-pressed','true'); b.removeAttribute('aria-busy'); b.disabled=false; b.focus(); clearTimeout(ghSecT); ghSecT=setTimeout(ghSecClear,60000); }
+  catch(st){ if(su!==i||!b.isConnected) return; b.textContent='Show'; b.removeAttribute('aria-busy'); b.disabled=false; ghSecFail(typeof st==='number'?st:0); } }
+async function ghSecCopy(){ const f=$('su-sec'); if(f&&f.value&&!f.value.includes('•')){ copy(f.value,'Webhook secret'); return; } let err=0;
+  try{ if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){ const p=ghFetchSecret().then(s=>new Blob([s],{type:'text/plain'}),e=>{ err=e; throw e; }); await navigator.clipboard.write([new ClipboardItem({'text/plain':p})]); }
+    else { const s=await ghFetchSecret(); await navigator.clipboard.writeText(s); }
+    toast('Webhook secret copied'); }
+  catch(e){ ghSecFail(typeof err==='number'&&err?err:0); } }
 
 /* ============================ event log ============================ */
 function fillFilters(){ const s=$('f-int'), v=s.value; s.innerHTML='<option value="">All</option>'+INTS.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join(''); s.value=v; }
@@ -582,7 +845,7 @@ $('ev-pause').onclick=e=>{ paused=!paused; e.target.setAttribute('aria-pressed',
 $('ev-body').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-id]'); if(!tr) return; const ev=EVENTS.find(x=>x.id===tr.dataset.id); if(!ev) return; const i=INTS.find(x=>x.id===ev.int);
   $('dr-title').textContent=ev.type; $('dr-kv').innerHTML=`<dt>Event id</dt><dd>${ev.id}</dd><dt>Integration</dt><dd>${esc(i?i.name:ev.int)}</dd><dt>Received</dt><dd>${new Date(ev.at).toISOString()}</dd><dt>Delivery</dt><dd>${ev.st}${ev.err?' · '+ev.err:''}</dd>`;
   $('dr-raw').textContent=JSON.stringify(rawView(ev),null,2); $('dr-pub').textContent=ev.st==='ok'?JSON.stringify(ev.pub||publicView(ev),null,2):'Nothing. A rejected delivery never reaches the stream.'; $('drawer').classList.add('on'); $('dr-x').focus(); });
-$('dr-x').onclick=()=>$('drawer').classList.remove('on'); addEventListener('keydown',e=>{ if(e.key==='Escape') $('drawer').classList.remove('on'); });
+$('dr-x').onclick=()=>$('drawer').classList.remove('on'); addEventListener('keydown',e=>{ if(e.key==='Escape'){ $('drawer').classList.remove('on'); if(ghp.open) ghPopClose(true); } });
 
 /* ============================ products ============================ */
 const visSwitch=(kind,id,v)=>`<span class="switch"><button type="button" data-vis="${kind}:${id}:public" aria-pressed="${v==='public'}">Public</button><button type="button" data-vis="${kind}:${id}:hidden" aria-pressed="${v==='hidden'}">Hidden</button></span>`;
@@ -606,7 +869,7 @@ $('pwform').onsubmit=e=>{ e.preventDefault(); if($('acc-p1').value!==$('acc-p2')
 /* ============================ stream + router ============================ */
 const strip=new Strip($('strip'),['github','qa','gaos','site'],false), loginStrip=new Strip($('logincv'),['github','qa','gaos','site'],true);
 function ingest(ev){ const i=INTS.find(x=>x.id===ev.int); EVENTS.unshift(ev); if(EVENTS.length>300) EVENTS.pop(); $('n-ev').textContent=EVENTS.length;
-  if(ev.st==='ok'){ i.today++; i.last=ev.at; stats.events++; buckets[buckets.length-1]++; if(ev.type==='issue.opened') stats.opened++; if(ev.type==='issue.closed') stats.closed++; if(ev.type==='qa.run.finished'){ stats.qaRuns++; if((ev.data.data||ev.data).failed) stats.qaFail++; } if(ev.kind==='gaos'&&ev.type==='task.done') stats.tasks++; if(ev.kind==='site') stats.posts++; strip.add(ev.kind);
+  if(ev.st==='ok'){ i.today++; i.last=ev.at; stats.events++; buckets[buckets.length-1]++; if(ev.type==='issue.opened') stats.opened++; if(ev.type==='issue.closed') stats.closed++; if(ev.type==='qa.run.finished'){ stats.qaRuns++; if((ev.data.data||ev.data).failed) stats.qaFail++; } if(ev.kind==='gaos'&&ev.type==='task.done') stats.tasks++; if(ev.kind==='site') stats.posts++; if(ev.type!=='ping') strip.add(ev.kind);
     const dot=$('dot-'+i.id); if(dot){ dot.classList.remove('ping'); void dot.offsetWidth; dot.classList.add('ping'); } }
   else { i.err++; i.lastErr=ev.at; }
   paintTiles(); const tl=$('tail'); tl.prepend(tailRow(ev,true)); while(tl.children.length>14) tl.lastChild.remove();
@@ -621,7 +884,7 @@ function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'das
   const pages=[...document.querySelectorAll('.page')], next=pages.find(p=>p.dataset.page===page), prev=curPage&&pages.find(p=>p.dataset.page===curPage);
   const dir=!prev?1:(Math.sign(ORDER.indexOf(page)-ORDER.indexOf(curPage))||1), dx=(dir*26)+'px';
   document.querySelectorAll('#rail nav a').forEach(a=>{ const on=a.getAttribute('href')==='#'+(page==='setup'?'integrations':page); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); placeMark();
-  $('drawer').classList.remove('on'); clearTimeout(swapT);
+  $('drawer').classList.remove('on'); ghPopClose(false); clearTimeout(swapT);
   const swap=()=>{ pages.forEach(p=>p.classList.remove('on','leave','enter')); next.style.setProperty('--dx',dx); next.classList.add('on'); void next.offsetWidth; next.classList.add('enter'); curPage=page;
     if(page==='setup') openSetup(h.slice(6)); if(page==='integrations') paintIntegrations(); if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
     window.scrollTo(0,0); swapT=setTimeout(()=>next.classList.remove('enter'),1100); };
@@ -644,9 +907,13 @@ let LIVE=false, liveStats=null, statTick=0;
 async function refreshStats(){ const r=await apiCall('GET','/api/admin/stats'); if(r.ok){ liveStats=r.data; paintDb(); } }
 async function apiCall(method,path,body){ try{ const r=await fetch(path,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined}); const t=await r.text(); let data=null; try{ data=JSON.parse(t); }catch(_){ return {ok:false,status:r.status===401?401:0,data:null}; } return {ok:r.ok,status:r.status,data}; }catch(_){ return {ok:false,status:0,data:null}; } }
 const ms=t=>t&&!String(t).startsWith('0001')?Date.parse(t):0;
-function mapInt(i){ const last=ms(i.lastEventAt), rej=ms(i.lastRejectedAt); return {id:i.id,kind:i.kind,name:i.name,org:i.org||'',hint:i.tokenHint,state:last?'ok':'waiting',today:i.today||0,err:i.errors||0,last,lastErr:rej}; }
+function mapInt(i){ const last=ms(i.lastEventAt), rej=ms(i.lastRejectedAt); return {id:i.id,kind:i.kind,name:i.name,org:i.org||'',hint:i.tokenHint,events:i.events||[],state:last?'ok':'waiting',today:i.today||0,err:i.errors||0,last,lastErr:rej}; }
 function sumOf(r){ const p=r.product&&r.product.key||r.product||'', t=r.task||{}, d=r.data||{}; return [p,t.id,t.title||d.title||d.step||d.spec||d.page||'',d.decision||d.to||d.status||''].filter(Boolean).join(' '); }
-function mapEv(e){ const raw=e.raw||{}; return {id:e.id||('rej-'+e.seq),type:e.type||'(invalid)',int:e.integration,kind:e.kind,at:Date.parse(e.received),data:raw,sum:e.delivery==='ok'?sumOf(raw):'',st:e.delivery,err:e.reason||'',pub:e.public&&e.public.payload?e.public:null}; }
+function ghSum(r){ const d=r.data||{}, t=r.task||{}, p=r.product&&r.product.key||'', b=[p,t.id?'#'+t.id:''];
+  if(r.type==='ping') b.push((d.events||[]).length+' events'); if(d.count!=null) b.push('×'+d.count); if(d.total!=null&&r.type==='repo.starred') b.push('total '+d.total);
+  if(d.jobs) b.push(d.jobs.done+'/'+d.jobs.total+' jobs'); if(d.commits!=null) b.push(d.commits+' commits'); if(d.pr!=null&&!t.id) b.push('PR #'+d.pr); if(d.status) b.push(d.status);
+  if(d.approved||d.changes) b.push((d.approved||0)+' ok '+(d.changes||0)+' changes'); if(d.done!=null&&d.total!=null&&r.type==='task.done') b.push(d.done+'/'+d.total); return b.filter(Boolean).join(' '); }
+function mapEv(e){ const raw=e.raw||{}; return {id:e.id||('rej-'+e.seq),type:e.type||'(invalid)',int:e.integration,kind:e.kind,at:Date.parse(e.received),data:raw,sum:e.delivery==='ok'?(e.kind==='github'?ghSum(raw):sumOf(raw)):'',st:e.delivery,err:e.reason||'',pub:e.public&&e.public.payload?e.public:null}; }
 function applyProducts(d){ ORGS.splice(0,ORGS.length,...d.orgs.map(o=>({id:o.key,vis:o.visibility,alias:o.alias})));
   PRODUCTS.splice(0,PRODUCTS.length,...d.products.map(p=>({key:p.key,org:p.org||'',src:(p.sources||[]).join(', ')||'-',vis:p.visibility,alias:p.alias,hall:p.hall}))); }
 async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/admin/integrations'),apiCall('GET','/api/admin/products'),apiCall('GET','/api/admin/events?limit=300')]);
@@ -657,8 +924,8 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   $('svc-addr').textContent=location.origin; $('svc-pub').textContent=location.origin+'/events'; $('svc-adm').textContent=location.origin+'/admin/events'; await refreshStats();
   $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;
-  const types=['product.upserted','task.created','task.moved','gate.requested','gate.decided','task.claimed','task.qa','task.done','task.failed','qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit'];
-  const on=m=>{ if(paused||!m.data) return; const e=mapEv(JSON.parse(m.data)); const i=INTS.find(x=>x.id===e.int); if(!i||EVENTS.some(x=>x.id===e.id&&x.int===e.int)) return; if(i.state==='waiting') i.state='ok'; ingest(e); paintIntegrations(); paintHealth(); };
+  const types=['product.upserted','task.created','task.moved','gate.requested','gate.decided','task.claimed','task.qa','task.done','task.failed','qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit','ping','issue.opened','issue.assigned','issue.closed','issue.labeled','issue.subissues','pr.opened','pr.merged','pr.closed','pr.reviewed','issue.commented','pr.checks','ci.run','repo.pushed','ref.created','ref.deleted','repo.labels','discussion.opened','discussion.answered','discussion.commented','repo.starred'];
+  const on=m=>{ if(paused||!m.data) return; const e=mapEv(JSON.parse(m.data)); const i=INTS.find(x=>x.id===e.int); if(!i||EVENTS.some(x=>x.id===e.id&&x.int===e.int)) return; if(i.state==='waiting') i.state='ok'; ingest(e); if(e.kind==='github') ghLive(e,i); paintIntegrations(); paintHealth(); };
   types.forEach(t=>es.addEventListener(t,on)); es.addEventListener('message',on);
   es.onopen=()=>{ $('sse-pill').className='pill ok'; $('sse-pill').innerHTML='<i></i>stream connected'; };
   es.onerror=()=>{ $('sse-pill').className='pill bad'; $('sse-pill').innerHTML='<i></i>reconnecting'; }; }
@@ -669,7 +936,7 @@ async function liveRotate(id){ const token=await rotateToken(id); if(!token){ to
   const i=INTS.find(x=>x.id===id); i.token=token; toast('New secret ready. Copy it now: it is shown once.'); location.hash='#setup-'+id; }
 async function liveCreate(kind){ const r=await apiCall('POST','/api/admin/integrations',{kind,name:KIND[kind].label}); if(!r.ok){ toast(r.data&&r.data.error||'Could not create the integration'); location.hash='#integrations'; return; }
   const i=mapInt(r.data.integration); i.token=r.data.token; INTS.push(i); paintIntegrations(); fillFilters(); location.replace('#setup-'+i.id); }
-async function liveTest(i){ if(i.kind==='github'){ toast('GitHub webhooks are not implemented yet.'); return; } if(!i.token){ toast('The secret is only shown once. Use Rotate and copy above to send a test event.'); return; }
+async function liveTest(i){ if(i.kind==='github') return; if(!i.token){ toast('The secret is only shown once. Use Rotate and copy above to send a test event.'); return; }
   const at=new Date().toISOString(), id='test-'+Date.now().toString(36), base={id,at};
   const body={gaos:{...base,type:'task.created',product:{key:'demo',name:'Demo',visibility:'public'},task:{id:'T-1',title:'Hello town',kind:'feature',column:'backlog'}},
     qa:{...base,type:'qa.run.started',product:'demo',run:'test-'+id,data:{spec:'smoke.spec.ts',steps:['Open page']}},
