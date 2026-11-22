@@ -102,3 +102,10 @@ A courier should walk to the mfardiansyah.id pendopo in the town.
 ## Pull fallback
 
 Set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the site's https JSON Feed 1.1; Brain Town pulls the latest 20 items every 5 minutes as `article.published` with `id` = item id, so a push with the same id is deduplicated.
+
+## As built (mfardiansyah.id v0.54.3, PR #157)
+- **Feed:** `https://mfardiansyah.id/feed.json`, the latest 20 live English notes. Item `id` is `post-<slug>`, the same as the push `id`, so the two paths dedupe. `_kind` is always `article`; there are no illustrations on this site.
+- **Push:** `article.published` is sent once per note (also for scheduled notes when their time passes) with `data{title,url,to:"blog"}`. Indonesian twins are not announced.
+- **Visit beacon:** sent server-side from the home and blog handlers. Country comes from a local GeoIP lookup. Bots, prefetches and admin sessions are skipped; no IP or user agent is sent. A page cached by the browser for 60 s sends nothing on repeat loads. There is no retry and at most 16 in flight.
+- **Env** on the site: `BRAIN_TOWN_ENABLED=true`, `BRAIN_TOWN_URL=https://<host>/ingest/site/<integration-id>` (https only) and `BRAIN_TOWN_TOKEN=bt_live_...`. All three are needed; until they are set both push and beacon stay off.
+- **Open:** `/privacy` does not mention the beacon yet.
