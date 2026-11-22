@@ -256,6 +256,11 @@ body{overflow-x:clip}
   #org-body td.lead,#prod-body td.lead{grid-column:1/-1;font-size:16px}
   #org-body td input,#prod-body td input,#prod-body td select{width:100%}
   #org-body td:last-child{grid-column:1/-1}
+  #own-body tr{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  #own-body td.lead,#own-body td[data-l="Public name"],#own-body td[data-l="Events"]{grid-column:1/-1}
+  #own-body td.lead{font-size:16px}
+  #own-body td input{width:100%}
+  [data-page=owner] .head .grow{flex:1 1 100%}
   table.stack tr.empty{display:block;padding:0}
   .panel.scroll{overflow-x:visible}
   #drawer{top:auto;left:0;right:0;width:auto;max-height:84%;border-left:0;border-top:1px solid var(--ink);box-shadow:0 -6px 0 rgba(31,43,58,.08);transform:translateY(105%);padding:16px 14px 90px}
@@ -348,6 +353,14 @@ body.still .ghc,body.still #gh-copy-list{transition:none} body.still .ghc:active
 body.still .ghpop,body.still .ghpop.on{transform:none}
 body.still .ghpop{transition:opacity 150ms ease,visibility 0s 150ms} body.still .ghpop.on{transition:opacity 150ms ease,visibility 0s}
 body.still #gh-pop-scrim,body.still #gh-pop-scrim.on{transition:opacity 150ms ease}
+/* ---------- GitHub owners: owner page, create form ---------- */
+.ev-miss{color:#8a6516}
+#gh-create[hidden]{display:none}
+#gh-create label.panel:has(input:checked){border-width:2px}
+#gh-create:not([hidden]){animation:ghform 160ms var(--ease-out) both}
+@keyframes ghform{from{opacity:0;transform:translateY(4px)}}
+@media (prefers-reduced-motion:reduce){ #gh-create:not([hidden]){animation:none} }
+body.still #gh-create:not([hidden]){animation:none}
 </style>
 </head>
 <body>
@@ -399,8 +412,9 @@ body.still #gh-pop-scrim,body.still #gh-pop-scrim.on{transition:opacity 150ms ea
 
     <!-- INTEGRATIONS -->
     <section class="page" data-page="integrations">
-      <div class="head"><div class="grow"><h1>Integrations</h1><p>One card per connected platform. A card turns amber after an hour of silence and red after a rejected delivery.</p></div></div>
-      <div class="cards" id="icards"></div>
+      <div class="head"><div class="grow"><h1>Integrations</h1><p>One card per connected platform. GitHub has one card per owner: an organization, or a personal account with one webhook per repo. A card turns amber when a repo is missing events and red after a rejected delivery.</p></div></div>
+      <div id="igroups" style="display:flex;flex-direction:column;gap:22px"></div>
+      <div class="cards" id="iadd"></div>
     </section>
 
     <!-- SETUP -->
@@ -426,6 +440,15 @@ body.still #gh-pop-scrim,body.still #gh-pop-scrim.on{transition:opacity 150ms ea
           <div class="panel pad" id="su-map" role="region" aria-labelledby="su-map-title"></div>
         </div>
       </div>
+    </section>
+
+    <!-- GITHUB OWNER -->
+    <section class="page" data-page="owner" data-testid="owner-page">
+      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / GitHub owner</div><h1 id="own-title" data-testid="owner-title"></h1><p id="own-lede"></p></div><span class="pill" id="own-type" data-testid="owner-type"></span><span class="pill" id="own-pill" data-testid="owner-health"></span></div>
+      <div class="panel pad" id="own-hook" style="order:1"><h2>Shared webhook</h2><p class="small muted" id="own-hook-note"></p>
+        <div class="two" style="margin-top:6px"><div id="own-url-wrap"></div><div id="own-sec-wrap"></div></div></div>
+      <div class="panel scroll" style="order:3"><table class="stack" id="own-table"><thead><tr><th>Repo</th><th>Visibility</th><th>Public name in town</th><th>Last event</th><th>Today</th><th>Rejected</th><th>Events</th></tr></thead><tbody id="own-body" data-testid="owner-repos" data-empty=""></tbody></table></div>
+      <div class="panel pad" id="own-add" data-testid="add-repo-panel" style="order:4;display:flex;flex-direction:column;gap:10px"></div>
     </section>
 
     <!-- EVENTS -->
@@ -517,18 +540,29 @@ const PRODUCTS=[
   {key:'education-graph',org:'mf-labs',src:'GitHub, QA',vis:'public',alias:'education-graph',hall:'GitHub Valley hall'},
   {key:'article2video',org:'mf-media',src:'GitHub, GAOS',vis:'public',alias:'article2video',hall:'Video Generator'},
   {key:'statusmag',org:'mf-media',src:'GitHub, GAOS',vis:'public',alias:'statusmag',hall:'Magazine House'},
+  {key:'brain-notes',org:'mf-dev',src:'GitHub',vis:'public',alias:'brain-notes',hall:'GitHub Valley hall'},
+  {key:'dotfiles',org:'mf-dev',src:'GitHub',vis:'hidden',alias:'Workbench',hall:'GitHub Valley hall'},
+  {key:'homelab',org:'mf-dev',src:'GitHub',vis:'hidden',alias:'Product E',hall:'GitHub Valley hall'},
 ];
 const HALLS=['GitHub Valley hall','Video Generator','Magazine House','Article Bureau','Imago','LinkedIn Hall'];
+/* sample repos of an organization, built from its products (no GH_* constants here: they are defined later) */
+const demoRepos=org=>PRODUCTS.filter(p=>p.org===org).map((p,n)=>({name:p.key,private:false,events:['issues','issue_comment','check_run','push','star','create','discussion','pull_request'],last:Date.now()-(n+1)*7000,lastErr:0,today:10+n*7,rejected:0,product:p.key,vis:p.vis,alias:p.alias,aliasCustom:false,defaultAlias:p.vis==='hidden'?'Product '+String.fromCharCode(65+PRODUCTS.indexOf(p)):p.key}));
+const demoDev=(name,priv,evs,today,rej,last,lastErr,vis,alias,custom,def,product)=>({name,private:priv,events:evs,last,lastErr,today,rejected:rej,product,vis,alias,aliasCustom:custom,defaultAlias:def});
 const INTS=[
-  {id:'gh-sismedika',kind:'github',name:'GitHub · sismedika',org:'sismedika',state:'ok',today:212,err:0,last:Date.now()-4000,events:['issues','issue_comment','check_run','push','star','create','discussion']},
-  {id:'gh-mf-labs',kind:'github',name:'GitHub · mf-labs',org:'mf-labs',state:'ok',today:148,err:1,last:Date.now()-9000,events:['issues','issue_comment','check_run','push','star','create','discussion']},
-  {id:'gh-mf-media',kind:'github',name:'GitHub · mf-media',org:'mf-media',state:'ok',today:97,err:0,last:Date.now()-21000,events:['issues','issue_comment','check_run','push','star','create','discussion']},
+  {id:'gh-sismedika',kind:'github',name:'GitHub · sismedika',org:'sismedika',ownerType:'organization',state:'ok',today:212,err:0,last:Date.now()-4000,events:['issues','issue_comment','check_run','push','star','create','discussion'],repos:demoRepos('sismedika')},
+  {id:'gh-mf-labs',kind:'github',name:'GitHub · mf-labs',org:'mf-labs',ownerType:'organization',state:'ok',today:148,err:1,last:Date.now()-9000,events:['issues','issue_comment','check_run','push','star','create','discussion'],repos:demoRepos('mf-labs')},
+  {id:'gh-mf-media',kind:'github',name:'GitHub · mf-media',org:'mf-media',ownerType:'',state:'ok',today:97,err:0,last:Date.now()-21000,events:['issues','issue_comment','check_run','push','star','create','discussion'],repos:demoRepos('mf-media')},
+  {id:'gh-mf-dev',kind:'github',name:'GitHub · mf-dev',org:'mf-dev',ownerType:'user',state:'ok',today:43,err:1,last:Date.now()-12000,events:[],repos:[
+    demoDev('brain-notes',false,['issues','pull_request','issue_comment','push','star'],21,0,Date.now()-12000,0,'public','brain-notes',false,'brain-notes','brain-notes'),
+    demoDev('dotfiles',true,['issues','pull_request','push'],9,0,Date.now()-180000,0,'hidden','Workbench',true,'Product D','dotfiles'),
+    demoDev('homelab',true,['issues','push'],13,1,Date.now()-480000,Date.now()-300000,'hidden','Product E',false,'Product E','homelab'),
+    demoDev('scratchpad',false,['issues','pull_request'],0,0,Date.now()-1200000,0,'public','',false,'','')]},
   {id:'qa-main',kind:'qa',name:'QA tool',state:'ok',today:324,err:0,last:Date.now()-2000},
   {id:'gaos-main',kind:'gaos',name:'GAOS',state:'ok',today:186,err:2,last:Date.now()-6000},
   {id:'site-main',kind:'site',name:'mfardiansyah.id',state:'waiting',today:0,err:0,last:0},
 ];
 const KIND={
-  github:{label:'GitHub',lede:'One integration per GitHub organization. GitHub pushes signed webhooks; nothing is installed in the repos.'},
+  github:{label:'GitHub',lede:'One integration per GitHub owner. An organization has one webhook for every repo; a personal account has one webhook per repo, all sharing the same URL and secret.'},
   qa:{label:'QA tool',lede:'A small Playwright reporter in the QA project posts every run, step by step.',task:'brain-town-integration-qa-tool.md'},
   gaos:{label:'GAOS',lede:'GAOS posts one event whenever a product or task changes state. It works for any product GAOS manages.',task:'brain-town-integration-gaos.md'},
   site:{label:'mfardiansyah.id',lede:'The site either pushes a publish hook or exposes a feed that Brain Town pulls every 5 minutes. Both can run together.',task:'brain-town-integration-mfardiansyah-id.md'},
@@ -591,16 +625,73 @@ function drawChart(){ const cv=$('chart'), W=cv.clientWidth, H=cv.clientHeight; 
   const lx=X(buckets.length-1), ly=Y(buckets.at(-1)); c.beginPath(); c.arc(lx,ly,4,0,7); c.fillStyle='#c8472f'; c.fill(); c.stroke(); }
 const ago=t=>{ if(!t) return 'never'; const s=Math.max(0,Math.round((Date.now()-t)/1000)); return s<60?s+' s ago':s<3600?Math.round(s/60)+' min ago':Math.round(s/3600)+' h ago'; };
 const stateOf=i=>i.state==='waiting'?['off','waiting for first event']:i.state==='paused'?['off','paused']:i.err>0&&Date.now()-i.lastErr<60000?['bad','delivery rejected']:['ok','receiving'];
-function paintHealth(){ $('health').innerHTML=INTS.map(i=>{ const [cl,tx]=stateOf(i); return `<a class="panel hcard ${cl==='off'?'off':''}" href="#setup-${i.id}" style="text-decoration:none"><span class="dot" id="dot-${i.id}"></span><div class="row"><span class="kind k-${i.kind}"></span><h3>${esc(i.name)}</h3></div><span class="pill ${cl}"><i></i>${tx}</span><span class="small muted">last event <span data-ago="${i.id}">${ago(i.last)}</span> · ${i.today} today</span></a>`; }).join(''); }
+/* GitHub owners: one integration per owner, repos listed under it */
+const ownerName=i=>i.org||i.name;
+const ownerKind=i=>i.ownerType==='user'?'user':i.ownerType==='organization'?'organization':'unknown';
+const ghMissing=events=>events&&events.length?GH_EVENTS.filter(e=>e.tier==='m'&&!ghHas(events,e.id)).map(e=>e.id):[];
+const ownerLast=i=>Math.max(i.last||0,...(i.repos||[]).map(r=>r.last||0));
+function ownerState(i){ if(i.state==='paused') return ['off','paused']; if(!ownerLast(i)) return ['off','waiting for first ping'];
+  const now=Date.now(); if((i.err>0&&now-i.lastErr<60000)||(i.repos||[]).some(r=>now-r.lastErr<60000)) return ['bad','delivery rejected'];
+  const n=(i.repos||[]).filter(r=>ghMissing(r.events).length).length; if(n) return ['warn',n===1?'1 repo missing events':n+' repos missing events']; return ['ok','receiving']; }
+const lastOf=i=>i.kind==='github'?ownerLast(i):i.last;
+const num=n=>(n||0).toLocaleString('en-US');
+function paintHealth(){ $('health').innerHTML=INTS.map(i=>{ const gh=i.kind==='github', [cl,tx]=gh?ownerState(i):stateOf(i); return `<a class="panel hcard ${cl==='off'?'off':''}" href="#${gh?'integration':'setup'}-${i.id}" style="text-decoration:none"><span class="dot" id="dot-${i.id}"></span><div class="row"><span class="kind k-${i.kind}"></span><h3>${esc(i.name)}</h3></div><span class="pill ${cl}"><i></i>${tx}</span><span class="small muted">last event <span data-ago="${i.id}">${ago(lastOf(i))}</span> · ${i.today} today</span></a>`; }).join(''); }
 function tailRow(ev,isNew){ const li=document.createElement('li'); if(isNew) li.className='new'; li.innerHTML=`<time>${hhmmss(ev.at)}</time><span><span class="kind k-${ev.kind}" style="margin-right:6px"></span><b style="font-weight:500">${esc(ev.type)}</b> ${esc(ev.sum)}</span>`; return li; }
 
 /* ============================ integrations ============================ */
-function paintIntegrations(){ $('n-int').textContent=INTS.length; placeMark();
-  $('icards').innerHTML=INTS.map(i=>{ const [cl,tx]=stateOf(i); return `<div class="panel icard" style="border-top-color:${KCOL[i.kind]}"><div class="row"><h2 class="grow">${esc(i.name)}</h2><span class="pill ${cl}"><i></i>${tx}</span></div>
+const OWN_SUB={user:'one webhook per repo',organization:'one webhook for the whole organization',unknown:'treated as an organization'};
+const OWN_TYPE={user:'Personal',organization:'Organization',unknown:'Owner type not set'};
+const typePill=(i,tid)=>{ const k=ownerKind(i); return `<span class="pill${k==='unknown'?' off':''}" data-testid="${tid}" data-owner-type="${k}">${OWN_TYPE[k]}</span>`; };
+const repoCount=n=>n?n+(n===1?' repo':' repos'):'No repos yet';
+function ownerCard(i){ const [cl,tx]=ownerState(i), k=ownerKind(i), id=esc(i.id), n=(i.repos||[]).length;
+  return `<div class="panel icard" style="border-top-color:${KCOL.github}" data-testid="owner-card-${id}"><div class="row">${typePill(i,'owner-type-'+i.id)}<span class="grow"></span><span class="pill ${cl}" data-testid="owner-health-${id}"><i></i>${tx}</span></div>
+    <h2 style="overflow-wrap:anywhere"><a href="#integration-${id}" data-testid="owner-open-${id}">${esc(ownerName(i))}</a></h2>
+    <p class="small muted">${OWN_SUB[k]} · <span data-testid="owner-repos-${id}">${repoCount(n)}</span></p>
+    <dl><div><dt>Last event</dt><dd data-ago="${id}">${ago(ownerLast(i))}</dd></div><div><dt>Today</dt><dd>${num(i.today)}</dd></div><div><dt>Rejected</dt><dd>${num(i.err)}</dd></div></dl>
+    <div class="row"><a href="#integration-${id}"><button class="primary" tabindex="-1">Repos</button></a><a href="#setup-${id}"><button tabindex="-1">Setup guide</button></a><button data-pause="${id}">${i.state==='paused'?'Resume':'Pause'}</button><button class="quiet" data-rotate="${id}">Rotate secret</button></div></div>`; }
+function plainCard(i){ const [cl,tx]=stateOf(i); return `<div class="panel icard" style="border-top-color:${KCOL[i.kind]}"><div class="row"><h2 class="grow">${esc(i.name)}</h2><span class="pill ${cl}"><i></i>${tx}</span></div>
     <dl><div><dt>Last event</dt><dd data-ago="${i.id}">${ago(i.last)}</dd></div><div><dt>Today</dt><dd>${i.today}</dd></div><div><dt>Rejected</dt><dd>${i.err}</dd></div></dl>
-    <div class="row"><a href="#setup-${i.id}"><button class="primary" tabindex="-1">Setup guide</button></a><button data-pause="${i.id}">${i.state==='paused'?'Resume':'Pause'}</button><button class="quiet" data-rotate="${i.id}">Rotate secret</button></div></div>`; }).join('')
-   +`<div class="panel icard add"><h2>Add an integration</h2><p class="small muted">Pick a platform to open its tutorial.</p><div class="row">${Object.keys(KIND).map(k=>`<a href="#setup-new-${k}"><button tabindex="-1"><span class="kind k-${k}" style="margin-right:6px"></span>${KIND[k].label}</button></a>`).join('')}</div></div>`; }
-$('icards').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.target.dataset.rotate; if(p&&LIVE){ toast('Pause is not available yet. Rotate the secret to cut a sender off.'); return; } if(p){ const i=INTS.find(x=>x.id===p); i.state=i.state==='paused'?(i.last?'ok':'waiting'):'paused'; paintIntegrations(); paintHealth(); toast(i.name+(i.state==='paused'?' paused':' resumed')); } if(r&&LIVE){ liveRotate(r); return; } if(r) toast('New secret generated. Update it on the platform side.'); });
+    <div class="row"><a href="#setup-${i.id}"><button class="primary" tabindex="-1">Setup guide</button></a><button data-pause="${i.id}">${i.state==='paused'?'Resume':'Pause'}</button><button class="quiet" data-rotate="${i.id}">Rotate secret</button></div></div>`; }
+function paintIntegrations(){ $('n-int').textContent=INTS.length; placeMark();
+  $('igroups').innerHTML=Object.keys(KIND).map(k=>{ const list=INTS.filter(i=>i.kind===k); if(!list.length) return ''; const n=list.length, unit=k==='github'?'owner':'integration';
+    return `<section data-testid="igroup-${k}" aria-labelledby="ig-${k}"><div class="row"><span class="kind k-${k}"></span><h2 id="ig-${k}">${KIND[k].label}</h2><span class="small muted">${n} ${unit}${n===1?'':'s'}</span></div><div class="cards" style="margin-top:10px">${list.map(k==='github'?ownerCard:plainCard).join('')}</div></section>`; }).join(''); }
+/* "Add an integration" is rendered once: the create form lives in it and must survive every repaint of the list */
+function renderAdd(){ const radio=(v,t,d)=>`<label class="panel pad row" style="box-shadow:none;flex-direction:row;color:var(--ink);font-size:14px;cursor:pointer"><input type="radio" name="ot" value="${v}" data-testid="gh-owner-type-${v}"><span class="grow"><b style="font-weight:600">${t}</b><span class="small muted" style="display:block">${d}</span></span></label>`;
+  $('iadd').innerHTML=`<div class="panel icard add"><h2>Add an integration</h2><p class="small muted">Pick a platform to open its tutorial.</p><div class="row"><button type="button" data-testid="gh-create-open" aria-expanded="false" aria-controls="gh-create"><span class="kind k-github" style="margin-right:6px"></span>GitHub</button>${Object.keys(KIND).filter(k=>k!=='github').map(k=>`<a href="#setup-new-${k}"><button tabindex="-1"><span class="kind k-${k}" style="margin-right:6px"></span>${KIND[k].label}</button></a>`).join('')}</div>
+    <form id="gh-create" data-testid="gh-create-form" class="stackf" novalidate hidden>
+      <fieldset style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"><legend class="eyebrow">Who owns the repos?</legend>
+        ${radio('user','Personal account','GitHub has no account-wide webhook, so each repo gets its own. All of them share one URL and secret.')}
+        ${radio('organization','Organization','One webhook on the organization covers every repo, including new ones.')}</fieldset>
+      <label>GitHub owner<input type="text" id="gh-owner" data-testid="gh-owner-name" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-username | your-org" aria-describedby="gh-owner-help gh-owner-err"></label>
+      <p class="small muted" id="gh-owner-help">As in github.com/<b>owner</b>. Shown as “GitHub · <span id="gh-owner-prev">owner</span>”.</p>
+      <p class="small" id="gh-owner-err" data-testid="gh-owner-error" role="alert" style="color:var(--bad)" hidden></p>
+      <div class="row"><button class="primary" data-testid="gh-create-submit">Connect owner</button><button type="button" class="quiet" data-testid="gh-create-cancel">Cancel</button></div></form></div>`; }
+const GH_NAME_RE=/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+let ghCreateWanted=false;
+const ghOwnerClean=v=>v.trim().replace(/^@/,'').replace(/^https?:\/\/(?:www\.)?github\.com\//i,'').replace(/^@/,'').replace(/\/+$/,'');
+function ghCreateErr(html,el){ const e=$('gh-owner-err'); e.innerHTML=html; e.hidden=false; if(el){ if(el.id==='gh-owner') el.setAttribute('aria-invalid','true'); el.focus(); } }
+function ghCreateClearErr(){ $('gh-owner-err').hidden=true; $('gh-owner-err').textContent=''; $('gh-owner').removeAttribute('aria-invalid'); document.querySelectorAll('#gh-create input[type=radio]').forEach(r=>r.removeAttribute('aria-invalid')); }
+function openGhCreate(){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f||!b) return; f.hidden=false; b.setAttribute('aria-expanded','true'); f.querySelector('input[type=radio]').focus({preventScroll:true}); f.closest('.icard').scrollIntoView({block:'nearest',behavior:isStill()?'auto':'smooth'}); }
+function closeGhCreate(refocus){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f) return; f.reset(); ghCreateClearErr(); $('gh-owner').placeholder='your-username | your-org'; $('gh-owner-prev').textContent='owner'; f.hidden=true; b.setAttribute('aria-expanded','false'); const s=f.querySelector('[data-testid=gh-create-submit]'); s.disabled=false; s.removeAttribute('aria-busy'); s.textContent='Connect owner'; if(refocus) b.focus(); }
+async function ghCreateSubmit(){ const f=$('gh-create'), sel=f.querySelector('input[name=ot]:checked'), owner=ghOwnerClean($('gh-owner').value), field=$('gh-owner');
+  if(!sel) return ghCreateErr('Choose personal account or organization.',f.querySelector('input[type=radio]'));
+  if(!owner) return ghCreateErr('Enter the GitHub owner name.',field);
+  if(!GH_NAME_RE.test(owner)) return ghCreateErr('That isn’t a GitHub name. Use letters, numbers and single hyphens, up to 39 characters.',field);
+  const dupMsg=x=>ghCreateErr(`${esc(owner)} is already connected.${x?` <a href="#integration-${esc(x.id)}">Open it</a>`:''}`,field), dup=INTS.find(x=>x.kind==='github'&&(x.org||'').toLowerCase()===owner.toLowerCase());
+  if(dup) return dupMsg(dup);
+  const ownerType=sel.value, btn=f.querySelector('[data-testid=gh-create-submit]'); btn.disabled=true; btn.setAttribute('aria-busy','true'); btn.textContent='Connecting…'; const undo=()=>{ btn.disabled=false; btn.removeAttribute('aria-busy'); btn.textContent='Connect owner'; };
+  let rec;
+  if(LIVE){ const r=await apiCall('POST','/api/admin/integrations',{kind:'github',name:'GitHub · '+owner,org:owner,ownerType});
+    if(!r.ok){ undo(); if(r.status===409) return dupMsg(INTS.find(x=>x.kind==='github'&&(x.org||'').toLowerCase()===owner.toLowerCase())); toast(r.data&&r.data.error||'Could not create the integration'); return; }
+    rec=mapInt(r.data.integration); rec.token=r.data.token; }
+  else { let id='gh-'+owner.toLowerCase(), n=1; while(INTS.some(x=>x.id===id)) id='gh-'+owner.toLowerCase()+'-'+(++n); rec={id,kind:'github',name:'GitHub · '+owner,org:owner,ownerType,state:'waiting',today:0,err:0,last:0,events:[],repos:[]}; }
+  INTS.push(rec); fillFilters(); paintIntegrations(); paintHealth(); closeGhCreate(false); location.hash=(ownerType==='user'?'#integration-':'#setup-')+rec.id; }
+$('iadd').addEventListener('click',e=>{ const b=e.target.closest('[data-testid=gh-create-open]'); if(b){ if($('gh-create').hidden) openGhCreate(); else closeGhCreate(true); return; } if(e.target.closest('[data-testid=gh-create-cancel]')) closeGhCreate(true); });
+$('iadd').addEventListener('submit',e=>{ e.preventDefault(); ghCreateClearErr(); ghCreateSubmit(); });
+$('iadd').addEventListener('input',e=>{ if(e.target.id!=='gh-owner') return; ghCreateClearErr(); $('gh-owner-prev').textContent=ghOwnerClean(e.target.value)||'owner'; });
+$('iadd').addEventListener('change',e=>{ if(e.target.name!=='ot') return; ghCreateClearErr(); $('gh-owner').placeholder=e.target.value==='user'?'your-username':'your-org'; });
+$('iadd').addEventListener('keydown',e=>{ if(e.key==='Escape'&&e.target.closest('#gh-create')){ e.preventDefault(); closeGhCreate(true); } });
+$('igroups').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.target.dataset.rotate; if(p&&LIVE){ toast('Pause is not available yet. Rotate the secret to cut a sender off.'); return; } if(p){ const i=INTS.find(x=>x.id===p); i.state=i.state==='paused'?(lastOf(i)?'ok':'waiting'):'paused'; paintIntegrations(); paintHealth(); toast(i.name+(i.state==='paused'?' paused':' resumed')); } if(r&&LIVE){ liveRotate(r); return; } if(r) toast('New secret generated. Update it on the platform side.'); });
 
 /* ============================ setup ============================ */
 let su=null, wait=null;
@@ -611,11 +702,11 @@ const secLabel=i=>i.kind==='github'?'Webhook secret':'BRAIN_TOWN_TOKEN';
 const secRowHidden=i=>`<span class="small muted sec-note" data-testid="su-sec-hidden">Hidden. Shown once when created.${i.hint?' Ends in '+esc(i.hint)+'.':''}</span><button type="button" data-rotate-sec data-testid="su-sec-rotate">Rotate and copy</button>`;
 const secRowConfirm=()=>`<span class="small muted sec-note" id="su-sec-warn">The current secret stops working right away.</span><button type="button" class="primary" aria-describedby="su-sec-warn" data-rotate-go data-testid="su-sec-rotate-confirm">Rotate now</button><button type="button" aria-describedby="su-sec-warn" data-rotate-cancel data-testid="su-sec-rotate-cancel">Cancel</button>`;
 function secHTML(i){ const label=secLabel(i);
-  if(i.kind==='github'&&!i.token) return ghSecHTML(label);
+  if(i.kind==='github'&&!i.token) return ghSecHTML(label,'su');
   if(LIVE&&!i.token) return `<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row">${secRowHidden(i)}</div></div>`;
   return field(label,secretOf(i),'su-sec',true); }
-function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true,events:[]}; }
-  ghSecClear(); ghPopClose(false); su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
+function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&id!=='new-github'&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true,events:[]}; }
+  ghSecClear('su'); ghPopClose(false); su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
   $('su-title').textContent=i.name; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;
   const steps={
     github:['In GitHub, open the organization, then Settings, Webhooks, Add webhook.','Paste the payload URL below. Set content type to <code>application/json</code>.','Paste the secret below into the Secret field.','Choose “Let me select individual events” and tick the events below. Tap ⋯ on any event to see what it becomes in town.','Click Add webhook. GitHub sends a ping; this step ticks and each event below shows ✓ or ⚠.'],
@@ -623,6 +714,7 @@ function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWit
     gaos:['Copy the task file below into the GAOS repo and hand it to the agent or developer working there.','It adds an outbound event emitter that posts whenever a product or task changes state.','Set <code>BRAIN_TOWN_URL</code>, <code>BRAIN_TOWN_TOKEN</code> and <code>BRAIN_TOWN_ENABLED=true</code> in GAOS, using the values below.','On Products and visibility, choose which GAOS products are public and which town building each one uses.','Create or move one task in GAOS. This page ticks the last step when it arrives.'],
     site:['Copy the task file below into the site repo and hand it to the agent or developer working there.','Part 1 adds a feed. Paste its URL in the field below and Brain Town starts pulling every 5 minutes.','Part 2 adds a publish hook and Part 3 a visit beacon that reports only the page and the visitor’s country. Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> in the server secrets.','Check that <code>https://mfardiansyah.id/office</code> loads. The pendopo in town links to it.','Publish one article. This page ticks the last step when it arrives.'],
   }[k];
+  if(k==='github'&&ownerKind(i)==='user') steps[0]=`In GitHub, open one of ${esc(ownerName(i))}’s repos, then Settings, Webhooks, Add webhook. Repeat for each repo, or run the script on the <a href="#integration-${esc(i.id)}">owner page</a>.`;
   $('su-steps').innerHTML=steps.map((s,n)=>`<li class="${(i.last||(k==='github'&&i.events&&i.events.length))&&n===steps.length-1?'done':''}"><div>${s}${k==='github'&&n===3?ghBoxHTML(i):''}</div></li>`).join('');
   let extra=field(k==='github'?'Payload URL':'BRAIN_TOWN_URL',url,'su-url')+`<div id="su-sec-wrap">${secHTML(i)}</div>`;
   if(k==='site') extra+=`<label>Feed URL to pull (optional)<input type="text" id="su-feed" value="https://mfardiansyah.id/feed.json"></label>`;
@@ -637,7 +729,7 @@ function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWit
   }[k];
   $('su-map').innerHTML=`<h3 id="su-map-title">What becomes what</h3><table style="margin-top:6px"><thead><tr><th>${K.label} sends</th><th>Town event</th></tr></thead><tbody>${maps.map(([a,b,c])=>`<tr><td>${a}</td><td class="t">${b.replace(/\./g,'.<wbr>')}${typeof c==='number'?(c?'<span class="muted"> · grouped</span>':''):c?`<span class="su-note">${c}</span>`:''}</td></tr>`).join('')}</tbody></table>${k==='github'?'<p class="small muted" style="margin-top:8px">Grouped: deliveries for the same thing within 15 s become one town event with a count. Comment text, commit messages and logins are never stored.</p>':''}`;
   const gh=k==='github'; $('su-test').hidden=gh&&LIVE; $('su-test-row').hidden=gh&&LIVE; $('gh-wait-extra').hidden=!(gh&&LIVE); $('su-test').textContent=gh&&!LIVE?'Simulate a ping (demo)':'Send test event';
-  $('gh-wait-links').innerHTML=gh?(i.org?`<a class="small" href="https://github.com/organizations/${encodeURIComponent(i.org)}/settings/hooks" target="_blank" rel="noopener" data-testid="gh-open-hooks">Open webhooks in GitHub</a>`:'')+'<a class="small" href="#events">See deliveries</a>':'';
+  $('gh-wait-links').innerHTML=gh?(i.org?(ownerKind(i)==='user'?`<a class="small" href="https://github.com/${encodeURIComponent(i.org)}?tab=repositories" target="_blank" rel="noopener" data-testid="gh-open-hooks">Open ${esc(i.org)}’s repos in GitHub</a>`:`<a class="small" href="https://github.com/organizations/${encodeURIComponent(i.org)}/settings/hooks" target="_blank" rel="noopener" data-testid="gh-open-hooks">Open webhooks in GitHub</a>`):'')+'<a class="small" href="#events">See deliveries</a>':'';
   if(gh){ ghPaint(false); ghPreviewInit(i); } else $('gh-preview').hidden=true;
   wait=new Strip($('waitcv'),[k],false); wait.add(k,!i.last); setWait(i);
 }
@@ -659,8 +751,8 @@ async function secRotate(){ const i=su, row=$('su-sec-row'); if(!i||!row) return
   toast(ok?(i.kind==='github'?'New secret copied. Update it in GitHub.':`New token copied. Update BRAIN_TOWN_TOKEN in ${KIND[i.kind].label}.`):'New secret is ready, but copy was blocked. Press Copy to copy it.'); }
 $('su-extra').addEventListener('keydown',e=>{ if(e.key==='Escape'&&e.target.closest&&e.target.closest('#su-sec-row')&&$('su-sec-row').querySelector('[data-rotate-cancel]:not(:disabled)')){ e.preventDefault(); secRow('hidden','[data-rotate-sec]'); } });
 $('su-extra').addEventListener('click',e=>{ const t=e.target; if(!t.dataset) return;
-  if(t.dataset.ghShow!==undefined){ ghSecShow(t); return; }
-  if(t.dataset.ghCopy!==undefined){ ghSecCopy(); return; }
+  if(t.dataset.ghShow!==undefined){ ghSecShow(t,'su',su); return; }
+  if(t.dataset.ghCopy!==undefined){ ghSecCopy('su',su); return; }
   if(t.dataset.rotateSec!==undefined){ secRow('confirm','[data-rotate-cancel]'); return; }
   if(t.dataset.rotateCancel!==undefined){ secRow('hidden','[data-rotate-sec]'); return; }
   if(t.dataset.rotateGo!==undefined){ secRotate(); return; }
@@ -824,25 +916,108 @@ async function ghRefetch(i,ping){ const wait=2000-(Date.now()-(ghFetchAt[i.id]||
 function ghLive(e,i){ if(e.st!=='ok') return; if(e.type!=='ping'&&(su!==i||curPage!=='setup')) return; if(e.type!=='ping'){ ghRefetch(i,false); return; }
   const evs=e.data&&e.data.data&&e.data.data.events; if(Array.isArray(evs)){ i.events=evs.slice(); ghAfter(i,true); } else ghRefetch(i,true); }
 
-/* github secret: never in the DOM before Show or Copy */
-document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden') ghSecClear(); });
-const GH_PH='whsec_•••••••••••••••• (hidden)'; let ghSecT=0;
-const ghSecHTML=label=>`<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row"><input type="text" readonly value="" placeholder="${GH_PH}" id="su-sec" data-testid="su-sec" aria-label="Webhook secret, hidden"><button type="button" data-gh-show aria-pressed="false" data-testid="su-sec-show">Show</button><button type="button" data-gh-copy data-testid="su-sec-copy">Copy</button></div></div>`;
-function ghSecClear(){ clearTimeout(ghSecT); const f=$('su-sec'), b=document.querySelector('[data-gh-show]'); if(!f||!b) return; f.value=''; f.placeholder=GH_PH; f.setAttribute('aria-label','Webhook secret, hidden'); b.textContent='Show'; b.setAttribute('aria-pressed','false'); b.removeAttribute('aria-busy'); b.disabled=false; }
-async function ghFetchSecret(){ const i=su; if(!LIVE) return secretOf(i); const r=await apiCall('GET','/api/admin/integrations/'+encodeURIComponent(i.id)+'/secret');
+/* github secret: never in the DOM before Show or Copy. p = 'su' (setup page) or 'own' (owner page) */
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='hidden'){ ghSecClear('su'); ghSecClear('own'); } });
+const GH_PH='whsec_•••••••••••••••• (hidden)', ghSecT={su:0,own:0}, ghCur=p=>p==='own'?own:su, ghShowBtn=p=>{ const r=$(p+'-sec-row'); return r&&r.querySelector('[data-gh-show]'); };
+const ghSecHTML=(label,p='su')=>`<div><span class="small muted">${label}</span><div class="copy" id="${p}-sec-row"><input type="text" readonly value="" placeholder="${GH_PH}" id="${p}-sec" data-testid="${p}-sec" aria-label="Webhook secret, hidden"><button type="button" data-gh-show aria-pressed="false" data-testid="${p}-sec-show">Show</button><button type="button" data-gh-copy data-testid="${p}-sec-copy">Copy</button></div></div>`;
+function ghSecClear(p='su'){ clearTimeout(ghSecT[p]); const f=$(p+'-sec'), b=ghShowBtn(p); if(!f||!b) return; f.value=''; f.placeholder=GH_PH; f.setAttribute('aria-label','Webhook secret, hidden'); b.textContent='Show'; b.setAttribute('aria-pressed','false'); b.removeAttribute('aria-busy'); b.disabled=false; }
+async function ghFetchSecret(i){ if(i.token) return i.token; if(!LIVE) return secretOf(i); const r=await apiCall('GET','/api/admin/integrations/'+encodeURIComponent(i.id)+'/secret');
   if(r.ok&&r.data&&typeof r.data.secret==='string'&&r.data.secret&&!r.data.secret.includes('•')) return r.data.secret; throw r.status||0; }
-function ghSecFail(st){ if(st===503){ const row=$('su-sec-row'); if(!row||!su) return; row.innerHTML=secRowHidden(su); if(!row.parentElement.querySelector('[data-testid=su-sec-503]')) row.insertAdjacentHTML('afterend','<p class="small muted" data-testid="su-sec-503">The server has no secret key set, so this secret can’t be shown again. Rotate to get a new one, then paste it into GitHub.</p>'); return; }
+function ghSecFail(st,p='su',i=su){ if(st===503){ const row=$(p+'-sec-row'); if(!row||!i) return;
+    if(p==='own'){ row.innerHTML=`<span class="small muted sec-note" data-testid="own-sec-hidden">Hidden. Shown once when created.</span>`; if(!row.parentElement.querySelector('[data-testid=own-sec-503]')) row.insertAdjacentHTML('afterend',`<p class="small muted" data-testid="own-sec-503">The server has no secret key set, so this secret can’t be shown again. Rotate it from the <a href="#setup-${esc(i.id)}">setup guide</a>, then update it in GitHub.</p>`); return; }
+    row.innerHTML=secRowHidden(i); if(!row.parentElement.querySelector('[data-testid=su-sec-503]')) row.insertAdjacentHTML('afterend','<p class="small muted" data-testid="su-sec-503">The server has no secret key set, so this secret can’t be shown again. Rotate to get a new one, then paste it into GitHub.</p>'); return; }
   toast(st===401?'Your session ended. Sign in again to see the secret.':'Could not load the secret. Try again.'); }
-async function ghSecShow(b){ if(b.getAttribute('aria-pressed')==='true'){ ghSecClear(); return; }
-  const i=su; b.setAttribute('aria-busy','true'); b.disabled=true; b.textContent='Loading…';
-  try{ const s=await ghFetchSecret(), f=$('su-sec'); if(su!==i||!f||!b.isConnected) return; f.value=s; f.setAttribute('aria-label','Webhook secret'); b.textContent='Hide'; b.setAttribute('aria-pressed','true'); b.removeAttribute('aria-busy'); b.disabled=false; b.focus(); clearTimeout(ghSecT); ghSecT=setTimeout(ghSecClear,60000); }
-  catch(st){ if(su!==i||!b.isConnected) return; b.textContent='Show'; b.removeAttribute('aria-busy'); b.disabled=false; ghSecFail(typeof st==='number'?st:0); if(st!==503&&b.isConnected) b.focus(); } }
-async function ghSecCopy(){ const f=$('su-sec'); if(f&&f.value&&!f.value.includes('•')){ copy(f.value,'Webhook secret'); return; } let err=0;
+function ghSecReveal(p,f,b,s){ f.value=s; f.setAttribute('aria-label','Webhook secret'); b.textContent='Hide'; b.setAttribute('aria-pressed','true'); b.removeAttribute('aria-busy'); b.disabled=false; clearTimeout(ghSecT[p]); ghSecT[p]=setTimeout(()=>ghSecClear(p),60000); }
+async function ghSecShow(b,p='su',i=ghCur(p)){ if(b.getAttribute('aria-pressed')==='true'){ ghSecClear(p); return; }
+  b.setAttribute('aria-busy','true'); b.disabled=true; b.textContent='Loading…';
+  try{ const s=await ghFetchSecret(i), f=$(p+'-sec'); if(ghCur(p)!==i||!f||!b.isConnected) return; ghSecReveal(p,f,b,s); b.focus(); }
+  catch(st){ if(ghCur(p)!==i||!b.isConnected) return; b.textContent='Show'; b.removeAttribute('aria-busy'); b.disabled=false; ghSecFail(typeof st==='number'?st:0,p,i); if(st!==503&&b.isConnected) b.focus(); } }
+async function ghSecCopy(p='su',i=ghCur(p)){ const f=$(p+'-sec'); if(f&&f.value&&!f.value.includes('•')){ copy(f.value,'Webhook secret'); return; } let err=0;
   let got=null;
-  try{ if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){ const p=ghFetchSecret().then(s=>{ got=s; return new Blob([s],{type:'text/plain'}); },e=>{ err=e; throw e; }); await navigator.clipboard.write([new ClipboardItem({'text/plain':p})]); }
-    else { const s=await ghFetchSecret(); got=s; await navigator.clipboard.writeText(s); }
+  try{ if(window.ClipboardItem&&navigator.clipboard&&navigator.clipboard.write){ const pr=ghFetchSecret(i).then(s=>{ got=s; return new Blob([s],{type:'text/plain'}); },e=>{ err=e; throw e; }); await navigator.clipboard.write([new ClipboardItem({'text/plain':pr})]); }
+    else { const s=await ghFetchSecret(i); got=s; await navigator.clipboard.writeText(s); }
     toast('Webhook secret copied'); }
-  catch(e){ if(got!==null){ const f2=$('su-sec'), b=document.querySelector('[data-gh-show]'); if(f2&&b&&b.isConnected){ f2.value=got; f2.setAttribute('aria-label','Webhook secret'); b.textContent='Hide'; b.setAttribute('aria-pressed','true'); clearTimeout(ghSecT); ghSecT=setTimeout(ghSecClear,60000); f2.focus(); f2.select(); } toast('Copy was blocked. Select the text and copy it by hand.'); } else ghSecFail(typeof err==='number'&&err?err:0); } }
+  catch(e){ if(got!==null){ const f2=$(p+'-sec'), b=ghShowBtn(p); if(f2&&b&&b.isConnected){ ghSecReveal(p,f2,b,got); f2.focus(); f2.select(); } toast('Copy was blocked. Select the text and copy it by hand.'); } else ghSecFail(typeof err==='number'&&err?err:0,p,i); } }
+
+/* ============================ GitHub owner page (#integration-<id>) ============================ */
+let own=null, ownBusy=0, ownDirty=false, ownT=0, ownAt=0;
+const OWN_LEDE={user:'Personal account. GitHub has no account-wide webhook, so each repo has its own, and all of them use the same payload URL and secret.',organization:'Organization. One webhook on the organization sends events from every repo, including new ones.',unknown:'Owner type not set. This integration was created before owner types existed, so it is treated as an organization.'};
+const ownUrl=i=>`${LIVE?location.origin:HOST}/ingest/github/${i.id}`;
+const ownEmpty={user:'No repo has sent a ping yet. Add the webhook to a repo with the script below; it appears here after GitHub’s ping.',organization:'No repo has sent an event yet. Once the organization webhook is saved, each repo appears here after its first delivery.'};
+function mapRepo(r){ return {name:r.name,private:!!r.private,events:r.hookEvents||[],last:ms(r.lastEventAt),lastErr:ms(r.lastRejectedAt),today:r.today||0,rejected:r.rejected||0,product:r.product||'',vis:r.visibility||'public',alias:r.alias||'',aliasCustom:!!r.aliasCustom,defaultAlias:r.defaultAlias||''}; }
+const orgHidden=i=>{ const o=ORGS.find(o=>o.id===i.org); return !!o&&o.vis==='hidden'; };
+function repoEvents(r){ const ev=r.events, n=esc(r.name); if(!ev.length) return '<span class="muted">No ping yet</span>';
+  const miss=ghMissing(ev); let t;
+  if(ev.includes('*')) t='<span aria-hidden="true">✓</span> Every event'; else if(!miss.length) t='<span aria-hidden="true">✓</span> Issues and pull requests';
+  else t=`<span class="ev-miss"><span aria-hidden="true">⚠</span> Missing: ${miss.map(id=>GH_BY[id].name).join(' and ')}</span>`;
+  return t+`<details data-testid="repo-events-more-${n}"><summary class="small">All ${ev.length} event${ev.length===1?'':'s'}</summary><p class="small mono" style="margin-top:4px;overflow-wrap:anywhere">${esc(ev.join(', '))}</p></details>`; }
+function repoRow(i,r,forced){ const n=esc(r.name), hint=`rh-${n}`, none=r.product==='', effHidden=forced||r.vis==='hidden', canEdit=effHidden&&!none;
+  const vis=forced?`<span class="pill off" data-testid="repo-vis-${n}">hidden by its org</span>`:visSwitch('prod',r.product,r.vis,{label:r.name,tid:`repo-vis-${n}`,off:none,desc:hint});
+  let val='',ph=r.name; if(none) ph='—'; else if(effHidden){ if(r.aliasCustom){ val=r.alias; ph=r.defaultAlias; } else ph=r.alias; }
+  const d=r.rejected>0?' style="color:var(--bad)"':'';
+  return `<tr data-testid="repo-row-${n}" data-repo="${n}"><td class="lead" style="overflow-wrap:anywhere"><b style="font-weight:600">${n}</b>${r.private?' <span class="pill off">private</span>':''}${none?`<span class="small muted" id="${hint}" data-testid="repo-hint-${n}" style="display:block">Not in the town yet. Visibility and public name can be set after its next ping or event.</span>`:''}</td>`
+   +`<td data-l="Visibility">${vis}</td><td data-l="Public name"><input type="text" data-repo-alias data-testid="repo-alias-${n}" aria-label="Public name in town for ${n}" value="${esc(val)}" placeholder="${esc(ph)}"${none?` aria-describedby="${hint}"`:''}${canEdit?'':' disabled'} autocomplete="off" spellcheck="false"></td>`
+   +`<td class="t" data-l="Last event"><span data-at="${r.last}">${ago(r.last)}</span></td><td class="t" data-l="Today">${num(r.today)}</td><td class="t" data-l="Rejected"${d}>${num(r.rejected)}</td><td data-l="Events" data-testid="repo-events-${n}">${repoEvents(r)}</td></tr>`; }
+function paintOwnerHead(){ const i=own; if(!i) return; const k=ownerKind(i), pg=document.querySelector('.page[data-page=owner]'); pg.dataset.ownerId=i.id; pg.dataset.ownerType=k;
+  $('own-title').textContent=ownerName(i); $('own-lede').textContent=OWN_LEDE[k]; const t=$('own-type'); t.className='pill'+(k==='unknown'?' off':''); t.dataset.ownerType=k; t.textContent=OWN_TYPE[k];
+  const [cl,tx]=ownerState(i), h=$('own-pill'); h.className='pill '+cl; h.innerHTML='<i></i>'+tx; $('own-hook-note').textContent=k==='user'?'Use this payload URL and secret in every repo’s webhook.':'Set once on the organization.'; }
+function paintOwnerTable(o={}){ const i=own, ob=$('own-body'); if(!i) return;
+  const a=document.activeElement; if(!o.force&&(ownBusy||(ob.contains(a)&&a.tagName==='INPUT'))){ ownDirty=true; return; } ownDirty=false;
+  let tid=ob.contains(a)&&a.dataset.testid||null; if(!tid&&(!a||a===document.body)) tid=o.focus||null;
+  const forced=orgHidden(i), k=ownerKind(i), repos=i.repos||[];
+  ob.dataset.empty=ownEmpty[k==='user'?'user':'organization']; ob.innerHTML=repos.map(r=>repoRow(i,r,forced)).join('');
+  $('own-add').style.order=repos.length?'4':'2';
+  if(tid){ const el=[...ob.querySelectorAll('[data-testid]')].find(x=>x.dataset.testid===tid);
+    if(el&&!el.disabled) el.focus(); else { const row=el?el.closest('tr'):ob.querySelector(`tr[data-repo="${CSS.escape(o.row||'')}"]`); const alt=row&&row.querySelector('.switch button:not(:disabled)'); if(alt) alt.focus(); } } }
+async function refetchOwner(id,o={}){ const r=await apiCall('GET','/api/admin/integrations');
+  if(r.ok&&Array.isArray(r.data)){ const row=r.data.find(x=>x.id===id), cur=INTS.find(x=>x.id===id); if(row&&cur) Object.assign(cur,mapInt(row)); }
+  if(own&&own.id===id&&curPage==='owner'){ paintOwnerHead(); paintOwnerTable(o); } paintIntegrations(); paintHealth(); }
+function ownLive(i){ const wait=2000-(Date.now()-ownAt); if(wait>0){ if(!ownT) ownT=setTimeout(()=>{ ownT=0; if(own===i&&curPage==='owner') ownLive(i); },wait); return; } ownAt=Date.now(); refetchOwner(i.id); }
+function ghScript(i,raw){ const names=(raw||'').split(/\s+/).filter(t=>/^[A-Za-z0-9._-]{1,100}$/.test(t)), repos=names.length?names:['your-repo'], owner=ownerName(i).replace(/[^A-Za-z0-9._-]/g,'')||'owner', url=ownUrl(i).replace(/[^A-Za-z0-9._~:\/-]/g,''), ev=GH_EVENTS.map(e=>`-f "events[]=${e.id}"`).join(' ');
+  return `# Brain Town: add the webhook to each repo of ${owner}\nread -rs -p "Brain Town webhook secret: " BT_SECRET; echo\nfor repo in ${repos.join(' ')}; do\n  gh api --method POST "repos/${owner}/$repo/hooks" \\\n    -f name=web -F active=true \\\n    -f "config[url]=${url}" -f "config[content_type]=json" \\\n    -f "config[secret]=$BT_SECRET" \\\n    ${ev} \\\n    >/dev/null && echo "added: $repo" || echo "skipped: $repo"\ndone\nunset BT_SECRET`; }
+function ownAddHTML(i){ const k=ownerKind(i), o=esc(ownerName(i)), id=esc(i.id);
+  if(k==='user') return `<h2>Add a repo</h2><p class="small muted">GitHub has no webhook for a whole personal account, so each repo needs its own. This script adds one to every repo you list, with the payload URL above. It asks for the secret without showing it; copy the secret above first. Needs the GitHub CLI, signed in as ${o}.</p>
+    <label>Repos to add (separated by spaces)<input type="text" data-testid="add-repo-names" placeholder="repo-one repo-two" autocomplete="off" spellcheck="false"></label>
+    <pre data-testid="add-repo-script" id="own-script"></pre>
+    <div class="row"><button class="primary" data-testid="add-repo-copy">Copy script</button>${LIVE?'':'<button data-testid="add-repo-demo-ping">Simulate a repo ping (demo)</button>'}</div>
+    <p class="small muted">Running it again is safe: GitHub answers “Hook already exists” for a repo that already has it, and the script moves on.</p>`;
+  return `<h2>Add a repo</h2><p class="small muted">Nothing to add per repo: the organization webhook covers every repo in ${o}, including new ones.</p>
+    <ol class="steps"><li><div>In GitHub, open ${o}, then Settings, Webhooks.</div></li><li><div>If the Brain Town webhook is not there yet, add it with the payload URL and secret above.</div></li><li><div>A repo appears in the table after its first delivery.</div></li></ol>
+    <div class="row"><a href="#setup-${id}" data-testid="add-repo-setup-link"><button class="primary" tabindex="-1">Open the setup guide</button></a><a class="small" href="https://github.com/organizations/${encodeURIComponent(ownerName(i))}/settings/hooks" target="_blank" rel="noopener">Open webhooks in GitHub</a></div>`
+    +(k==='unknown'?`<p class="small muted">If ${o} is a personal account, add it again from Integrations as a personal account to get the per-repo script.</p>`:''); }
+function openOwner(id){ const i=INTS.find(x=>x.id===id);
+  if(!i){ location.replace('#integrations'); toast('That integration no longer exists.'); return; }
+  if(i.kind!=='github'){ location.replace('#setup-'+id); return; }
+  own=i; ownDirty=false; ownBusy=0; ghSecClear('own'); $('own-hook').querySelectorAll('[data-testid=own-sec-503]').forEach(x=>x.remove());
+  $('own-url-wrap').innerHTML=field('Payload URL',ownUrl(i),'own-url'); $('own-sec-wrap').innerHTML=ghSecHTML('Webhook secret','own');
+  const add=$('own-add'); add.dataset.ownerType=ownerKind(i)==='user'?'user':'organization'; add.innerHTML=ownAddHTML(i); if(ownerKind(i)==='user') $('own-script').textContent=ghScript(i,'');
+  paintOwnerHead(); paintOwnerTable({force:true}); }
+$('own-hook').addEventListener('click',e=>{ const t=e.target.closest('button'); if(!t||!own) return;
+  if(t.dataset.ghShow!==undefined) ghSecShow(t,'own',own); else if(t.dataset.ghCopy!==undefined) ghSecCopy('own',own);
+  else if(t.dataset.copy){ const f=$(t.dataset.copy); if(f&&f.value) copy(f.value,t.dataset.what); } });
+$('own-add').addEventListener('input',e=>{ if(e.target.dataset.testid==='add-repo-names'&&own) $('own-script').textContent=ghScript(own,e.target.value); });
+$('own-add').addEventListener('click',e=>{ const t=e.target.closest('button'); if(!t||!own) return; const tid=t.dataset.testid;
+  if(tid==='add-repo-copy') copy($('own-script').textContent,'Script');
+  if(tid==='add-repo-demo-ping'&&!LIVE){ let n=1; while(own.repos.some(r=>r.name==='demo-repo-'+n)) n++; const now=Date.now();
+    own.repos.push({name:'demo-repo-'+n,private:false,events:[...GH_DEMO,'pull_request'],last:now,lastErr:0,today:0,rejected:0,product:'',vis:'public',alias:'',aliasCustom:false,defaultAlias:''}); own.repos.sort((a,b)=>a.name<b.name?-1:a.name>b.name?1:0);
+    if(own.state==='waiting') own.state='ok'; own.last=Math.max(own.last||0,now); paintOwnerHead(); paintOwnerTable({force:true}); paintIntegrations(); paintHealth(); toast(`Ping simulated: demo-repo-${n} joined (demo)`); } });
+const ownRepo=tr=>own&&own.repos.find(r=>r.name===tr.dataset.repo);
+$('own-body').addEventListener('click',async e=>{ const b=e.target.closest('button[data-vis]'); if(!b||b.disabled||b.getAttribute('aria-pressed')==='true'||!own) return;
+  const i=own, tr=b.closest('tr'), r=ownRepo(tr); if(!r) return; const v=b.dataset.vis.split(':')[2], tid=b.dataset.testid, msg=r.name+' is now '+v+' in the town';
+  tr.setAttribute('aria-busy','true'); tr.querySelectorAll('.switch button').forEach(x=>x.disabled=true); ownBusy++;
+  try{ if(LIVE){ const ok=await liveSave('prod',r.product,{visibility:v},msg); if(ok) await refetchOwner(i.id,{force:true,focus:tid,row:r.name}); }
+    else { r.vis=v; if(v==='hidden'){ if(r.defaultAlias===r.name) r.defaultAlias='Product '+String.fromCharCode(65+PRODUCTS.findIndex(x=>x.key===r.product)); r.alias=r.defaultAlias; r.aliasCustom=false; } else { r.alias=r.name; r.aliasCustom=false; } const p=PRODUCTS.find(x=>x.key===r.product); if(p){ p.vis=v; p.alias=v==='public'?p.key:r.alias; } paintProducts(); toast(msg); } }
+  finally{ ownBusy--; if(own===i) paintOwnerTable({force:true,focus:tid,row:r.name}); } });
+$('own-body').addEventListener('focusin',e=>{ if(e.target.matches('input[data-repo-alias]')) e.target.dataset.prev=e.target.value; });
+$('own-body').addEventListener('keydown',e=>{ const t=e.target; if(!t.matches||!t.matches('input[data-repo-alias]')) return; if(e.key==='Enter'){ e.preventDefault(); t.blur(); } else if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); t.value=t.dataset.prev||''; t.blur(); } });
+$('own-body').addEventListener('change',async e=>{ const t=e.target; if(!t.matches||!t.matches('input[data-repo-alias]')||!own) return;
+  const i=own, tr=t.closest('tr'), r=ownRepo(tr); if(!r) return; const v=t.value.trim(), prev=t.dataset.prev||'';
+  if((v===''&&!r.aliasCustom)||(v===r.alias&&r.aliasCustom)){ t.value=prev; return; }
+  const reset=v==='', name=r.name; t.readOnly=true; t.setAttribute('aria-busy','true'); ownBusy++; let ok=true;
+  try{ if(LIVE){ ok=await liveSave('prod',r.product,{alias:v},reset?'':'Public name saved'); if(ok){ await refetchOwner(i.id,{force:true}); if(reset){ const nr=i.repos.find(x=>x.name===name); toast('Public name reset to '+(nr?nr.defaultAlias:'its default')); } } }
+    else { const p=PRODUCTS.find(x=>x.key===r.product); if(reset){ r.alias=r.defaultAlias; r.aliasCustom=false; toast('Public name reset to '+r.defaultAlias); } else { r.alias=v; r.aliasCustom=v!==r.defaultAlias; toast('Public name saved'); } if(p) p.alias=r.alias; paintProducts(); } }
+  finally{ ownBusy--; if(!ok&&t.isConnected){ t.value=prev; t.readOnly=false; t.removeAttribute('aria-busy'); t.focus(); } else if(own===i) paintOwnerTable({force:true,row:name}); } });
+$('own-body').addEventListener('focusout',()=>setTimeout(()=>{ if(ownDirty&&!ownBusy&&!$('own-body').contains(document.activeElement)) paintOwnerTable({force:true}); },0));
 
 /* ============================ event log ============================ */
 function fillFilters(){ const s=$('f-int'), v=s.value; s.innerHTML='<option value="">All</option>'+INTS.map(i=>`<option value="${i.id}">${esc(i.name)}</option>`).join(''); s.value=v; }
@@ -858,14 +1033,16 @@ $('ev-body').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-id
 $('dr-x').onclick=()=>$('drawer').classList.remove('on'); addEventListener('keydown',e=>{ if(e.key==='Escape'){ $('drawer').classList.remove('on'); if(ghp.open) ghPopClose(true); } });
 
 /* ============================ products ============================ */
-const visSwitch=(kind,id,v)=>`<span class="switch"><button type="button" data-vis="${kind}:${id}:public" aria-pressed="${v==='public'}">Public</button><button type="button" data-vis="${kind}:${id}:hidden" aria-pressed="${v==='hidden'}">Hidden</button></span>`;
+const visSwitch=(kind,id,v,o={})=>`<span class="switch"${o.tid?` role="group" aria-label="Visibility of ${esc(o.label)}" data-testid="${o.tid}"`:''}>`+['public','hidden'].map(x=>`<button type="button" data-vis="${kind}:${id}:${x}" aria-pressed="${v===x}"${o.tid?` data-testid="${o.tid}-${x}"`:''}${o.off?` disabled aria-describedby="${o.desc}"`:''}>${x==='public'?'Public':'Hidden'}</button>`).join('')+'</span>';
+function demoSyncRepos(){ for(const i of INTS) for(const r of i.repos||[]){ const p=r.product&&PRODUCTS.find(x=>x.key===r.product); if(!p) continue; r.vis=p.vis; r.alias=p.alias;
+    if(p.vis==='hidden'&&r.defaultAlias===r.name&&/^Product [A-Z]$/.test(p.alias)) r.defaultAlias=p.alias; r.aliasCustom=p.vis==='hidden'&&p.alias!==r.defaultAlias; } }
 function paintProducts(){
   $('org-body').innerHTML=ORGS.map(o=>`<tr><td class="lead"><b style="font-weight:600">${o.id}</b></td><td data-l="Visibility">${visSwitch('org',o.id,o.vis)}</td><td data-l="Public name"><input type="text" id="oa-${o.id}" data-alias="org:${o.id}" value="${esc(o.alias)}" aria-label="Public name for ${o.id}" ${o.vis==='public'?'disabled':''}></td><td class="small muted" data-l="Products">${PRODUCTS.filter(p=>p.org===o.id).map(p=>p.key).join(', ')}</td></tr>`).join('');
   $('prod-body').innerHTML=PRODUCTS.map(p=>{ const o=ORGS.find(o=>o.id===p.org), forced=!!o&&o.vis==='hidden'; return `<tr><td class="lead"><b style="font-weight:600">${p.key}</b></td><td class="small" data-l="Sources">${p.src}</td><td class="small" data-l="Org">${p.org?esc(p.org):'<span class="muted">—</span>'}</td><td data-l="Visibility">${forced?'<span class="pill off">hidden by its org</span>':visSwitch('prod',p.key,p.vis)}</td><td data-l="Public name"><input type="text" id="pa-${p.key}" data-alias="prod:${p.key}" value="${esc(p.alias)}" aria-label="Public name for ${p.key}" ${!forced&&p.vis==='public'?'disabled':''}></td><td data-l="Town building"><select id="ph-${p.key}" data-hall="${p.key}" aria-label="Town building for ${p.key}">${HALLS.map(h=>`<option ${h===p.hall?'selected':''}>${h}</option>`).join('')}</select></td></tr>`; }).join('');
   const sample={id:'01JD3X9T2M8Q4W6Z7K5B',type:'issue.opened',int:'gh-sismedika',kind:'github',at:Date.now(),st:'ok',data:{org:'sismedika',repo:'sipreport',number:48,title:'Email bounces for director list'}};
   $('vis-raw').textContent='stored\n'+JSON.stringify(rawView(sample).data,null,2); $('vis-pub').textContent='public stream\n'+JSON.stringify(publicView(sample).data,null,2); }
-document.querySelector('[data-page=products]').addEventListener('click',e=>{ const v=e.target.dataset.vis; if(!v) return; const [kind,id,val]=v.split(':'); if(LIVE){ liveSave(kind,id,{visibility:val},id+' is now '+val+' in the town'); return; } const o=kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id); o.vis=val; if(val==='public') o.alias=kind==='org'?o.id:o.key; else if(o.alias===(o.id||o.key)) o.alias=kind==='org'?'Org '+String.fromCharCode(65+ORGS.indexOf(o)):'Product '+String.fromCharCode(65+PRODUCTS.indexOf(o)); paintProducts(); toast((o.id||o.key)+' is now '+val+' in the town'); });
-document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(LIVE){ if(a){ const [kind,id]=a.split(':'); liveSave(kind,id,{alias:e.target.value.trim()},'Public name saved'); } if(h) liveSave('prod',h,{hall:e.target.value},h+' now shows at '+e.target.value); return; } if(a){ const [kind,id]=a.split(':'); (kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id)).alias=e.target.value.trim()||'Hidden'; paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
+document.querySelector('[data-page=products]').addEventListener('click',e=>{ const v=e.target.dataset.vis; if(!v) return; const [kind,id,val]=v.split(':'); if(LIVE){ liveSave(kind,id,{visibility:val},id+' is now '+val+' in the town'); return; } const o=kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id); o.vis=val; if(val==='public') o.alias=kind==='org'?o.id:o.key; else if(o.alias===(o.id||o.key)) o.alias=kind==='org'?'Org '+String.fromCharCode(65+ORGS.indexOf(o)):'Product '+String.fromCharCode(65+PRODUCTS.indexOf(o)); demoSyncRepos(); paintProducts(); toast((o.id||o.key)+' is now '+val+' in the town'); });
+document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(LIVE){ if(a){ const [kind,id]=a.split(':'); liveSave(kind,id,{alias:e.target.value.trim()},'Public name saved'); } if(h) liveSave('prod',h,{hall:e.target.value},h+' now shows at '+e.target.value); return; } if(a){ const [kind,id]=a.split(':'); (kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id)).alias=e.target.value.trim()||'Hidden'; demoSyncRepos(); paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
 
 /* ============================ settings ============================ */
 function paintDb(){ if(LIVE){ const c=liveStats, rows=c?[['Integration (vertex)',c.Integrations],['Org (vertex)',c.Orgs],['Product (vertex)',c.Products],['Event (vertex, newest 5,000)',c.Events],['Rejected deliveries',c.Rejected]]:[];
@@ -882,21 +1059,23 @@ function ingest(ev){ const i=INTS.find(x=>x.id===ev.int); EVENTS.unshift(ev); if
   if(ev.st==='ok'){ i.today++; i.last=ev.at; stats.events++; buckets[buckets.length-1]++; if(ev.type==='issue.opened') stats.opened++; if(ev.type==='issue.closed') stats.closed++; if(ev.type==='qa.run.finished'){ stats.qaRuns++; if((ev.data.data||ev.data).failed) stats.qaFail++; } if(ev.kind==='gaos'&&ev.type==='task.done') stats.tasks++; if(ev.kind==='site') stats.posts++; if(ev.type!=='ping') strip.add(ev.kind);
     const dot=$('dot-'+i.id); if(dot){ dot.classList.remove('ping'); void dot.offsetWidth; dot.classList.add('ping'); } }
   else { i.err++; i.lastErr=ev.at; }
+  if(ev.kind==='github'&&i.repos&&ev.data){ const r=i.repos.find(x=>x.name===ev.data.repo); if(r){ if(ev.st==='ok'){ r.today++; r.last=ev.at; } else { r.rejected++; r.lastErr=ev.at; } } if(curPage==='owner'&&own===i){ paintOwnerHead(); paintOwnerTable(); } }
   paintTiles(); const tl=$('tail'); tl.prepend(tailRow(ev,true)); while(tl.children.length>14) tl.lastChild.remove();
   if(passes(ev)){ const b=$('ev-body'); b.querySelector(':scope>tr.empty')?.remove(); b.prepend(evRow(ev,true)); while(b.children.length>80) b.lastChild.remove(); } }
 function tick(){ if(!paused&&!LIVE&&!$('app').hidden){ const live=INTS.filter(i=>i.state==='ok'); if(live.length) ingest(makeEvent(pick(live))); } setTimeout(tick,rnd(700,2100)); }
 setInterval(()=>{ buckets.shift(); buckets.push(0); },10000);
-setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(i.last); }); drawChart(); paintDb(); if(LIVE&&++statTick%5===0) refreshStats(); },1000);
-const ORDER=['dashboard','integrations','setup','events','products','prefs']; let curPage=null, swapT=0;
+setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(lastOf(i)); }); document.querySelectorAll('[data-at]').forEach(el=>{ el.textContent=ago(+el.dataset.at); }); drawChart(); paintDb(); if(LIVE&&++statTick%5===0) refreshStats(); },1000);
+const ORDER=['dashboard','integrations','owner','setup','events','products','prefs']; let curPage=null, swapT=0;
 const isStill=()=>document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
 function placeMark(){ const a=document.querySelector('#rail nav a[aria-current=page]'), m=$('navmark'); if(!a){ m.style.width='0'; return; } m.style.width=a.offsetWidth+'px'; m.style.height=a.offsetHeight+'px'; m.style.transform=`translate(${a.offsetLeft}px,${a.offsetTop}px)`; }
-function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'dashboard', page=h.startsWith('setup-')?'setup':h; if(!document.querySelector(`.page[data-page="${page}"]`)){ page=h='dashboard'; }
+function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'dashboard'; if(h==='setup-new-github'){ ghCreateWanted=true; location.replace('#integrations'); return; }
+  let page=h.startsWith('setup-')?'setup':h.startsWith('integration-')?'owner':h; if(!document.querySelector(`.page[data-page="${page}"]`)){ page=h='dashboard'; }
   const pages=[...document.querySelectorAll('.page')], next=pages.find(p=>p.dataset.page===page), prev=curPage&&pages.find(p=>p.dataset.page===curPage);
   const dir=!prev?1:(Math.sign(ORDER.indexOf(page)-ORDER.indexOf(curPage))||1), dx=(dir*26)+'px';
-  document.querySelectorAll('#rail nav a').forEach(a=>{ const on=a.getAttribute('href')==='#'+(page==='setup'?'integrations':page); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); placeMark();
-  $('drawer').classList.remove('on'); ghPopClose(false); ghSecClear(); clearTimeout(swapT);
+  document.querySelectorAll('#rail nav a').forEach(a=>{ const on=a.getAttribute('href')==='#'+(page==='setup'||page==='owner'?'integrations':page); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); placeMark();
+  $('drawer').classList.remove('on'); ghPopClose(false); ghSecClear('su'); ghSecClear('own'); clearTimeout(swapT);
   const swap=()=>{ pages.forEach(p=>p.classList.remove('on','leave','enter')); next.style.setProperty('--dx',dx); next.classList.add('on'); void next.offsetWidth; next.classList.add('enter'); curPage=page;
-    if(page==='setup') openSetup(h.slice(6)); if(page==='integrations') paintIntegrations(); if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
+    if(page==='setup') openSetup(h.slice(6)); if(page==='owner') openOwner(h.slice(12)); if(page==='integrations'){ paintIntegrations(); if(ghCreateWanted){ ghCreateWanted=false; openGhCreate(); } } if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
     window.scrollTo(0,0); swapT=setTimeout(()=>next.classList.remove('enter'),1100); };
   if(prev&&!isStill()){ const w=$('wipe'); w.style.transformOrigin=dir>0?'left':'right'; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); pages.forEach(p=>p.classList.remove('enter')); prev.style.setProperty('--dx',dx); prev.classList.add('leave'); swapT=setTimeout(swap,150); }
   else swap(); }
@@ -917,7 +1096,7 @@ let LIVE=false, liveStats=null, statTick=0;
 async function refreshStats(){ const r=await apiCall('GET','/api/admin/stats'); if(r.ok){ liveStats=r.data; paintDb(); } }
 async function apiCall(method,path,body){ try{ const r=await fetch(path,{method,credentials:'same-origin',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined}); const t=await r.text(); let data=null; try{ data=JSON.parse(t); }catch(_){ return {ok:false,status:r.status===401?401:0,data:null}; } return {ok:r.ok,status:r.status,data}; }catch(_){ return {ok:false,status:0,data:null}; } }
 const ms=t=>t&&!String(t).startsWith('0001')?Date.parse(t):0;
-function mapInt(i){ const last=ms(i.lastEventAt), rej=ms(i.lastRejectedAt); return {id:i.id,kind:i.kind,name:i.name,org:i.org||'',hint:i.tokenHint,events:i.events||[],state:last?'ok':'waiting',today:i.today||0,err:i.errors||0,last,lastErr:rej}; }
+function mapInt(i){ const last=ms(i.lastEventAt), rej=ms(i.lastRejectedAt); return {id:i.id,kind:i.kind,name:i.name,org:i.org||'',ownerType:i.ownerType||'',hint:i.tokenHint,events:i.events||[],state:last?'ok':'waiting',today:i.today||0,err:i.errors||0,last,lastErr:rej,repos:(i.repos||[]).map(mapRepo)}; }
 function sumOf(r){ const p=r.product&&r.product.key||r.product||'', t=r.task||{}, d=r.data||{}; return [p,t.id,t.title||d.title||d.step||d.spec||d.page||'',d.decision||d.to||d.status||''].filter(Boolean).join(' '); }
 function ghSum(r){ const d=r.data||{}, t=r.task||{}, p=r.product&&r.product.key||'', b=[p,t.id?'#'+t.id:''];
   if(r.type==='ping') b.push((d.events||[]).length+' events'); if(d.count!=null) b.push('×'+d.count); if(d.total!=null&&r.type==='repo.starred') b.push('total '+d.total);
@@ -935,12 +1114,12 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;
   const types=['product.upserted','task.created','task.moved','gate.requested','gate.decided','task.claimed','task.qa','task.done','task.failed','qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit','ping','issue.opened','issue.assigned','issue.closed','issue.labeled','issue.subissues','pr.opened','pr.merged','pr.closed','pr.reviewed','issue.commented','pr.checks','ci.run','repo.pushed','ref.created','ref.deleted','repo.labels','discussion.opened','discussion.answered','discussion.commented','repo.starred'];
-  const on=m=>{ if(paused||!m.data) return; const e=mapEv(JSON.parse(m.data)); const i=INTS.find(x=>x.id===e.int); if(!i||EVENTS.some(x=>x.id===e.id&&x.int===e.int)) return; if(i.state==='waiting') i.state='ok'; const first=!i.last; ingest(e); if(e.kind==='github'&&su===i&&curPage==='setup'&&e.st==='ok'){ first?wait.release():wait.add(i.kind); setWait(i); } if(e.kind==='github') ghLive(e,i); paintIntegrations(); paintHealth(); };
+  const on=m=>{ if(paused||!m.data) return; const e=mapEv(JSON.parse(m.data)); const i=INTS.find(x=>x.id===e.int); if(!i||EVENTS.some(x=>x.id===e.id&&x.int===e.int)) return; if(i.state==='waiting') i.state='ok'; const first=!i.last; ingest(e); if(e.kind==='github'&&su===i&&curPage==='setup'&&e.st==='ok'){ first?wait.release():wait.add(i.kind); setWait(i); } if(e.kind==='github') ghLive(e,i); if(e.kind==='github'&&curPage==='owner'&&own===i) ownLive(i); paintIntegrations(); paintHealth(); };
   types.forEach(t=>es.addEventListener(t,on)); es.addEventListener('message',on);
   es.onopen=()=>{ $('sse-pill').className='pill ok'; $('sse-pill').innerHTML='<i></i>stream connected'; };
   es.onerror=()=>{ $('sse-pill').className='pill bad'; $('sse-pill').innerHTML='<i></i>reconnecting'; }; }
-async function liveSave(kind,id,body,msg){ const r=await apiCall('PUT','/api/admin/'+(kind==='org'?'orgs/':'products/')+encodeURIComponent(id),body); if(!r.ok){ toast(r.data&&r.data.error||'Could not save'); return; }
-  const b=await apiCall('GET','/api/admin/products'); if(b.ok) applyProducts(b.data); paintProducts(); toast(msg); }
+async function liveSave(kind,id,body,msg){ const r=await apiCall('PUT','/api/admin/'+(kind==='org'?'orgs/':'products/')+encodeURIComponent(id),body); if(!r.ok){ toast(r.data&&r.data.error||'Could not save'); return false; }
+  const b=await apiCall('GET','/api/admin/products'); if(b.ok) applyProducts(b.data); paintProducts(); if(msg) toast(msg); return true; }
 async function rotateToken(id){ const r=await apiCall('POST','/api/admin/integrations/'+encodeURIComponent(id)+'/token'); return r.ok&&r.data&&r.data.token?r.data.token:null; }
 async function liveRotate(id){ const token=await rotateToken(id); if(!token){ toast('Could not rotate the secret'); return; }
   const i=INTS.find(x=>x.id===id); i.token=token; toast('New secret ready. Copy it now: it is shown once.'); location.hash='#setup-'+id; }
@@ -957,7 +1136,7 @@ async function liveTest(i){ if(i.kind==='github') return; if(!i.token){ toast('T
 
 /* boot */
 for(let n=0;n<26;n++){ const ev=makeEvent(pick(INTS.filter(i=>i.state==='ok'))); ev.at=Date.now()-(26-n)*4200; EVENTS.unshift(ev); }
-$('n-ev').textContent=EVENTS.length; paintTiles(true); EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); fillFilters(); paintIntegrations(); paintHealth(); paintDb(); paintLog(); watchTables();
+$('n-ev').textContent=EVENTS.length; paintTiles(true); EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); fillFilters(); renderAdd(); paintIntegrations(); paintHealth(); paintDb(); paintLog(); watchTables();
 let inside=false; try{ inside=sessionStorage.getItem('bt-in')==='1'; }catch(_){}
 (async()=>{ const r=await apiCall('GET','/api/admin/session'); if(r.ok){ LIVE=true; $('who').textContent=r.data.email; try{ await loadLive(); inside=true; }catch(_){ LIVE=false; } } else if(r.status===401){ inside=false; } if(inside) enter(false); })();
 let last=performance.now(); (function frame(now){ const dt=Math.min(.05,(now-last)/1000); last=now; const still=document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
