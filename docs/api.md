@@ -63,12 +63,39 @@ Grouped events (comments, reviews, pushes, labels, stars, CI runs, ...) are merg
 
 Both send `id: <seq>`, `event: <type>`, `data: <json>` and a heartbeat comment every 15 s.
 
+### `GET /api/town` (public, no auth)
+
+Masked snapshot the town page loads once to draw GitHub owners (gates) and their repos (halls). Sent with
+`Cache-Control: no-store`; other methods get `405`.
+
+```json
+{
+  "owners": [
+    { "name": "ardihikaru", "type": "user", "hidden": false, "lastEventAt": "2026-11-23T08:00:00Z",
+      "repos": [ { "name": "brain-town", "hidden": false, "lastEventAt": "2026-11-23T08:00:00Z" },
+                 { "name": "Product A", "hidden": true } ] }
+  ],
+  "unowned": [ { "name": "Product C", "hidden": true, "lastEventAt": "2026-11-23T07:00:00Z" } ]
+}
+```
+
+- `owners`: one per org that has a product or is the org of a `github` integration, sorted by `name`. `name` is
+  the org alias when the org is hidden, else the org key. `type` is the integration's `ownerType` (`user`,
+  `organization`, or `""`).
+- `repos` (and `unowned`, the products with no org): `name` is the public product name exactly as `/events`
+  publishes it (alias when the product or its org is hidden). Repos sharing a public name inside one owner are
+  merged, so a hidden org shows only distinct aliases. Sorted by `name`; arrays are never `null`.
+- `lastEventAt` (RFC 3339 UTC) is the newest accepted event for the repo or the repo's last delivery on the
+  GitHub integration; omitted when there is none. An owner's value is the newest of its repos.
+
 ## Masking
 
-One function, `visibility.View`, builds every public output. If the event's product or org is
+One function, `visibility.View`, builds every public event output, and `visibility.Town` builds `/api/town`; both
+resolve names through `visibility.Aliases`, so hidden names are masked in one place. If the event's product or org is
 hidden, the product and org are replaced by their aliases ("Product A", "Org A") and task
 titles, URLs, step names, specs and failure reasons are removed. Masking is applied when an
-event is read, so changing visibility also applies to events already stored.
+event is read, so changing visibility also applies to events already stored. `/api/town` is computed on each
+request and never contains a hidden org key, hidden product key or product name.
 
 ## Admin API
 
