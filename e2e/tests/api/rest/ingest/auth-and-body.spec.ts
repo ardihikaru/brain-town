@@ -75,7 +75,7 @@ test.describe('ingest · authentication', () => {
       const gaos = await integration('gaos');
 
       await expectStatus(
-        await ingestApi.send(`/ingest/github/${gaos.id}`, buildGaosTask(), { token: gaos.token }),
+        await ingestApi.send(`/ingest/unknown/${gaos.id}`, buildGaosTask(), { token: gaos.token }),
         404,
       );
     },
