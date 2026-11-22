@@ -13,6 +13,15 @@ export interface EventMapCell {
   content: { left: number; right: number; top: number; bottom: number };
 }
 
+/** Table and event-map region geometry, in CSS pixels (viewport coordinates). */
+export interface EventMapLayout {
+  /** Region content box: its rect minus border and padding. */
+  region: { left: number; right: number; top: number; bottom: number };
+  regionClientWidth: number;
+  table: { left: number; right: number; top: number; bottom: number };
+  tableScrollWidth: number;
+}
+
 /** Setup page of one integration (#setup-<id>): ingest URL and the one-time token. */
 export class SetupPage extends BasePage {
   protected readonly path = './#integrations';
@@ -65,6 +74,37 @@ export class SetupPage extends BasePage {
         }),
       ),
     );
+  }
+
+  /** Measures the event-map region's content box and the table inside it (no assertions). */
+  async measureEventMapLayout(): Promise<EventMapLayout> {
+    const table = await this.eventMapTable.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      return {
+        box: { left: b.left, right: b.right, top: b.top, bottom: b.bottom },
+        scrollWidth: el.scrollWidth,
+      };
+    });
+    const region = await this.eventMap.evaluate((el) => {
+      const b = el.getBoundingClientRect();
+      const s = getComputedStyle(el);
+      const px = (v: string): number => parseFloat(v) || 0;
+      return {
+        box: {
+          left: b.left + px(s.borderLeftWidth) + px(s.paddingLeft),
+          right: b.right - px(s.borderRightWidth) - px(s.paddingRight),
+          top: b.top + px(s.borderTopWidth) + px(s.paddingTop),
+          bottom: b.bottom - px(s.borderBottomWidth) - px(s.paddingBottom),
+        },
+        clientWidth: el.clientWidth,
+      };
+    });
+    return {
+      region: region.box,
+      regionClientWidth: region.clientWidth,
+      table: table.box,
+      tableScrollWidth: table.scrollWidth,
+    };
   }
 
   async expectLoaded(): Promise<void> {

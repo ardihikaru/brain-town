@@ -4,7 +4,7 @@ import { IntegrationListSchema, TOKEN_PATTERN } from '@api/rest/admin/admin.sche
 import { AcceptedSchema } from '@api/rest/ingest/ingest.schemas';
 import { env } from '@config/env';
 import { buildGaosTask } from '@data/factories/gaos.factory';
-import { cellsLeakingContent, cellsOverflowing, overlappingNeighbours } from '@utils/geometry';
+import { cellsLeakingContent, containmentViolations, cellsOverflowing, overlappingNeighbours } from '@utils/geometry';
 import { Tag } from '@utils/tags';
 
 test.describe('backoffice · integrations', () => {
@@ -58,6 +58,8 @@ test.describe('backoffice · integrations', () => {
         await expect(backoffice.setup.eventMapTable).toContainText('page and country only');
         const cells = await backoffice.setup.measureEventMapCells();
         expect(cells.length).toBeGreaterThan(2);
+        const layout = await backoffice.setup.measureEventMapLayout();
+        expect(containmentViolations(layout, cells), 'table or cells outside the event map region').toEqual([]);
         expect(cellsOverflowing(cells), 'cells with horizontal overflow').toEqual([]);
         expect(cellsLeakingContent(cells), 'cells whose content leaves the cell').toEqual([]);
         expect(overlappingNeighbours(cells), 'neighbouring cells with overlapping content').toEqual([]);

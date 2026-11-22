@@ -1,4 +1,4 @@
-import type { EventMapCell } from '@web/backoffice/pages/setup.page';
+import type { EventMapCell, EventMapLayout } from '@web/backoffice/pages/setup.page';
 
 const TOLERANCE_PX = 1;
 
@@ -37,4 +37,30 @@ export function overlappingNeighbours(cells: EventMapCell[]): string[] {
     }
   }
   return overlaps;
+}
+
+/**
+ * Containment violations: the table and every cell must lie inside the region's content box
+ * (±1 px) and the table must not scroll wider than the region's client width.
+ */
+export function containmentViolations(layout: EventMapLayout, cells: EventMapCell[]): string[] {
+  const r = layout.region;
+  const outside = (b: EventMapCell['box']): boolean =>
+    b.left < r.left - TOLERANCE_PX ||
+    b.right > r.right + TOLERANCE_PX ||
+    b.top < r.top - TOLERANCE_PX ||
+    b.bottom > r.bottom + TOLERANCE_PX;
+  const violations: string[] = [];
+  if (outside(layout.table)) {
+    violations.push(
+      `table [${layout.table.left}, ${layout.table.right}] outside region content [${r.left}, ${r.right}]`,
+    );
+  }
+  if (layout.tableScrollWidth > layout.regionClientWidth) {
+    violations.push(`table scrollWidth ${layout.tableScrollWidth} > region clientWidth ${layout.regionClientWidth}`);
+  }
+  for (const c of cells) {
+    if (outside(c.box)) violations.push(`cell "${c.text}" [${c.box.left}, ${c.box.right}] outside region content`);
+  }
+  return violations;
 }
