@@ -13,7 +13,8 @@ Agents live in `.claude/agents/`; skills (Emil Kowalski, vendored) in `.claude/s
 | Work | Model | Agents |
 |---|---|---|
 | Analysis, planning, design, review | **Opus 5.5** (`claude-opus-5-5`) | `lead-engineer`, `frontend-designer` |
-| Coding | **Sonnet 5.5** (`claude-sonnet-5-5`) | `frontend-engineer`, `backend-engineer` |
+| Coding, including all E2E automation and stress-test code | **Sonnet 5.5** (`claude-sonnet-5-5`) | `frontend-engineer`, `backend-engineer`, `e2e-engineer` |
+| Running E2E or stress tests only (no edits) | **Haiku 5.5** (`claude-haiku-5-5`) | `e2e-runner` |
 
 The model is pinned in each agent's frontmatter. Never pass a `model` override when spawning them.
 
@@ -28,6 +29,17 @@ If nested agent spawning is not available, the main session takes the lead-engin
 follows the same steps, spawning the workers directly. A small single-file fix may go straight to
 the right worker.
 
+## E2E automation (both ways with the lead)
+- Writing or changing anything in `e2e/` (specs, fixtures, page objects, catalog, k6 scripts) →
+  **`e2e-engineer`** (Sonnet 5.5). Sonnet-class is enough for E2E work; do not use Opus for it.
+- Only running the suite or stress tests → **`e2e-runner`** (Haiku 5.5). It never edits files and
+  always tears down the local `brain-town-e2e` stack (see `e2e-automation.md`).
+- Lead → E2E: `lead-engineer` adds an E2E unit for every behaviour change and asks `e2e-runner` to run
+  the suite on the integrated branch before the PR.
+- E2E → lead: `e2e-engineer` and `e2e-runner` report app bugs, needed app hooks (`data-testid`) and
+  approval-gated e2e changes to `lead-engineer`, who routes them to the right worker or the caller.
+  `e2e-engineer` never edits product code; `e2e-runner` sends test-code failures to `e2e-engineer`.
+
 ## Project rules beat skill advice
 The skills assume React and libraries; this repo does not. No frameworks, bundlers or npm libraries
 (no Motion, Vaul, Sonner, React). Use CSS transitions, keyframes, WAAPI and vanilla JS in single HTML
@@ -36,5 +48,6 @@ skill files; see `.claude/skills/UPSTREAM.md` to re-sync.
 
 ## Non-Claude CLIs
 Use the equivalent tiers: your strongest reasoning model for analysis/design/review, a Sonnet-class
-coding model for implementation. Read the agent files as role briefs and the skills as plain
+coding model for implementation and E2E/stress-test code, and the smallest fast model (Haiku-class)
+for only running E2E or stress tests. Read the agent files as role briefs and the skills as plain
 markdown under `.claude/skills/*/SKILL.md`.
