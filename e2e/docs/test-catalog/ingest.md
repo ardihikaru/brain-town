@@ -8,6 +8,7 @@
 - **US-ING-02** — As the QA tool I want a run (started, steps, finished) accepted in order so that the QA bot walks its steps.
 - **US-ING-03** — As mfardiansyah.id I want articles and visits accepted so that couriers and visitors appear, with no personal data stored.
 - **US-ING-04** — As the owner I want unauthenticated, malformed and flooding senders refused so that the town stays clean.
+- **US-ING-05** — As GitHub I want my signed organisation webhooks accepted once so that the town shows issues, pull requests and comments without any code in another repo.
 
 ## Test cases
 
@@ -30,3 +31,17 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-ING-032 | US-ING-04 | Given a body that is not a JSON object or is over 64 KiB, then 422 with field body                                                                 | -   | API   | P1  | automated | `tests/api/rest/ingest/auth-and-body.spec.ts` |
 | ☑    | TC-ING-040 | US-ING-04 | Given INGEST_BURST, when a bigger burst arrives, then the excess gets 429 with Retry-After 1                                                       | -   | API   | P1  | automated | `tests/api/rest/ingest/rate-limit.spec.ts`    |
 | ☑    | TC-ING-041 | US-ING-04 | Given a limited integration, when the bucket refills, then events are accepted again                                                               | +   | API   | P2  | automated | `tests/api/rest/ingest/rate-limit.spec.ts`    |
+| ☑    | TC-ING-050 | US-ING-05 | Given a GitHub integration, when an issue is opened, assigned and closed, then each is 202 and stored as a town event                              | +   | API   | P0  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-051 | US-ING-05 | Given a delivery signed with another secret, then 401 and it is logged as rejected                                                                 | -   | API   | P0  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-052 | US-ING-05 | Given a delivery without X-Hub-Signature-256, then 401                                                                                             | -   | API   | P0  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-053 | US-ING-05 | Given a forged signature, a GAOS integration id or an unknown id in the GitHub path, then 401                                                      | -   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-054 | US-ING-05 | Given a correctly signed form-encoded delivery, then 415                                                                                           | -   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-055 | US-ING-05 | Given a ping, when delivered, then 202 and hook.events is saved on the integration and stored as a ping event                                      | +   | API   | P0  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-056 | US-ING-05 | Given a ping, when a signed delivery of another event (even an ignored one) arrives, then it is added to events                                    | +   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-057 | US-ING-05 | Given an accepted delivery, when the same X-GitHub-Delivery is sent again, then 409 and it is stored once                                          | -   | API   | P0  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-058 | US-ING-05 | Given an integration with an org, when a delivery for another org arrives, then 422 field organization and logged as rejected                      | -   | API   | P0  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-059 | US-ING-05 | Given an org on the integration, then the org compares case-insensitively; given none, the first accepted delivery sets it                         | +   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-060 | US-ING-05 | Given a comment from a bot, when delivered, then 202 skipped and nothing is stored                                                                 | +   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-061 | US-ING-05 | Given an event or an action the town does not use, when delivered, then 202 ignored and nothing is stored                                          | +   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-062 | US-ING-05 | Given a pull request body saying "Fixes #n", when opened, then pr.opened is stored with pr and issue numbers                                       | +   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |
+| ☑    | TC-ING-063 | US-ING-05 | Given an issue in a private repo, when delivered, then its product is created hidden                                                               | +   | API   | P1  | automated | `tests/api/rest/github/github-ingest.spec.ts` |

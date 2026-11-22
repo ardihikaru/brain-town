@@ -13,13 +13,13 @@ counts as automated: it passes while the bug exists and turns red when the bug i
 
 | Epic                                   | Cases |   + |   - | automated | planned | blocked | manual-only | wont | Automated % |
 | -------------------------------------- | ----: | --: | --: | --------: | ------: | ------: | ----------: | ---: | ----------: |
-| [Admin API (admin)](admin.md)          |    25 |  15 |  10 |        24 |       0 |       0 |           1 |    0 |         96% |
+| [Admin API (admin)](admin.md)          |    31 |  18 |  13 |        30 |       0 |       0 |           1 |    0 |         97% |
 | [Feed puller (feed)](feed.md)          |     5 |   2 |   3 |         3 |       0 |       1 |           0 |    1 |         60% |
-| [Ingest (ingest)](ingest.md)           |    15 |   6 |   9 |        15 |       0 |       0 |           0 |    0 |        100% |
-| [Event streams (stream)](stream.md)    |    11 |   9 |   2 |        10 |       0 |       0 |           0 |    1 |         91% |
-| [Back-office (web)](web-backoffice.md) |     6 |   4 |   2 |         6 |       0 |       0 |           0 |    0 |        100% |
-| [Town (web)](web-town.md)              |     6 |   5 |   1 |         6 |       0 |       0 |           0 |    0 |        100% |
-| **Total**                              |    68 |  41 |  27 |        64 |       0 |       1 |           1 |    2 |         94% |
+| [Ingest (ingest)](ingest.md)           |    29 |  14 |  15 |        29 |       0 |       0 |           0 |    0 |        100% |
+| [Event streams (stream)](stream.md)    |    15 |  13 |   2 |        14 |       0 |       0 |           0 |    1 |         93% |
+| [Back-office (web)](web-backoffice.md) |    13 |  10 |   3 |        13 |       0 |       0 |           0 |    0 |        100% |
+| [Town (web)](web-town.md)              |     9 |   7 |   2 |         9 |       0 |       0 |           0 |    0 |        100% |
+| **Total**                              |   102 |  64 |  38 |        98 |       0 |       1 |           1 |    2 |         96% |
 
 <!-- coverage:end -->
 
@@ -36,13 +36,13 @@ Refresh with `npm run catalog:report`; validate with `npm run catalog`.
 
 ## Epics
 
-| Epic                             | Target                                       |
-| -------------------------------- | -------------------------------------------- |
-| [Admin API](admin.md)            | `/api/admin/*` (REST, cookie session)        |
-| [Ingest](ingest.md)              | `/ingest/{gaos,qa,site}/{id}` (REST, Bearer) |
-| [Event streams](stream.md)       | `/events`, `/admin/events` (SSE)             |
-| [Feed puller](feed.md)           | site JSON Feed → `article.published`         |
-| [Town](web-town.md)              | `/` (web)                                    |
-| [Back-office](web-backoffice.md) | `/backoffice/` (web)                         |
+| Epic                             | Target                                                                               |
+| -------------------------------- | ------------------------------------------------------------------------------------ |
+| [Admin API](admin.md)            | `/api/admin/*` (REST, cookie session)                                                |
+| [Ingest](ingest.md)              | `/ingest/{gaos,qa,site}/{id}` (REST, Bearer), `/ingest/github/{id}` (signed webhook) |
+| [Event streams](stream.md)       | `/events`, `/admin/events` (SSE)                                                     |
+| [Feed puller](feed.md)           | site JSON Feed → `article.published`                                                 |
+| [Town](web-town.md)              | `/` (web)                                                                            |
+| [Back-office](web-backoffice.md) | `/backoffice/` (web)                                                                 |
 
 New epic: copy [_template.md](_template.md), add it to this table, run `npm run catalog:report`.
