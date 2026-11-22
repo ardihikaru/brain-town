@@ -17,5 +17,7 @@ human contribution rules are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 2. Commit with Conventional Commits, push, open a PR with `gh pr create` filling every section of
    `.github/PULL_REQUEST_TEMPLATE.md`.
 3. Once the PR is created, remove the worktree: `git worktree remove <path>`.
+4. When the PR is merged, delete the branch every time: `gh pr merge <n> --squash --delete-branch`,
+   then `git branch -D <branch>` and `git fetch --prune`. Only your own branches.
 
 Details: `.claude/rules/worktree-and-pr.md`.
