@@ -1,6 +1,18 @@
 import { expect } from '@playwright/test';
 import { BasePage } from '@web/shared/base.page';
 
+/** Geometry of one cell of the event map, in CSS pixels (viewport coordinates). */
+export interface EventMapCell {
+  row: number;
+  col: number;
+  text: string;
+  box: { left: number; right: number; top: number; bottom: number };
+  scrollWidth: number;
+  clientWidth: number;
+  /** Bounding rect of a Range around everything the cell contains. */
+  content: { left: number; right: number; top: number; bottom: number };
+}
+
 /** Setup page of one integration (#setup-<id>): ingest URL and the one-time token. */
 export class SetupPage extends BasePage {
   protected readonly path = './#integrations';
@@ -21,6 +33,39 @@ export class SetupPage extends BasePage {
   readonly maskedText = this.page.getByText('••••');
   /** Kept for existing specs. */
   readonly revealToken = this.page.getByRole('button', { name: 'Show' });
+
+  /** The "What becomes what" panel and its table (kind -> town event). */
+  readonly eventMap = this.page.getByRole('region', { name: 'What becomes what' });
+  readonly eventMapTable = this.eventMap.getByRole('table');
+
+  /** Opens the setup page of an existing integration. */
+  async open(id: string): Promise<void> {
+    await this.page.goto(`./#setup-${id}`);
+    await this.expectLoaded();
+  }
+
+  /** Measures every body and header cell of the event map (no assertions). */
+  async measureEventMapCells(): Promise<EventMapCell[]> {
+    return this.eventMapTable.locator('tr').evaluateAll((rows) =>
+      rows.flatMap((tr, row) =>
+        Array.from(tr.children).map((cell, col) => {
+          const b = cell.getBoundingClientRect();
+          const range = document.createRange();
+          range.selectNodeContents(cell);
+          const c = range.getBoundingClientRect();
+          return {
+            row,
+            col,
+            text: (cell.textContent ?? '').trim(),
+            box: { left: b.left, right: b.right, top: b.top, bottom: b.bottom },
+            scrollWidth: cell.scrollWidth,
+            clientWidth: cell.clientWidth,
+            content: { left: c.left, right: c.right, top: c.top, bottom: c.bottom },
+          };
+        }),
+      ),
+    );
+  }
 
   async expectLoaded(): Promise<void> {
     await expect(this.page.getByRole('heading', { name: 'Set it up' })).toBeVisible();
