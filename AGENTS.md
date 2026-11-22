@@ -11,6 +11,16 @@ human contribution rules are in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Mask hidden orgs/products server-side; no personal data in events.
 - Test: `cd backend && go vet ./... && go test ./...`; run: `docker compose up --build`.
 
+## Roles and models (mandatory)
+Role briefs are in `.claude/agents/`, design/motion skills in `.claude/skills/*/SKILL.md` (plain
+markdown, Emil Kowalski, MIT). Full rule: `.claude/rules/agents-and-models.md`.
+- Analysis, planning, design and review run on the strongest reasoning model (Claude: Opus 5.5).
+  Roles: lead engineer (coordinates all coding, including parallel workers), frontend designer.
+- Coding runs on a Sonnet-class model (Claude: Sonnet 5.5). Roles: frontend engineer, backend engineer.
+- Frontend work always follows designer spec → engineer → designer review. Project rules beat skill
+  advice: no frameworks or npm libraries; CSS/WAAPI/vanilla JS; respect `prefers-reduced-motion`.
+- Parallel work: one branch and worktree per unit under `.claude/worktrees/`, reviewed by the lead.
+
 ## Workflow (mandatory)
 1. Create a git worktree per task: `git worktree add -b <type>/<name> .claude/worktrees/<type>-<name> main`
    (always inside this repo's git-ignored `.claude/worktrees/`, never elsewhere).
