@@ -13,7 +13,7 @@ Agents live in `.claude/agents/`; skills (Emil Kowalski, vendored) in `.claude/s
 | Work | Model | Agents |
 |---|---|---|
 | Analysis, planning, design, review | **Opus 5.5** (`claude-opus-5-5`) | `lead-engineer`, `frontend-designer` |
-| Coding, including all E2E automation and stress-test code | **Sonnet 5.5** (`claude-sonnet-5-5`) | `frontend-engineer`, `backend-engineer`, `e2e-engineer` |
+| Coding, including all E2E automation and stress-test code | **Sonnet 5.5** (`claude-sonnet-5-5`) | `frontend-engineer`, `backend-engineer`, `e2e-engineer`, `integration-tester` |
 | Running E2E or stress tests only (no edits) | **Haiku 5.5** (`claude-haiku-5-5`) | `e2e-runner` |
 
 The model is pinned in each agent's frontmatter. Never pass a `model` override when spawning them.
@@ -39,6 +39,10 @@ the right worker.
 - E2E → lead: `e2e-engineer` and `e2e-runner` report app bugs, needed app hooks (`data-testid`) and
   approval-gated e2e changes to `lead-engineer`, who routes them to the right worker or the caller.
   `e2e-engineer` never edits product code; `e2e-runner` sends test-code failures to `e2e-engineer`.
+- Platform integrations (a real sender such as mfardiansyah.id run locally against the e2e stack) →
+  **`integration-tester`** (Sonnet 5.5). It reads the platform repo read-only, follows the platform skill
+  (`.claude/skills/mfardiansyah-id-integration/`), and reports contract mismatches to `lead-engineer`,
+  who routes the fix to the platform repo or to a Brain Town worker.
 
 ## Project rules beat skill advice
 The skills assume React and libraries; this repo does not. No frameworks, bundlers or npm libraries

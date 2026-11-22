@@ -2,7 +2,7 @@
 
 > **Platform:** [mfardiansyah.id](https://mfardiansyah.id) — the author's personal site and blog.
 > **In the town:** a pendopo; couriers bring new articles and illustrations, and visitors travel in from their countries.
-> **Status:** integration contract (v1). The receiving backend is on the roadmap; see the [README](../../README.md#roadmap).
+> **Status:** live. The receiver (`/ingest/site/<id>`, feed puller) runs on `town.mfardiansyah.id`; the site sends visits since v0.54.3 (2026-11-23). Local both-sides check: skill `.claude/skills/mfardiansyah-id-integration/`.
 
 ---
 
@@ -108,4 +108,6 @@ Set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the si
 - **Push:** `article.published` is sent once per note (also for scheduled notes when their time passes) with `data{title,url,to:"blog"}`. Indonesian twins are not announced.
 - **Visit beacon:** sent server-side from the home and blog handlers. Country comes from a local GeoIP lookup. Bots, prefetches and admin sessions are skipped; no IP or user agent is sent. A page cached by the browser for 60 s sends nothing on repeat loads. There is no retry and at most 16 in flight.
 - **Env** on the site: `BRAIN_TOWN_ENABLED=true`, `BRAIN_TOWN_URL=https://<host>/ingest/site/<integration-id>` (https only) and `BRAIN_TOWN_TOKEN=bt_live_...`. All three are needed; until they are set both push and beacon stay off.
-- **Open:** `/privacy` does not mention the beacon yet.
+- **v0.54.4:** a visit without a two-letter country is not sent (the receiver requires `country`, 422 otherwise); a push answered `409` (the puller already has the id) counts as delivered.
+- **Privacy:** `/privacy` describes the beacon (site PR #158).
+- **Not yet seen live:** the publish push; it is proven by the first real EN note.
