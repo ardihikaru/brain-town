@@ -13,8 +13,7 @@ services:
       dockerfile: deploy/Dockerfile
     image: brain-town-web:${BRAIN_TOWN_MODE:-local}
     restart: unless-stopped
-    # Runtime settings (mode, public URL, ArcadeDB). The static pages do not read them yet;
-    # they are wired here for the ingest/events backend on the roadmap.
+    # Runtime settings (mode, public URL). Only the api service reads the admin credentials.
     env_file:
       - path: ${ENV_FILE:-.env}
         required: false
@@ -26,3 +25,28 @@ services:
       - /var/run
     mem_limit: 64m
     pids_limit: 64
+    depends_on:
+      - api
+
+  # Back-office API: admin API, ingest endpoints and the /events SSE streams.
+  # Not published on the host: the web service proxies /api/, /ingest/, /events and /admin/events to it.
+  api:
+    build:
+      context: backend
+    image: brain-town-api:${BRAIN_TOWN_MODE:-local}
+    restart: unless-stopped
+    environment:
+      LISTEN_ADDR: ":8081"
+      DATA_FILE: /data/braintown.json
+      BRAIN_TOWN_MODE: ${BRAIN_TOWN_MODE:-demo}
+      PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8080}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in the env file}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in the env file}
+    volumes:
+      - api-data:/data
+    read_only: true
+    mem_limit: 64m
+    pids_limit: 64
+
+volumes:
+  api-data:
