@@ -13,7 +13,7 @@ test.describe('backoffice · one-time secret', () => {
     async ({ backoffice, ingestApi, adminApi, cleanup }) => {
       await backoffice.integrations.goto();
       await backoffice.integrations.add('gaos');
-      await backoffice.setup.expectLoaded();
+      await backoffice.setup.waitForCreated('gaos');
       const id = backoffice.setup.integrationId();
       cleanup.add(() => adminApi.deleteIntegration(id));
       await expect(backoffice.setup.token).toHaveValue(TOKEN_PATTERN);
