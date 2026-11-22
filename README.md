@@ -136,7 +136,7 @@ contract in `docs/integrations/` that you can copy for your own platforms.
 | **[mfardiansyah.id](https://mfardiansyah.id)** | The author's personal site and blog. | A pendopo (open pavilion). Couriers carry new articles and illustrations to it, and visitors travel in from their countries. Links to [`/office`](https://mfardiansyah.id/office). | [mfardiansyah-id.md](docs/integrations/mfardiansyah-id.md) |
 | **[GAOS](https://github.com/ardihikaru/gaos)** | A graph-native agent operating system: product and task management for AI coding agents, with a design gate, a kanban, and integrations for an AI gateway and QA tools. Open source. | Every GAOS product is a hall, and every task is a person who queues, waits at the design gate, gets worked on by an agent and leaves when done. | [gaos.md](docs/integrations/gaos.md) |
 | **QA Tool** | The author's Playwright end-to-end testing tool. *Not open source yet; it will be released later.* | Each test run is a QA bot walking through its steps in the QA Lab, passing or failing each one. | [qa-tool.md](docs/integrations/qa-tool.md) |
-| **GitHub** | Organisation webhooks, signed with a per-integration secret. No code in another repo. | Issues are people at the org gate in GitHub Valley, pull requests are scrolls, CI runs are carts with job boxes, discussions are guests at the Tea House and stars are lanterns. Bursts are grouped; private repos arrive hidden. | [github.md](docs/integrations/github.md) |
+| **GitHub** | Organisation webhooks, or one webhook per repo for a personal account, signed with a per-owner secret. No code in another repo. | Issues are people at the org gate in GitHub Valley, pull requests are scrolls, CI runs are carts with job boxes, discussions are guests at the Tea House and stars are lanterns. Bursts are grouped; private repos arrive hidden. | [github.md](docs/integrations/github.md) |
 
 Nothing in Brain Town is specific to these platforms: any system that can send an HTTP POST
 with the documented JSON can join the town.
@@ -198,6 +198,8 @@ Step-by-step, including redeploys: [`docs/deployment.md`](docs/deployment.md).
 - [x] GitHub organisation webhooks (`POST /ingest/github/<integration-id>`): HMAC-signed, encrypted
       secret, 15 s rollups, private repos hidden; GitHub Valley shows issues, PRs, CI, refs,
       discussions and stars.
+- [x] One GitHub integration per owner (personal account or organization), with per-repo hook events, an owner page
+      in the back-office and an editable public name for hidden repos.
 - [ ] Feed puller for sites that only expose JSON Feed / RSS.
 - [x] Prod town connects to `/events` by default; the demo keeps the simulator (`?sim=1`).
 - [ ] Screenshots and a short screen recording in the docs.
