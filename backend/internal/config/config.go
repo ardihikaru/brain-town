@@ -39,6 +39,9 @@ func Load() (Config, error) {
 	if c.AdminEmail == "" || c.AdminPassword == "" {
 		return c, errors.New("ADMIN_EMAIL and ADMIN_PASSWORD must be set")
 	}
+	if at := strings.Index(c.AdminEmail, "@"); at < 1 || at == len(c.AdminEmail)-1 {
+		return c, errors.New("ADMIN_EMAIL must be an email address, for example me@mfardiansyah.id")
+	}
 	if c.Mode == "prod" && c.ArcadeURL == "" {
 		return c, errors.New("ARCADEDB_URL must be set when BRAIN_TOWN_MODE=prod (memory-only storage would lose events)")
 	}
