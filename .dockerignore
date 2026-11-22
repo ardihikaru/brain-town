@@ -1,0 +1,7 @@
+.git
+.claude
+artifacts
+backend
+.env
+.env.*
+!.env.example

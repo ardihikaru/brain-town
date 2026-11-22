@@ -2,8 +2,10 @@
 
 1. **Always work in a git worktree.** Never edit files in the main checkout.
    ```
-   git worktree add -b <type>/<name> ../brain-town-worktrees/<type>-<name> main
+   git worktree add -b <type>/<name> .claude/worktrees/<type>-<name> main
    ```
+   **Always put the worktree in this repo's `.claude/worktrees/` folder** (git-ignored), never
+   next to the repo or in `/tmp`. Run from the main checkout root so the relative path resolves.
    One branch and one worktree per task. `<type>` is a Conventional Commit type (`feat`, `fix`, `chore`, `docs`).
 2. Commit with Conventional Commits and push the branch.
 3. **Open the PR** with `gh pr create`, using `.github/PULL_REQUEST_TEMPLATE.md`: fill every
