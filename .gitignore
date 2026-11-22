@@ -5,5 +5,4 @@
 *.swp
 .claude/settings.local.json
 
-.claude/worktrees/ 
-!.claude/worktrees/.gitkeep
+.claude/worktrees/
