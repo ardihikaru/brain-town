@@ -6,8 +6,8 @@
 
 - **US-BO-01** — As the admin I want to sign in through the page so that I reach the live back-office.
 - **US-BO-02** — As the admin I want to add an integration in the page so that I can copy its URL and one-time token.
-- **US-BO-04** — As the admin I want Copy on the setup page to never copy a masked token so that I never paste a dead credential; when the token is no longer shown I rotate it and copy the new one.
 - **US-BO-03** — As the admin I want the event log to update live so that I see deliveries as they arrive.
+- **US-BO-04** — As the admin I want Copy on the setup page to never copy a masked token so that I never paste a dead credential; when the token is no longer shown I rotate it and copy the new one.
 - **US-BO-05** — As the admin I want a GitHub setup page that shows the secret on demand and which events are ticked so that I can wire the org webhook without guessing.
 
 ## Test cases

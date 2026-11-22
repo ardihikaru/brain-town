@@ -29,11 +29,9 @@ export class GithubSetupPage extends BasePage {
     await expect(this.page.getByRole('heading', { name: 'Set it up' })).toBeVisible();
   }
 
-  /** Opens the setup guide of an integration from the integrations list (its card links to #setup-<id>). */
+  /** Opens the setup page by hash, like SetupPage.open: the dashboard and the list both link to it, so no link click. */
   async open(id: string): Promise<void> {
-    await this.page.goto(this.path);
-    // The card's "Setup guide" link is the only way in that does not depend on the page's own routing state.
-    await this.page.locator(`a[href="#setup-${id}"]`).click();
+    await this.page.goto(`./#setup-${id}`);
     await this.expectLoaded();
   }
 
