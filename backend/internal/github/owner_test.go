@@ -141,10 +141,28 @@ func TestRejectedDeliveryIsCountedPerRepoAndNeverRegistered(t *testing.T) {
 		t.Fatalf("rejected: %+v", rej)
 	}
 	got, _ := e.st.GetIntegration(e.id)
-	if got.Repos["elsewhere"].LastRejectedAt.IsZero() {
-		t.Error("repo LastRejectedAt not set")
+	if _, ok := got.Repos["elsewhere"]; ok {
+		t.Error("a rejected delivery added an unknown repo")
 	}
 	if _, ok := e.st.GetProduct("elsewhere"); ok {
 		t.Error("a rejected delivery registered a product")
+	}
+}
+
+func TestRejectedDeliverySetsLastRejectedAtOfKnownRepo(t *testing.T) {
+	e := newEnv(t, "acme")
+	ok := M{"action": "opened", "issue": issue(1, "t", nil), "repository": repo("known", true), "organization": M{"login": "Acme"}}
+	if c, _ := e.send("issues", "k1", ok); c != 202 {
+		t.Fatalf("want 202, got %d", c)
+	}
+	e.st.AddRejectedRepo(e.id, "github", "issues", 422, "delivery is for another organisation", "known")
+	got, _ := e.st.GetIntegration(e.id)
+	r, found := got.Repos["known"]
+	if !found || r.LastRejectedAt.IsZero() {
+		t.Fatalf("known repo LastRejectedAt not set: %+v", got.Repos)
+	}
+	rej := e.rejected()
+	if len(rej) != 1 || rej[0].Product != "known" {
+		t.Fatalf("rejected: %+v", rej)
 	}
 }

@@ -53,7 +53,8 @@ unset SECRET
 ```
 
 A delivery whose repository belongs to another owner than the integration's is rejected (`422`) and counted as a
-rejection for that repo; rejected deliveries never reach public output.
+rejection on that repo only when the repo is already known to the integration (a rejection never adds a repo);
+rejected deliveries never reach public output.
 
 ### Event tiers (GitHub's checkbox names)
 

@@ -852,7 +852,8 @@ func (st *Store) AddRejected(integration, kind, typ string, status int, reason s
 }
 
 // AddRejectedRepo is AddRejected for a delivery whose repository is known: the repo becomes the event's Product
-// (so rejections can be counted per repo; the event is never public) and its LastRejectedAt is set.
+// (so rejections can be counted per repo; the event is never public) and, when the repo already exists on the
+// integration, its LastRejectedAt is set. A rejection never creates a repo entry.
 // The product is not registered: a rejected delivery adds nothing to the town.
 func (st *Store) AddRejectedRepo(integration, kind, typ string, status int, reason, repo string) Event {
 	st.mu.Lock()
@@ -861,7 +862,8 @@ func (st *Store) AddRejectedRepo(integration, kind, typ string, status int, reas
 	if i, ok := st.s.Integrations[integration]; ok {
 		i.LastRejectedAt = now
 		if repo != "" {
-			if r, ok := i.repo(repo); ok {
+			// Only a repo the integration already knows: a rejection never adds one.
+			if r, ok := i.Repos[repo]; ok {
 				r.LastRejectedAt = now
 				i.putRepo(r)
 			}
