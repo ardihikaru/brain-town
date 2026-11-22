@@ -2,7 +2,10 @@
 package config
 
 import (
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -20,6 +23,7 @@ type Config struct {
 	Mode          string  // BRAIN_TOWN_MODE: demo | prod
 	IngestRate    float64 // INGEST_RATE: events per second per integration (default 50)
 	IngestBurst   float64 // INGEST_BURST: burst size per integration (default 200)
+	SecretKey     []byte  // BRAIN_TOWN_SECRET_KEY: base64, 32 bytes; encrypts GitHub webhook secrets (required in prod)
 	FeedInterval  int     // FEED_PULL_INTERVAL_SECONDS: how often site JSON Feeds are pulled (default 300)
 }
 
@@ -47,7 +51,38 @@ func Load() (Config, error) {
 	if c.Mode == "prod" && c.ArcadeURL == "" {
 		return c, errors.New("ARCADEDB_URL must be set when BRAIN_TOWN_MODE=prod (memory-only storage would lose events)")
 	}
+	key, err := loadSecretKey(os.Getenv("BRAIN_TOWN_SECRET_KEY"), c.Mode == "prod")
+	if err != nil {
+		return c, err
+	}
+	c.SecretKey = key
 	return c, nil
+}
+
+// loadSecretKey decodes the key. When empty it fails in prod and otherwise returns a random per-process key.
+func loadSecretKey(v string, prod bool) ([]byte, error) {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		if prod {
+			return nil, errors.New("BRAIN_TOWN_SECRET_KEY must be set when BRAIN_TOWN_MODE=prod (generate one with: openssl rand -base64 32)")
+		}
+		k := make([]byte, 32)
+		if _, err := rand.Read(k); err != nil {
+			return nil, err
+		}
+		log.Print("BRAIN_TOWN_SECRET_KEY is empty: using a random key for this process; GitHub webhook secrets created now stop working after a restart")
+		return k, nil
+	}
+	k, err := base64.StdEncoding.DecodeString(v)
+	if err != nil {
+		if k, err = base64.RawStdEncoding.DecodeString(v); err != nil {
+			return nil, errors.New("BRAIN_TOWN_SECRET_KEY must be base64 (openssl rand -base64 32)")
+		}
+	}
+	if len(k) != 32 {
+		return nil, errors.New("BRAIN_TOWN_SECRET_KEY must decode to exactly 32 bytes (openssl rand -base64 32)")
+	}
+	return k, nil
 }
 
 func (c Config) SecureCookies() bool { return strings.HasPrefix(c.PublicURL, "https://") }

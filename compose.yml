@@ -45,6 +45,7 @@ services:
       PUBLIC_URL: ${PUBLIC_URL:-http://127.0.0.1:8080}
       INGEST_RATE: ${INGEST_RATE:-50}
       INGEST_BURST: ${INGEST_BURST:-200}
+      BRAIN_TOWN_SECRET_KEY: ${BRAIN_TOWN_SECRET_KEY:-}
       ADMIN_EMAIL: ${ADMIN_EMAIL:?set ADMIN_EMAIL in the env file}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in the env file}
     read_only: true
