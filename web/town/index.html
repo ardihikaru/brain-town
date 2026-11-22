@@ -117,7 +117,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .kc .t{font-weight:500;overflow-wrap:anywhere}
 .kc .m{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:4px}
 .chip{font-family:var(--font-mono);font-size:10px;border:1px solid var(--rule);border-radius:20px;padding:0 7px;white-space:nowrap}
-.chip.bug{border-color:#c8472f;color:#c8472f}.chip.feature{border-color:#2f6f8f;color:#2f6f8f}.chip.chore{border-color:var(--ink-soft);color:var(--ink-soft)}
+.chip.bug{border-color:#c8472f;color:#c8472f}.chip.feature{border-color:#2f6f8f;color:#2f6f8f}.chip.chore,.chip.review{border-color:var(--ink-soft);color:var(--ink-soft)}.chip.implement{border-color:#2f6f8f;color:#2f6f8f}.chip.design{border-color:#b0568a;color:#b0568a}
 .chip.next{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .chip.reel{border-color:#d9523c;color:#d9523c}
 .tasks{list-style:none;margin:7px 0 0;padding:6px 0 0;border-top:1px dotted var(--rule);display:flex;flex-direction:column;gap:3px;font-size:12px}
@@ -200,12 +200,12 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 <aside class="panel" id="feed">
   <header>
     <h2>Live feed</h2>
-    <span class="pill" id="mode"><i></i>simulated</span>
+    <span class="pill" id="mode"><i></i>connecting</span>
     <button id="feed-toggle" aria-expanded="true" aria-controls="log">Hide</button>
   </header>
   <button id="hl" hidden><i></i><span id="hl-text"></span><em>Go there</em></button>
   <ol id="log" aria-live="off"></ol>
-  <footer>The town only reacts to events. Today a simulator emits them; later call <code>brainTown.connect(url)</code> to read the same events from SSE.</footer>
+  <footer>The town only reacts to events. It reads the live stream from <code>/events</code> (SSE) and reconnects by itself. If the stream is not reachable, or the URL has <code>?sim=1</code>, a built-in simulator plays a static demo instead.</footer>
 </aside>
 
 <section class="panel" id="card" aria-live="polite">
@@ -265,8 +265,60 @@ const CONFIG = {
      qa.run.started        {org,repo,run,spec,steps}          qa.step {org,repo,run,index,status}
      qa.run.finished       {org,repo,run,spec,passed,failed,total}
      imago.requested / imago.delivered {id,kind:"image"|"video",from,title}
+   Added for the live stream (made by fromPublic below; a GAOS task is an issue):
+     task.column           {org,repo,number,title,column,from?}   a task moved to a GAOS column
+     task.failed           {org,repo,number,title,reason:"failed"|"canceled"}
+     gate.requested        {org,repo,number,title}                the design gate asks for a decision
+     gate.decided          {org,repo,number,title,decision:"approved"|"rejected"}
+   Issue and task events may also carry productName (shown instead of repo) and hidden:true.
+   Live mode: once /events is open, only events flagged live:true (or local:true, staged by the
+   town itself) pass the bus, so the simulator can never mix with the real stream.
    ============================================================ */
-const bus = { fns:[], on(f){this.fns.push(f)}, emit(ev){ for(const f of this.fns) f(ev); } };
+const bus = { fns:[], live:false, on(f){this.fns.push(f)}, emit(ev){ if(this.live&&!ev.live&&!ev.local) return; for(const f of this.fns) f(ev); } };
+
+/* ---------- public envelope -> town events (pure, no DOM; see docs/integrations/*.md) ----------
+   /events sends SSE messages  id: <seq>  event: <type>  data: {seq,id,type,source,at,payload}
+   where payload is the emitter envelope as the server chose to publish it (hidden products masked).
+   fromPublic(msg) returns an array of town events. Products are mapped onto the town's fixed
+   org/repo halls: by repo name first, otherwise the next free hall (then round-robin). */
+const GAOS_STATE={backlog:'queued',ready:'queued',working:'progress','needs-you':'progress',blocked:'progress',review:'review',done:'closed',failed:'closed',canceled:'closed'};
+function makePublicAdapter(slots){
+  const slotOf=new Map(), used=new Set(), tasks=new Map(), seen=new Set(); let rr=0, extra=1000;
+  function slotFor(key,orgHint){ key=String(key||'unknown'); if(slotOf.has(key)) return slotOf.get(key);
+    const s=slots.find(x=>x.repo===key&&(!orgHint||x.org===orgHint))||slots.find(x=>x.repo===key)||slots.find(x=>!used.has(x.org+'/'+x.repo))||slots[rr++%slots.length];
+    used.add(s.org+'/'+s.repo); slotOf.set(key,s); return s; }
+  /* find or create the issue behind a GAOS task; a repeated task.created is therefore a no-op */
+  function ensure(env,out){ const pr=env.product||{}, t=env.task||{}, hidden=pr.visibility==='hidden', s=slotFor(pr.key||pr.name), tid=String(t.id==null?'?':t.id), k=s.org+'/'+s.repo+'/'+tid;
+    const title=hidden?'Private task '+tid:(t.title||'Task '+tid), productName=hidden?(pr.name||'Private'):(pr.name||s.repo);
+    let rec=tasks.get(k), isNew=false;
+    if(!rec){ isNew=true; let n=parseInt((tid.match(/(\d+)$/)||[])[1],10); if(!(n>0)||[...tasks.values()].some(r=>r.slot===s&&r.number===n)) n=++extra;
+      rec={slot:s,number:n,column:null}; tasks.set(k,rec);
+      out.push({type:'issue.opened',org:s.org,repo:s.repo,number:n,title,label:t.kind||'implement',productName,hidden}); }
+    return {rec,isNew,base:{org:s.org,repo:s.repo,number:rec.number,title,productName,hidden}}; }
+  function moveTo(rec,base,col,from,out){ if(!col||rec.column===col) return; rec.column=col; out.push({type:'task.column',...base,column:col,from}); }
+  return function fromPublic(msg){ if(!msg||typeof msg!=='object') return [];
+    const env=(msg.payload&&typeof msg.payload==='object')?msg.payload:msg, type=env.type||msg.type, d=env.data||{}, out=[];
+    if(env.id!=null){ const k=type+'|'+env.id; if(seen.has(k)) return []; seen.add(k); if(seen.size>4000) seen.delete(seen.values().next().value); }
+    switch(type){
+      case 'product.upserted': { const pr=env.product||{}; slotFor(pr.key||pr.name); break; }
+      case 'task.created': { const {rec,isNew,base}=ensure(env,out), c=(env.task||{}).column;
+        if(isNew){ if(c&&GAOS_STATE[c]!=='queued') moveTo(rec,base,c,null,out); else rec.column=c||'backlog'; } break; }
+      case 'task.moved': { const {rec,base}=ensure(env,out); moveTo(rec,base,d.to||(env.task||{}).column,d.from,out); break; }
+      case 'task.claimed': { const {rec,base}=ensure(env,out); if(!rec.column||GAOS_STATE[rec.column]==='queued') rec.column='working'; out.push({type:'issue.assigned',...base,agent:d.agent}); break; }
+      case 'task.done': { const {rec,base}=ensure(env,out); rec.column='done'; out.push({type:'issue.closed',...base}); break; }
+      case 'task.failed': { const {rec,base}=ensure(env,out), reason=d.reason==='canceled'?'canceled':'failed'; rec.column=reason; out.push({type:'task.failed',...base,reason}); break; }
+      case 'gate.requested': { const {base}=ensure(env,out); out.push({type:'gate.requested',...base}); break; }
+      case 'gate.decided': { const {base}=ensure(env,out); out.push({type:'gate.decided',...base,decision:d.decision==='rejected'?'rejected':'approved'}); break; }
+      case 'qa.run.started': case 'qa.step': case 'qa.run.finished': { const s=slotFor(env.product,env.org), id={org:s.org,repo:s.repo,run:env.run};
+        if(type==='qa.run.started') out.push({type,...id,spec:d.spec||'run',steps:Array.isArray(d.steps)&&d.steps.length?d.steps.map(String):undefined});
+        else if(type==='qa.step') out.push({type,...id,index:d.index|0,step:d.step,status:d.status==='failed'?'failed':'passed',duration_ms:d.duration_ms});
+        else out.push({type,...id,spec:d.spec||'run',passed:d.passed|0,failed:d.failed|0,total:d.total|0,duration_ms:d.duration_ms}); break; }
+      case 'article.published': out.push({type,id:env.id,title:d.title||'Untitled',to:d.to==='linkedin'?'linkedin':'blog',url:d.url}); break;
+      case 'illustration.published': out.push({type,id:env.id,title:d.title||'Illustration'}); break;
+      case 'site.visit': out.push({type,id:String(env.id),page:d.page==='blog'?'blog':'home',country:String(d.country||'ID').slice(0,2).toUpperCase(),...(d.title?{title:d.title}:{})}); break;
+      default: break; }
+    return out; }; }
+const fromPublic=makePublicAdapter(CONFIG.orgs.flatMap(o=>o.repos.map(repo=>({org:o.id,repo}))));
 
 /* ---------- small utils ---------- */
 function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
@@ -931,6 +983,7 @@ const st={siteNow:0,mag:0,articles:0,linkedin:0,blog:0,illos:0,videos:0,reels:0,
 const qaAgents=new Map();
 const issues=new Map(); let stallTurn=0, newsboys=[];
 const short=(s,n=26)=>s&&s.length>n?s.slice(0,n-1)+'…':(s||'');
+const hallOf=ev=>{ const org=orgBy[ev.org]; return org&&org.products.find(p=>p.repo===ev.repo); };
 const React={
   'magazine.printed'(ev){ st.mag=ev.issue; st.sold=0; if(T>3) highlight('good',`Magazine issue #${ev.issue} is off the press.`,MAG.cx,MAG.cy); pop(MAG.cx,MAG.cy,4.4,'Issue #'+ev.issue+' printed','#c8472f');
     for(const n of newsboys){ n.tick=null; travel(n,MAG.door,[MAG.entry],kill); } newsboys=[];
@@ -964,6 +1017,9 @@ const React={
   'site.pageview'(ev){ const rec=siteRec.get(ev.id); if(rec) rec.want=ev.page; },
   'site.chat'(){ pop(CHAT.cx,CHAT.cy,2.2,null,'#2f8f6b'); },
   'site.leave'(ev){ const rec=siteRec.get(ev.id); if(rec){ rec.want='leave'; siteRec.delete(ev.id); } },
+  'gate.requested'(ev){ const p=hallOf(ev); if(p) pop(p.cx,p.cy,2.9,'design gate: waiting','#b0568a'); },
+  'gate.decided'(ev){ const p=hallOf(ev); if(p) pop(p.cx,p.cy,2.9,ev.decision==='rejected'?'gate ✗ rejected':'gate ✓ approved',ev.decision==='rejected'?'#c8472f':'#2f8f6b'); },
+  'task.failed'(ev){ const p=hallOf(ev); if(p) pop(p.cx,p.cy,2.9,ev.reason==='canceled'?'task canceled':'task ✗ failed','#c8472f'); },
   'imago.requested'(ev){ st.imagoOpen++; const g=pick(GATES), P0=PERSONA[pick(['artist','business','engineer','student'])], c={arrived:false,done:false}; imgClients.set(ev.id,c);
     const start=(x,y,near)=>{ const a=spawn(x,y,{color:P0.color,hat:P0.hat,carry:'paper',mark:'#b0568a',speed:2.1}); c.a=a; const inn=()=>{ c.arrived=true; a.hidden=true; pop(IMG.cx,IMG.cy,2.7,ev.kind+' request','#b0568a'); if(c.done) after(2.5,()=>imgLeave(c,ev)); }; near?walk(a,[IMG.entry],inn):travel(a,IMG.door,[IMG.entry],inn); };
     if(Math.random()<.35){ const v=spawn(g[0]+.5,g[1]+.5,{kind:'car',model:pick(['sedan','hatch']),color:pick(AMB_COL),speed:2.8}); travel(v,IMG.door,null,()=>{ start(IMG.door[0]+.5,IMG.door[1]+.8,true); after(1.5,()=>travel(v,pick(GATES),null,kill)); }); } else start(g[0]+.5,g[1]+.5,false); },
@@ -1133,9 +1189,21 @@ const Sim={ vis:0, active:0,
   stop(){ this.run=false; }
 };
 
-/* real feed: same events over SSE (needs a host that allows the connection) */
-window.brainTown={ connect(url){ Sim.stop(); const es=new EventSource(url); es.onmessage=e=>{ try{ bus.emit(JSON.parse(e.data)); }catch(_){} };
-  document.getElementById('mode').innerHTML='<i></i>live SSE'; return es; }, emit:ev=>bus.emit(ev), config:CONFIG };
+/* real feed: public events over SSE. The server sends NAMED events (event: <type>), so
+   EventSource.onmessage never fires; every type gets its own listener. EventSource reconnects by
+   itself and resends Last-Event-ID, so the server can replay what was missed. */
+const LIVE_TYPES=['product.upserted','task.created','task.moved','task.claimed','task.qa','task.done','task.failed','gate.requested','gate.decided',
+  'qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit'];
+const modeEl=document.getElementById('mode'), setMode=t=>{ modeEl.innerHTML='<i></i>'+t; };
+function connectLive(url,onFail){ let opened=false, es;
+  try{ es=new EventSource(url); }catch(_){ if(onFail) onFail(); return null; }
+  const onMsg=e=>{ let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
+    for(const ev of fromPublic(m)) bus.emit({...ev,live:true}); };
+  for(const t of LIVE_TYPES) es.addEventListener(t,onMsg);
+  es.onopen=()=>{ opened=true; Sim.stop(); bus.live=true; setMode('live SSE'); };
+  es.onerror=()=>{ if(!opened){ es.close(); if(onFail) onFail(); } else setMode('reconnecting'); };
+  return es; }
+window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>bus.emit({live:true,...ev}), config:CONFIG, fromPublic };
 
 /* ============================================================
    UI: feed log, stats, controls
@@ -1143,7 +1211,7 @@ window.brainTown={ connect(url){ Sim.stop(); const es=new EventSource(url); es.o
 const logEl=document.getElementById('log'); let pendingLog=[], booting=true;
 function clockStr(){ const m=Math.floor(tod*1440); return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
 function describe(ev){ switch(ev.type){
-  case 'issue.opened': return `${ev.org}/${ev.repo} #${ev.number} ${ev.title||''}`;
+  case 'issue.opened': return `${ev.productName||ev.org+'/'+ev.repo} #${ev.number} ${ev.title||''}`;
   case 'issue.assigned': case 'issue.closed': return `${ev.org}/${ev.repo} #${ev.number}`;
   case 'task.done': return `${ev.repo} #${ev.number} ${ev.done}/${ev.total}`;
   case 'magazine.printed': return `issue #${ev.issue}`;
@@ -1154,6 +1222,10 @@ function describe(ev){ switch(ev.type){
   case 'site.leave': return `${ev.id} after ${ev.pages} page${ev.pages===1?'':'s'}`;
   case 'upload.stage': return `${ev.platform}: ${ev.title} · ${ev.stage}`;
   case 'video.ready': return `${ev.channel}: ${ev.title}, slot ${ev.publishAt}`;
+  case 'task.column': return `${ev.productName||ev.repo} #${ev.number} → ${ev.column}`;
+  case 'task.failed': return `${ev.productName||ev.repo} #${ev.number} ${ev.reason}`;
+  case 'gate.requested': return `${ev.productName||ev.repo} #${ev.number} waits at the design gate`;
+  case 'gate.decided': return `${ev.productName||ev.repo} #${ev.number} ${ev.decision}`;
   case 'task.created': return `${ev.repo} #${ev.number} ${ev.tasks.length} tasks`;
   case 'task.started': return `${ev.repo} #${ev.number} task ${ev.index+1}`;
   case 'pr.opened': case 'pr.merged': return `${ev.repo} PR ${ev.pr} for #${ev.number}`;
@@ -1330,8 +1402,9 @@ bus.on(ev=>{ const t=ev.type, now=clockStr();
     else if(t==='video.published'){ it.state='published'; it.kind=ev.kind; (it.platforms=it.platforms||[]).push('youtube'); it.publishedAt=now; it.seq=++YTS.seq;
       const pub=[...YTS.items.values()].filter(x=>x.state==='published').sort((a,b)=>a.seq-b.seq); while(pub.length>6) YTS.items.delete(pub.shift().id); }
     YTS.v++; }
-  else if(ev.org && /^(issue|task|pr)\./.test(t)){ const key=ev.org+'/'+ev.repo+'#'+ev.number; let is=GH.issues.get(key);
-    if(!is){ is={key,org:ev.org,repo:ev.repo,number:ev.number,title:ev.title||'',label:ev.label||'bug',state:'queued',openedAt:now,tasks:[],checks:{},seq:++GH.seq}; GH.issues.set(key,is); }
+  else if(ev.org && /^(issue|task|pr|gate)\./.test(t)){ const key=ev.org+'/'+ev.repo+'#'+ev.number; let is=GH.issues.get(key);
+    if(!is){ is={key,org:ev.org,repo:ev.repo,number:ev.number,title:ev.title||'',label:ev.label||'bug',productName:ev.productName,state:'queued',openedAt:now,tasks:[],checks:{},seq:++GH.seq}; GH.issues.set(key,is); }
+    if(ev.productName) is.productName=ev.productName;
     if(t==='issue.assigned'){ is.state='progress'; is.agent=ev.agent||('agent-'+ev.repo); is.startedAt=now; }
     else if(t==='task.created'){ is.tasks=ev.tasks.map(x=>({t:x,s:'todo'})); }
     else if(t==='task.started'){ if(is.tasks[ev.index]) is.tasks[ev.index].s='doing'; }
@@ -1339,10 +1412,15 @@ bus.on(ev=>{ const t=ev.type, now=clockStr();
     else if(t==='pr.opened'){ is.state='review'; is.pr=ev.pr; is.checks={}; (ev.checks||['lint','tests','build']).forEach(c=>is.checks[c]='queued'); }
     else if(t==='pr.checks'){ is.checks[ev.check]=ev.status; }
     else if(t==='pr.merged'){ is.merged=true; }
-    else if(t==='issue.closed'){ is.state='closed'; is.closedAt=now; is.seq=++GH.seq;
-      const done=[...GH.issues.values()].filter(x=>x.org===ev.org&&x.state==='closed').sort((a,b)=>a.seq-b.seq); while(done.length>5) GH.issues.delete(done.shift().key); }
+    else if(t==='issue.closed'){ is.fail=null; is.col='done'; closeIssue(is,ev.org,now); }
+    else if(t==='task.column'){ is.col=ev.column; is.state=GAOS_STATE[ev.column]||'queued'; if(is.state==='closed'){ is.fail=(ev.column==='done')?null:ev.column; closeIssue(is,ev.org,now); } else { is.fail=null; if(is.state==='progress'&&!is.startedAt) is.startedAt=now; if(is.state==='queued') is.agent=null; } }
+    else if(t==='task.failed'){ is.col=ev.reason; is.fail=ev.reason; closeIssue(is,ev.org,now); }
+    else if(t==='gate.requested'){ is.gate='waiting'; }
+    else if(t==='gate.decided'){ is.gate=ev.decision; }
     GH.v++; } });
 
+function closeIssue(is,org,now){ is.state='closed'; is.closedAt=now; is.seq=++GH.seq;
+  const done=[...GH.issues.values()].filter(x=>x.org===org&&x.state==='closed').sort((a,b)=>a.seq-b.seq); while(done.length>5) GH.issues.delete(done.shift().key); }
 let detail=null;
 function openDetail(kind,id){ detail={kind,id,tab:'people',v:-1}; sceneReset(); $('detail').classList.add('on'); renderDetail(true); $('d-close').focus(); }
 function closeDetail(){ detail=null; $('detail').classList.remove('on'); }
@@ -1377,12 +1455,12 @@ function ytSteps(){ const all=[...YTS.items.values()], b=all.filter(x=>x.state==
   return `<p class="lede">The same eight steps for every video. The coloured tags show which channel has a video at each step right now.</p>
   <ol class="steps">${steps.map((s,i)=>`<li class="${i===fk?'here':''}"><span class="n">Step ${i+1} of 8</span><b>${s[0]}</b><p>${s[1]}</p>${tok(s[2])}</li>`).join('')}</ol>
   <div class="follow"><h4>Follow one video</h4>${f?`<p><b>${esc(f.channel)}</b> is making “${esc(f.title)}” from ${f.source==='article'?'a blog article':'a planned topic'}${f.collab?', as a reel with '+esc(f.collab):''}. It is at <b>${STAGES[fk-1][1]}</b>, step ${fk+1} of 8, outlined above.${f.reworks?' Review already sent it back to Scenes once.':''}</p>`:'<p>No video is in production this minute. The next one starts when a studio picks an item from the queue.</p>'}</div>`; }
-function issueCard(is,pos){ let h=`<article class="kc"><div class="top"><span class="num">#${is.number}</span><span class="chip">${esc(is.repo)}</span><span class="chip ${esc(is.label)}">${esc(is.label)}</span></div><div class="t">${esc(is.title)}</div>`;
+function issueCard(is,pos){ let h=`<article class="kc"><div class="top"><span class="num">#${is.number}</span><span class="chip">${esc(is.productName||is.repo)}</span><span class="chip ${esc(is.label)}">${esc(is.label)}</span></div><div class="t">${esc(is.title)}</div>`;
   if(is.state==='queued') h+=`<div class="m">opened ${is.openedAt} · ${pos===1?'next':'position '+pos} for ${esc(is.repo)}</div>`;
-  else if(is.state==='closed') h+=`<div class="m">PR ${is.pr??''} merged · closed ${is.closedAt}</div>`;
-  else h+=`<div class="m">${esc(is.agent||'agent')} · started ${is.startedAt||''}</div>`;
+  else if(is.state==='closed') h+=`<div class="m">${is.fail?esc(is.fail)+' · ':'PR '+(is.pr??'')+' merged · '}closed ${is.closedAt}</div>`;
+  else h+=`<div class="m">${esc(is.agent||'agent')} · started ${is.startedAt||''}${is.col&&is.col!=='working'?' · '+esc(is.col):''}${is.gate?' · design gate '+esc(is.gate):''}</div>`;
   if((is.state==='progress'||is.state==='review')&&is.tasks.length) h+='<ul class="tasks">'+is.tasks.map(x=>`<li class="${x.s}">${esc(x.t)}</li>`).join('')+'</ul>';
-  if(is.state==='review') h+=`<div class="m">Pull request ${is.pr}${is.merged?' · merged':''}</div><div class="checks">`+Object.entries(is.checks).map(([c,s])=>`<span class="ck ${s}">${c} ${s==='passed'?'✓':s==='failed'?'✗ retrying':s==='running'?'…':'·'}</span>`).join('')+'</div>';
+  if(is.state==='review'&&is.pr) h+=`<div class="m">Pull request ${is.pr}${is.merged?' · merged':''}</div><div class="checks">`+Object.entries(is.checks).map(([c,s])=>`<span class="ck ${s}">${c} ${s==='passed'?'✓':s==='failed'?'✗ retrying':s==='running'?'…':'·'}</span>`).join('')+'</div>';
   return h+'</article>'; }
 function orgBoard(id){ const cfg=CONFIG.orgs.find(o=>o.id===id), all=[...GH.issues.values()].filter(x=>x.org===id);
   const q=all.filter(x=>x.state==='queued').sort((a,b)=>a.seq-b.seq), pos={};
@@ -1879,9 +1957,12 @@ function farmTick(dt){ for(const f of fields) if(f[3]<1&&!(harvesting===f[2]&&f[
   hands.forEach((h,i)=>{ const mine=tiles.slice(i*per,(i+1)*per); if(!mine.length){ left--; return; } h.busy=true; h.path=[]; h.cb=null; h.tick=b=>{ for(const f of mine) if(f[3]>0&&Math.hypot(f[0]+.5-b.x,f[1]+.5-b.y)<.3){ f[3]=0; f[4]=T; b.carry='bag'; pop(b.x,b.y,.5,null,'#dcae45'); } };
     walk(h,mine.map(f=>[f[0]+.5,f[1]+.5]).concat([BARN_DOOR]),()=>{ h.tick=null; h.carry=null; h.busy=false; after(rnd(1,3),h.idle); if(--left<=0){ harvesting=null; st.harvests++; pop(BARN_DOOR[0],BARN_DOOR[1],1.6,'The '+CROP[ty].name+' is in the barn','#2f8f6b'); } }); }); }
 for(let i=0;i<4;i++) farmer([6,38,6.5,5]); farmer([5,32,5,2.6]); farmer([37.3,40.2,6.4,4.6]); farmer([39.2,40.2,3.5,4.5]);
-Sim.start();
+const SIM_ONLY=new URLSearchParams(location.search).get('sim')==='1'||!window.EventSource;
+function startDemo(){ setMode('simulated'); const first=!Sim.run; Sim.start(); if(!booting&&first) for(let i=0;i<400;i++) update(.05); }
+if(SIM_ONLY) startDemo();
 for(let i=0;i<900;i++) update(.05);
 booting=false; flushLog(); paintStats();
+if(!SIM_ONLY) connectLive('/events',startDemo);
 let last=performance.now(), uiT=0;
 function frame(now){ const real=Math.max(0,Math.min(.05,(now-last)/1000)); last=now; if(!paused){ const steps=speed; for(let i=0;i<steps;i++) update(real); }
   render(); if(detail&&detail.tab==='people') drawScene(paused?0:real*speed); uiT+=real; hlTick(real); if(uiT>.25){ uiT=0; flushLog(); paintStats(); renderDetail(); } requestAnimationFrame(frame); }
