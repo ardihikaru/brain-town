@@ -74,6 +74,9 @@ const schema = z.object({
   SITE_ADMIN_USER: z.string().min(1).default('e2e-admin'),
   /** Random per stack, written to .stack/site/site.env by stack.sh. Absent when the site pieces are not running. */
   SITE_ADMIN_PASSWORD: z.string().optional(),
+  // ── Animora test services (compose profile "animora", see scripts/stack.sh) ─────────────────────
+  /** The real Animora Go server on a throwaway database (public GET /feed.json). */
+  ANIMORA_SERVER_URL: loopbackUrl('http://127.0.0.1:18285'),
   // ── Ingest limits the stack was started with (the rate-limit spec reads them) ─
   INGEST_RATE: z.coerce.number().positive().default(50),
   INGEST_BURST: z.coerce.number().int().positive().default(200),

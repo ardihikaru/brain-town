@@ -16,11 +16,11 @@ counts as automated: it passes while the bug exists and turns red when the bug i
 | [Admin API (admin)](admin.md)                                 |    42 |  24 |  18 |        41 |       0 |       0 |           1 |    0 |         98% |
 | [Feed puller (feed)](feed.md)                                 |     5 |   2 |   3 |         3 |       0 |       1 |           0 |    1 |         60% |
 | [Ingest (ingest)](ingest.md)                                  |    38 |  21 |  17 |        38 |       0 |       0 |           0 |    0 |        100% |
-| [mfardiansyah.id integration (integrations)](integrations.md) |    18 |   8 |  10 |        16 |       0 |       0 |           2 |    0 |         89% |
+| [mfardiansyah.id integration (integrations)](integrations.md) |    59 |  29 |  30 |        56 |       0 |       0 |           3 |    0 |         95% |
 | [Event streams (stream)](stream.md)                           |    22 |  18 |   4 |        21 |       0 |       0 |           0 |    1 |         95% |
 | [Back-office (web)](web-backoffice.md)                        |    34 |  27 |   7 |        34 |       0 |       0 |           0 |    0 |        100% |
-| [Town (web)](web-town.md)                                     |    13 |  10 |   3 |        13 |       0 |       0 |           0 |    0 |        100% |
-| **Total**                                                     |   172 | 110 |  62 |       166 |       0 |       1 |           3 |    2 |         97% |
+| [Town (web)](web-town.md)                                     |    14 |  11 |   3 |        14 |       0 |       0 |           0 |    0 |        100% |
+| **Total**                                                     |   214 | 132 |  82 |       207 |       0 |       1 |           4 |    2 |         97% |
 
 <!-- coverage:end -->
 
