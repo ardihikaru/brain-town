@@ -1,5 +1,7 @@
 import { test, expect } from '@fixtures';
 import { expectStatus } from '@api/core/assertions';
+import { setupGithub } from '@api/rest/github/github.setup';
+import { buildGithubScope } from '@data/factories/github.factory';
 import { buildQaRun, buildQaRunFinished, buildQaRunStarted, buildQaStep } from '@data/factories/qa.factory';
 import { uniqueId } from '@utils/unique';
 import { Tag } from '@utils/tags';
@@ -44,6 +46,36 @@ test.describe('town · QA Lab board', () => {
         await expect(card).toHaveCount(1);
         await expect(card.getByTestId('qa-tool-chip')).toHaveText(target.integration.name);
       }
+    },
+  );
+
+  test(
+    'the QA board shows an empty state until the first run arrives, then the run card (TC-TOWN-031)',
+    { tag: [Tag.regression] },
+    async ({ town, ingestApi, integration, sse, apiContextFor, adminApi, cleanup }) => {
+      // The town only drops its sample town (and its demo QA cards) once a real GitHub owner is known, so give it one.
+      const scope = buildGithubScope();
+      await setupGithub(
+        { apiContextFor, adminApi, cleanup },
+        { org: scope.org, ownerType: scope.ownerType ?? 'organization' },
+      );
+      const tool = await integration('qa', { name: uniqueId('QA Empty') });
+      const run = buildQaRun();
+      const stream = await sse.connect('public');
+      // The page's own /events is replaced by an empty one, so parallel tests cannot fill the board first.
+      const feed = await town.home.gotoIsolated();
+      await town.home.openQaBoard();
+      await expect(town.home.qaBoardEmpty).toBeVisible();
+      await expect(town.home.qaBoardEmpty).toContainText('No test runs yet.');
+
+      await expectStatus(await ingestApi.send(tool.ingestPath, buildQaRunStarted(run), { token: tool.token }), 202);
+      const frame = await stream.waitFor((e) => e.event === 'qa.run.started' && e.data.includes(run.spec));
+      feed.deliver(frame);
+
+      const group = town.home.qaGroup(tool.integration.name);
+      await expect(group).toHaveCount(1);
+      await expect(town.home.qaCard(group, run.spec)).toHaveCount(1);
+      await expect(town.home.qaBoardEmpty).toHaveCount(0);
     },
   );
 });

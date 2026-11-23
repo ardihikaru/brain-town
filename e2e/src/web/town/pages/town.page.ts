@@ -55,6 +55,33 @@ export class TownPage extends BasePage {
     return group.getByTestId('qa-card').filter({ hasText: spec });
   }
 
+  /** The "no runs yet" empty state of the QA Lab board. */
+  readonly qaBoardEmpty = this.page.getByTestId('qa-board-empty');
+
+  /**
+   * Opens the town with its /events stream replaced by one this test controls, so no event from a parallel test
+   * can reach the page. The stream is empty (valid SSE, reconnecting every 100 ms) until `deliver` hands it one
+   * frame, copied from the real public stream; /api/town stays the real one; returns once the page has switched from the sample town to the live one.
+   */
+  async gotoIsolated(): Promise<{ deliver(frame: { id: string; event: string; data: string }): void }> {
+    let pending = '';
+    await this.page.route('**/events', async (route) => {
+      const body = `retry: 100\n\n${pending}`;
+      pending = '';
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+    });
+    const snapshot = this.page.waitForResponse((r) => new URL(r.url()).pathname === '/api/town');
+    await this.goto();
+    expect((await snapshot).ok()).toBe(true);
+    // The sample town (with its demo QA cards) is swapped for the live one once the snapshot is bound.
+    await expect.poll(async () => (await this.valley()).source).toBe('live');
+    return {
+      deliver: (f) => {
+        pending = `id: ${f.id}\nevent: ${f.event}\ndata: ${f.data}\n\n`;
+      },
+    };
+  }
+
   async gotoSimulated(): Promise<void> {
     await this.page.goto('./?sim=1');
     await this.expectLoaded();
