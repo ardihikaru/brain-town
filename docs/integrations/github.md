@@ -1,7 +1,7 @@
 # GitHub → Brain Town
 
 > **Platform:** GitHub organisation webhooks.
-> **In the town:** each GitHub org is a gate in GitHub Valley and each repo is a hall behind it. Issues are people,
+> **In the town:** each GitHub owner (user or organisation) is a gate in GitHub Valley and each repo is a hall behind it. Issues are people,
 > pull requests are scrolls, CI runs are carts, discussions are guests at the Tea House and stars are lanterns.
 > **Status:** integration contract (v1). Receiver: `backend/internal/github`.
 
@@ -195,6 +195,31 @@ delivery. The list is capped at 64 entries. The setup page uses it to show ✓ s
 
 The `ping` is stored as an accepted event of type `ping` with `data.events` and published on `/admin/events` (and, like
 every accepted event, on `/events`, where the town ignores it), so the setup page updates live.
+
+## Owners and repos in the town
+
+The town builds GitHub Valley from the **real owners**, not from sample data (the simulator and the static demo keep
+three sample compounds, and so does a live town until the first real owner is known).
+
+- **One gate per owner.** The envelope's `org` is the owner's *public* name: the login, or the owner's alias when the
+  owner is hidden. A gate shows that name, plus a small `personal` / `org` marker when the owner is not hidden (a hidden
+  owner never shows a type). Three gates fit; the most recently active owners get them when the page loads (newest
+  first, ties by name). During the session placed gates never move; a new owner takes a free gate.
+- **Three halls per gate, one per repo.** `product.key` (or the alias for a hidden repo) is the hall's name. The three
+  most recently active repos get a hall; the others are counted on a `+n repos` board at the gate, which opens the owner's
+  board. Their issues still queue at the gate and walk to that board.
+- **Gate register.** Owners without a gate are listed on the Gate register signboard (`+n owners`), most recent first,
+  with their type, repo count and last activity. Their events still reach the feed, the board and the Tea House, but they
+  have no walkers.
+- **Hidden owners and repos** show aliases only (no real name, no titles, no type pill). When a refetch no longer lists a
+  placed owner or hall, it is removed from the canvas at once and the gate or hall is refilled.
+- **Products with no owner** (GAOS tasks, `org` empty) queue in the Pagoda Yard and walk into the Backlog Pagoda.
+- **Snapshot on load.** The town calls `GET /api/town` (owners with repos and last activity, and the unowned products,
+  all masked) while it opens `/events`, and waits at most 2 s for it before choosing the first layout. An event whose
+  owner or repo the town does not know yet adds it without a reload and triggers a debounced refetch of `/api/town`
+  (1.5 s after the last unknown, at most one request in flight).
+- **Test hook.** `window.brainTown.snapshot().valley` lists every known owner with `type`, `hidden`, `placed`, `gate`,
+  `halls` (the repo names) and `over` (repos without a hall).
 
 ## Done checklist
 

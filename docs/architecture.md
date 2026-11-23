@@ -33,16 +33,26 @@ animation detail (who a visitor looks like, the route they take, how long they s
         │  Brain Town backend  │◀──────▶│  ArcadeDB (graph)      │
         │  (planned)           │  HTTP  │  database `braintown`  │
         └───┬──────────────┬───┘        └────────────────────────┘
-   GET /events (SSE)   /admin/events, integrations API
+   GET /api/town (snapshot)   /admin/events, integrations API
+   GET /events   (SSE)
             ▼                 ▼
      town page          back-office
   (web/town)          (web/backoffice)
 ```
 
 - **Town page.** A single HTML file: canvas renderer, road-graph pathfinding (BFS on the tile
-  grid), agents, a clock, and an **event bus** (`bus.emit(event)`). On load it opens
-  `/events` (SSE) and converts the public envelopes into bus events (`fromPublic`); a built-in
-  simulator runs only as a static demo when the stream is unreachable or with `?sim=1`.
+  grid), agents, a clock, and an **event bus** (`bus.emit(event)`). On load it fetches the
+  public snapshot `GET /api/town` (owners and their repos, masked like `/events`) and opens
+  `/events` (SSE), converting the public envelopes into bus events (`fromPublic`); a built-in
+  simulator runs only as a static demo when the stream is unreachable or with `?sim=1`
+  (in that mode `/api/town` is never requested).
+- **GitHub Valley layout.** The district has three owner gates (a gate holds up to three halls, one per
+  repo, plus a `+n repos` board), a Pagoda Yard for products with no owner (GAOS), the Backlog Pagoda, the Tea
+  House and a gate register that lists every owner. The sample layout (three sample compounds) is drawn by the
+  simulator and while no real owner is known. As soon as the stream is open and an owner is known (from the
+  snapshot, waiting at most 2 s for it, or from an event) the town switches to one gate per real owner, ranked by
+  recent activity once; after that placed gates and halls never move. Events with an unknown owner or repo add it
+  and trigger a debounced refetch of `/api/town`. Details: [`integrations/github.md`](integrations/github.md#owners-and-repos-in-the-town).
 - **Back-office.** A single HTML file for integrations (ingest URL + token per platform, with
   the setup guide embedded), products and visibility, an event log, health and settings. v1
   uses sample data.
