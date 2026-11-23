@@ -8,4 +8,4 @@
   422 (invalid payload), 429 (rate limit), 202 (accepted). Ingest never blocks the sender.
 - Tokens: store SHA-256 hash only, show plaintext once. Visibility masking is applied server-side
   through one function before any public output.
-- Receivers only: GAOS, QA tool and mfardiansyah.id emitters live in their own repos.
+- Receivers only: GAOS, QA tool, mfardiansyah.id and Animora emitters live in their own repos.

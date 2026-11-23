@@ -42,13 +42,15 @@ The brand mark and its three treatments (live, demo, back-office) are in [`web/b
 
 **The town** (`web/town/index.html`)
 - An ink-on-paper isometric town with districts: Town Park, Castle, Press Quarter,
-  LinkedIn Street, Social Row, Video Generator, YouTube Company, GitHub Valley, Kampung,
+  LinkedIn Street, Social Row, Video Generator, YouTube, Facebook, Instagram and TikTok companies,
+  GitHub Valley, Kampung,
   Perumahan and the Countryside. Buildings are in Javanese, European, Arabic, Chinese and
   Japanese styles.
 - A day/night cycle with times of day, a clock, and speed controls (pause, 1×, 2×, 4×).
 - Pan and zoom, plus "go there" jumps to each district.
 - A live feed panel and counters: magazine issues, articles, illustrations, videos shipped,
-  issues in queue and issues closed.
+  issues in queue and issues closed. Animora videos leave the Video Generator when rendered and
+  arrive at the vendor's company when published.
 - Every visible change is driven by an **event**. Halls per product, couriers, QA bots, farm
   harvests, visitors arriving from other countries and the occasional sky crash are all
   reactions to the event stream.
@@ -128,7 +130,7 @@ More in [`docs/architecture.md`](docs/architecture.md).
 ## Real-world integration
 
 Brain Town is built to show **the author's own working life**, so the production town at
-https://town.mfardiansyah.id is wired to three real platforms. Each has a full integration
+https://town.mfardiansyah.id is wired to five real platforms. Each has a full integration
 contract in `docs/integrations/` that you can copy for your own platforms.
 
 | Platform | What it is | What appears in the town | Integration doc |
@@ -136,6 +138,7 @@ contract in `docs/integrations/` that you can copy for your own platforms.
 | **[mfardiansyah.id](https://mfardiansyah.id)** | The author's personal site and blog. | A pendopo (open pavilion). Couriers carry new articles and illustrations to it, and visitors travel in from their countries. Links to [`/office`](https://mfardiansyah.id/office). | [mfardiansyah-id.md](docs/integrations/mfardiansyah-id.md) |
 | **[GAOS](https://github.com/ardihikaru/gaos)** | A graph-native agent operating system: product and task management for AI coding agents, with a design gate, a kanban, and integrations for an AI gateway and QA tools. Open source. | Every GAOS product is a hall, and every task is a person who queues, waits at the design gate, gets worked on by an agent and leaves when done. | [gaos.md](docs/integrations/gaos.md) |
 | **QA Tool** | The author's Playwright end-to-end testing tool. *Not open source yet; it will be released later.* | Each test run is a QA bot walking through its steps in the QA Lab, passing or failing each one. | [qa-tool.md](docs/integrations/qa-tool.md) |
+| **Animora** | The author's video studio: turns a script (naskah) into a rendered video and publishes it to YouTube, Facebook, Instagram and TikTok. | Rendered videos leave the Video Generator; published videos arrive at the YouTube, Facebook, Instagram or TikTok company, with schedules, failed publishes and newly connected accounts shown there too. Pushed by both Animora services, with a public `/feed.json` as pull fallback. | [animora.md](docs/integrations/animora.md) |
 | **GitHub** | Organisation webhooks, or one webhook per repo for a personal account, signed with a per-owner secret. No code in another repo. | Issues are people at the org gate in GitHub Valley, pull requests are scrolls, CI runs are carts with job boxes, discussions are guests at the Tea House and stars are lanterns. Bursts are grouped; private repos arrive hidden. | [github.md](docs/integrations/github.md) |
 
 Nothing in Brain Town is specific to these platforms: any system that can send an HTTP POST
@@ -200,7 +203,9 @@ Step-by-step, including redeploys: [`docs/deployment.md`](docs/deployment.md).
       discussions and stars.
 - [x] One GitHub integration per owner (personal account or organization), with per-repo hook events, an owner page
       in the back-office and an editable public name for hidden repos.
-- [ ] Feed puller for sites that only expose JSON Feed / RSS.
+- [x] Feed puller for JSON Feed 1.1 (`site` and `animora` integrations with a `feedUrl`).
+- [x] Animora (`POST /ingest/animora/<integration-id>`): rendered, scheduled, published and failed videos and
+      connected accounts from both Animora services, plus its `/feed.json` pulled as a fallback.
 - [x] Prod town connects to `/events` by default; the demo keeps the simulator (`?sim=1`).
 - [ ] Screenshots and a short screen recording in the docs.
 

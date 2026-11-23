@@ -19,7 +19,7 @@ platform repos; this service only receives (see `integrations/`).
 
 ## Ingest
 
-`POST /ingest/{gaos|qa|site}/<integration-id>` with `Authorization: Bearer bt_live_…`.
+`POST /ingest/{gaos|qa|site|animora}/<integration-id>` with `Authorization: Bearer bt_live_…`.
 Payloads and rules: [`integrations/`](integrations/). Tokens are stored as SHA-256 only and
 shown once, when an integration is created or its secret is rotated.
 
@@ -38,6 +38,12 @@ QA events (`/ingest/qa/<id>`): if `org` is omitted, Brain Town fills it from the
 payload both carry it); an `org` the sender gives is kept, even when it differs from the integration's. Each QA tool
 instance is its own integration with an admin-chosen name, see [`integrations/qa-tool.md`](integrations/qa-tool.md).
 Rejected deliveries (401 for a known integration, 422) are logged and show in the event log.
+
+Animora events (`/ingest/animora/<id>`): `video.rendered`, `video.scheduled`, `video.published`, `video.publish_failed`
+and `channel.connected`. Only the documented `data` fields are kept (anything else is dropped); `vendor` must be
+`youtube`, `facebook`, `instagram` or `tiktok` and `url` https, else `422` with `field` `data.<name>`. The four `video.*` types may carry an optional `data.code` (opaque video code, `[A-Za-z0-9_-]`, max 32; anything else is silently dropped, not `422`). The stored event is
+rebuilt as `{"id","type","at","product":"animora","org","data"}` (`org` from the integration, when set). Contract:
+[`integrations/animora.md`](integrations/animora.md).
 
 ### GitHub
 
@@ -102,7 +108,8 @@ Masked snapshot the town page loads once to draw GitHub owners (gates) and their
 One function, `visibility.View`, builds every public event output, and `visibility.Town` builds `/api/town`; both
 resolve names through `visibility.Aliases`, so hidden names are masked in one place. If the event's product or org is
 hidden, the product and org are replaced by their aliases ("Product A", "Org A") and task
-titles, URLs, step names, specs and failure reasons are removed. Masking is applied when an
+titles, URLs, step names, specs and failure reasons are removed (for `animora`: `title`, `url`, `channel` and `account`;
+`vendor`, `dueAt`, `publishedAt`, `language`, `duration`, `format` and `code` stay). Masking is applied when an
 event is read, so changing visibility also applies to events already stored. `/api/town` is computed on each
 request and never contains a hidden org key, hidden product key or product name.
 
@@ -113,8 +120,8 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | Method and path | Purpose |
 | --- | --- |
 | `POST /api/admin/login`, `/logout`; `GET /session` | Sign in (10 failures/min cap), out, check. |
-| `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). A `github` create may carry `ownerType` (`user` or `organization`; anything else is `422`; ignored for other kinds). A `qa` create whose trimmed name equals another QA integration's name (case-insensitive) is `409` `{"error": "..."}`. |
-| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `ownerType` (`github` only, same validation), set `feedUrl` (https JSON Feed 1.1 URL of a `site` integration, pulled every 5 minutes; empty disables), delete. Any kind can be renamed: `name` is trimmed, empty or over 80 characters is `422`, and a name another integration of the same kind already uses (trimmed, case-insensitive, excluding itself) is `409`; the same name on a different kind is fine. An unknown id is `404` first. A GitHub rename changes only the display name, never `org` or `ownerType`. Create keeps the `409` for `qa` only. |
+| `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). `kind` is `gaos`, `qa`, `site`, `animora` or `github`. A `github` create may carry `ownerType` (`user` or `organization`; anything else is `422`; ignored for other kinds). A `qa` create whose trimmed name equals another QA integration's name (case-insensitive) is `409` `{"error": "..."}`. |
+| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `ownerType` (`github` only, same validation), set `feedUrl` (https JSON Feed 1.1 URL of a `site` or `animora` integration, pulled every 5 minutes; empty disables), delete. Any kind can be renamed: `name` is trimmed, empty or over 80 characters is `422`, and a name another integration of the same kind already uses (trimmed, case-insensitive, excluding itself) is `409`; the same name on a different kind is fine. An unknown id is `404` first. A GitHub rename changes only the display name, never `org` or `ownerType`. Create keeps the `409` for `qa` only. |
 | `POST /api/admin/integrations/{id}/token` | Rotate the secret; the old one stops working. For a `github` integration this makes a new `whsec_` secret (returned in the same `token` field). |
 | `GET /api/admin/integrations/{id}/secret` | `github` only, `Cache-Control: no-store`: `{"secret":"whsec_…"}` so the setup page can show it again. `404` for an unknown id or another kind, `503` when it cannot be decrypted. |
 | `GET /api/admin/products` | Orgs and products. |

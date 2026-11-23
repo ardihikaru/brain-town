@@ -11,7 +11,7 @@
 <!-- For visual changes; otherwise "N/A" -->
 
 ## Cross-repo dependencies
-<!-- GAOS / QA tool / mfardiansyah.id changes needed; "Tidak ada" if none -->
+<!-- GAOS / QA tool / mfardiansyah.id / Animora changes needed; "Tidak ada" if none -->
 
 ## Checklist
 - [ ] `src/backoffice.src.html` and `web/backoffice/index.html` are in sync (if touched)
