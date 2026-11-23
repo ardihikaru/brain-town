@@ -59,6 +59,19 @@ func stamp(d map[string]any, k string, must bool) (string, error) {
 	return s, nil
 }
 
+// validCode reports whether c is an opaque video code: 1 to 32 characters of [A-Za-z0-9_-].
+func validCode(c string) bool {
+	if c == "" || len(c) > 32 {
+		return false
+	}
+	for _, r := range c {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-') {
+			return false
+		}
+	}
+	return true
+}
+
 // Clean validates the data of one event and returns only the allowlisted keys. Everything else (including
 // prompt, script and failure text) is dropped.
 func Clean(typ string, in map[string]any) (map[string]any, error) {
@@ -81,6 +94,12 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 			return nil, err
 		}
 		out["title"] = title
+	}
+	// The optional video code correlates render, schedule and publish. An invalid one is dropped, never a 422.
+	if typ != "channel.connected" {
+		if c := strings.TrimSpace(strInput(in, "code")); validCode(c) {
+			out["code"] = c
+		}
 	}
 	switch typ {
 	case "video.rendered":

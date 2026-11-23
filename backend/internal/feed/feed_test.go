@@ -124,7 +124,7 @@ func TestPullAnimora(t *testing.T) {
 	}
 	d := ev.Raw["data"].(map[string]any)
 	if ev.Raw["product"] != "animora" || ev.Raw["org"] != "studio" || d["vendor"] != "youtube" || d["channel"] != "Kanal" ||
-		d["title"] != "Two" || d["url"] != "https://youtu.be/y2" || d["publishedAt"] != "2026-11-21T09:00:00Z" || len(d) != 5 {
+		d["title"] != "Two" || d["url"] != "https://youtu.be/y2" || d["publishedAt"] != "2026-11-21T09:00:00Z" || d["code"] != "c2" || len(d) != 6 {
 		t.Fatalf("raw %+v", ev.Raw)
 	}
 	if got := len(st.Events(store.Query{})); got != 2 { // the earlier push plus c2

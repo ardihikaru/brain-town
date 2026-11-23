@@ -193,3 +193,48 @@ func TestAnimoraMasking(t *testing.T) {
 		}
 	}
 }
+
+func TestAnimoraCode(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	id, tok := e.integration("animora", "A")
+	post := func(evID, typ, data string) map[string]any {
+		t.Helper()
+		if c, _, b := e.do("POST", "/ingest/animora/"+id, tok, animoraBody(evID, typ, data)); c != 202 {
+			t.Fatalf("%s: %d %s", evID, c, b)
+		}
+		for _, ev := range e.st.Events(store.Query{Delivery: "ok"}) {
+			if ev.ID == evID {
+				return ev.Raw["data"].(map[string]any)
+			}
+		}
+		t.Fatalf("%s not stored", evID)
+		return nil
+	}
+	if d := post("k1", "video.rendered", `{"title":"T","code":"Ab_9-z"}`); d["code"] != "Ab_9-z" {
+		t.Fatalf("code lost: %v", d)
+	}
+	for i, bad := range []string{`"a b"`, `"` + strings.Repeat("a", 33) + `"`, `"é"`, `""`, `5`} {
+		if d := post("bad"+string(rune('a'+i)), "video.scheduled", `{"vendor":"youtube","title":"T","dueAt":"2026-11-24T08:00:00Z","code":`+bad+`}`); d["code"] != nil {
+			t.Fatalf("invalid code %s kept: %v", bad, d)
+		}
+	}
+	if d := post("k2", "channel.connected", `{"vendor":"youtube","channel":"K","code":"abc"}`); d["code"] != nil {
+		t.Fatalf("channel.connected keeps code: %v", d)
+	}
+	// The code survives hidden masking.
+	if c, _, b := e.do("POST", "/ingest/animora/"+id, tok, animoraBody("k3", "video.published", `{"vendor":"youtube","title":"Secret","url":"https://youtu.be/x","code":"vid-1"}`)); c != 202 {
+		t.Fatalf("%d %s", c, b)
+	}
+	h := store.Hidden
+	e.st.SetProduct("animora", &h, nil, nil)
+	for _, ev := range e.st.Events(store.Query{Delivery: "ok"}) {
+		if ev.ID != "k3" {
+			continue
+		}
+		out, _ := json.Marshal(visibility.View(e.st, ev))
+		if !strings.Contains(string(out), `"code":"vid-1"`) || strings.Contains(string(out), "Secret") {
+			t.Fatalf("masking: %s", out)
+		}
+	}
+}

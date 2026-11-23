@@ -31,7 +31,7 @@ type Integration struct {
 	Kind           string               `json:"kind"` // github | qa | gaos | site | animora
 	Name           string               `json:"name"`
 	Org            string               `json:"org,omitempty"`
-	FeedURL        string               `json:"feedUrl,omitempty"` // site only: JSON Feed 1.1 URL pulled by internal/feed (https)
+	FeedURL        string               `json:"feedUrl,omitempty"` // site or animora: JSON Feed 1.1 URL pulled by internal/feed (https)
 	TokenHash      string               `json:"tokenHash,omitempty"`
 	TokenHint      string               `json:"tokenHint,omitempty"`
 	SecretEnc      string               `json:"secretEnc,omitempty"` // github only: AES-256-GCM sealed webhook secret; never sent by the admin API

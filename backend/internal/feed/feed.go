@@ -99,6 +99,7 @@ type item struct {
 	Animora       struct {
 		Vendor  string `json:"vendor"`
 		Channel string `json:"channel"`
+		Code    string `json:"code"`
 	} `json:"_animora"`
 	at time.Time
 }
@@ -189,7 +190,7 @@ func (p *Puller) Pull(i store.Integration) (int, error) {
 // a valid _animora.vendor, or that the ingest contract would reject, are skipped.
 func (p *Puller) addAnimora(i store.Integration, it item) bool {
 	data, err := animora.Clean("video.published", map[string]any{"vendor": it.Animora.Vendor,
-		"channel": it.Animora.Channel, "title": it.Title, "url": it.URL, "publishedAt": it.DatePublished})
+		"channel": it.Animora.Channel, "code": it.Animora.Code, "title": it.Title, "url": it.URL, "publishedAt": it.DatePublished})
 	if err != nil {
 		return false
 	}
