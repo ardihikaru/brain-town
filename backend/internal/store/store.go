@@ -849,6 +849,8 @@ func (st *Store) SetOrg(key string, vis, alias *string) (Org, error) {
 			return Org{}, &OrgError{ErrInvalid, "alias must be 1-60 characters"}
 		case !orgAliasChars.MatchString(a):
 			return Org{}, &OrgError{ErrInvalid, "alias may contain only letters, digits, spaces and . , ' & ( ) _ + - : # !"}
+		case generatedOrgAlias.MatchString(a):
+			return Org{}, &OrgError{ErrInvalid, `"Org A"-style names are reserved; choose another alias`}
 		default:
 			for _, other := range st.s.Orgs {
 				if other.Key == key {

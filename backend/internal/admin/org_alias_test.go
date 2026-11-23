@@ -116,3 +116,19 @@ func TestOrgCreatedFromIntegrationOrg(t *testing.T) {
 		t.Fatal("org created despite error")
 	}
 }
+
+func TestOrgAliasReservedPattern(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	e.st.RegisterProduct("sismedika", "web", "gaos", false)
+	for _, a := range []string{"Org B", "Org Z", "Org 123456"} {
+		c, m := putOrg(e, "sismedika", `{"alias":"`+a+`"}`)
+		if c != 422 || !strings.Contains(m["error"].(string), "reserved") {
+			t.Fatalf("alias %q: %d %v", a, c, m)
+		}
+	}
+	// case differs from the pattern: allowed
+	if c, m := putOrg(e, "sismedika", `{"alias":"org b"}`); c != 200 {
+		t.Fatalf("lowercase: %d %v", c, m)
+	}
+}

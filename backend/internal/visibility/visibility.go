@@ -14,6 +14,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/ardihikaru/brain-town/backend/internal/store"
@@ -77,6 +78,18 @@ func Aliases(r Resolver, ev store.Event) (hidden bool, orgAlias, productAlias st
 	return
 }
 
+// keyRegexps caches the compiled case-insensitive key matcher per org key (bounded by the org count).
+var keyRegexps sync.Map
+
+func keyRegexp(key string) *regexp.Regexp {
+	if re, ok := keyRegexps.Load(key); ok {
+		return re.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(key))
+	keyRegexps.Store(key, re)
+	return re
+}
+
 // View returns the public form of an event. For hidden events the product and org are
 // replaced by their aliases and titles, URLs and other free text are removed.
 func View(r Resolver, ev store.Event) map[string]any {
@@ -86,7 +99,7 @@ func View(r Resolver, ev store.Event) map[string]any {
 		if _, ok := payload["org"].(string); ok {
 			payload["org"] = o.Alias
 		}
-		re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(o.Key))
+		re := keyRegexp(o.Key)
 		if d, ok := payload["data"]; ok {
 			payload["data"] = scrub(d, re, o.Alias)
 		}
