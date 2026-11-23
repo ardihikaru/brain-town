@@ -62,6 +62,14 @@ func (a *API) Routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/admin/stats", a.auth(a.stats))
 	mux.HandleFunc("GET /admin/events", a.auth(a.stream(true)))
 	mux.HandleFunc("GET /events", a.stream(false))
+	mux.HandleFunc("GET /api/town", a.town)
+}
+
+// town serves the public, masked snapshot of GitHub owners and repos (no auth).
+func (a *API) town(w http.ResponseWriter, r *http.Request) {
+	v := visibility.Town(a.St, a.St.Orgs(), a.St.Products(), a.St.Integrations(), a.St.LastEventByProduct())
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, 200, v)
 }
 
 // ---- helpers ----
