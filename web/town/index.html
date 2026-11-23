@@ -767,10 +767,12 @@ lantern(17.3,26.2); lantern(19.6,29.4); lantern(18.9,35.2);
 const easeOutQuint=t=>1-Math.pow(1-Math.min(1,Math.max(0,t)),5);
 const mkFx=v=>({from:v,to:v,t0:0,dur:0});
 function fxVal(f){ if(f.dur<=0) return f.to; const t=(performance.now()-f.t0)/f.dur; if(t>=1){ f.dur=0; f.from=f.to; return f.to; } if(t<=0) return f.from; return f.from+(f.to-f.from)*easeOutQuint(t); }
-function fxGo(f,to,dur,delay=0){ const cur=fxVal(f); f.from=cur; f.to=to; if(dur<=0){ f.from=to; f.dur=0; return; } f.t0=performance.now()+delay; f.dur=dur; }
-function fxSet(f,v){ f.from=f.to=v; f.dur=0; }
-function drawFx(it){ let a=1; for(const f of it.fx) a*=fxVal(f); if(a<=.004) return; if(a>=.996){ it.draw(); return; }
-  ctx.save(); ctx.globalAlpha=a; ctx.translate(0,(1-a)*6/cam.z); it.draw(); ctx.restore(); }
+function fxGo(f,to,dur,delay=0){ const cur=fxVal(f); f.up=to>cur; f.from=cur; f.to=to; if(dur<=0){ f.from=to; f.dur=0; return; } f.t0=performance.now()+delay; f.dur=dur; }
+function fxSet(f,v){ f.from=f.to=v; f.dur=0; f.up=false; }
+function drawFx(it){ let a=1, rise=false; for(const f of it.fx){ a*=fxVal(f); if(f.up&&f.dur>0) rise=true; } if(a<=.004) return; if(a>=.996){ it.draw(); return; }
+  ctx.save(); ctx.globalAlpha=a; if(rise) ctx.translate(0,(1-a)*6/cam.z);   // entrances settle down 6px; exits only change opacity
+  it.draw(); ctx.restore(); }
+const fxAlpha=l=>{ let a=1; if(l) for(const f of l) a*=fxVal(f); return a; };
 const newGh=()=>({lan:[],ban:[],carts:[],stamp:null,painter:null,couriers:0});
 const cut=(s,n=20)=>{ const a=Array.from(String(s??'')); return a.length>n?a.slice(0,n).join('')+'…':a.join(''); };
 const PLOTC=['#e6b655','#a9c6de','#c7b3e0'], HASHC=['#9ccfb5','#eba595','#8fb9e0','#e6c860','#b9c0c1'];
@@ -793,7 +795,7 @@ const PLOTS=PLOTAT.map(([bx,by],i)=>{
       live:()=>p.visual?`Working on #${p.visual.number}: ${p.visual.done||0}/${p.visual.total||'?'} tasks`:'Idle, waiting for the next issue'},cnHall);
     BLD.push(p); GLOW.push([p.cx+p.w*.3,p.cy+p.d*.3,(p.h||2)*.4,Math.max(26,p.w*13),'rgba(255,196,110,.5)',()=>p.bound]);
     p.gh=newGh(); S(p.cx+p.cy+.6,()=>drawHallGh(p)); S(p.cx+p.cy+1.65,()=>drawHallRail(p));
-    org.products.push(p); FXS=null; }
+    p.fxs=[org.fx,fx]; org.products.push(p); FXS=null; }
   gate(bx+1.9,by+4.76,'y','paifang',1.2);
   /* owner seals on the paifang beam: one round seal (personal account) or three square seals (organization) */
   FXS=[org.fx];
@@ -808,16 +810,18 @@ const PLOTS=PLOTAT.map(([bx,by],i)=>{
     get desc(){ const ow=org.owner; if(!ow) return 'An empty gate. The next GitHub owner to send an event moves in here.';
       const n=ow.repos.size, h=ow.halls.length, kind=ow.hidden||!ow.type?'GitHub owner':ow.type==='organization'?'GitHub organization':'Personal GitHub account';
       return kind+' · '+(n?`${n} repo${n===1?'':'s'}: ${h} hall${h===1?'':'s'}${n>h?`, ${n-h} more on the board`:''}`:'No repos yet')+'. Each person queueing inside the gate is one open issue; the halls at the back are its repos. Star lanterns rise above the gate.'; }};
-  buildings.push(org.ent);
+  org.ent.fxs=[org.fx]; buildings.push(org.ent);
   /* "+n repos" board: stands where the left willow is, only while the owner has repos without a hall */
   org.board={id:'board-'+i,name:'More repos',label:false,nohit:true,major:false,district:'GitHub Valley',k:'cn',x:bx+.35,y:by+4,w:.55,d:.25,h:.95,cx:bx+.62,cy:by+4.12,over:0,hitKey:-.5,
-    dyn:()=>`+${org.board.over>999?'999+':org.board.over} repos`,
+    dyn:()=>`${org.board.over>999?'999+':'+'+org.board.over} repos`,
     get desc(){ const ow=org.owner; return ow?`${ow.repos.size-ow.halls.length} more repo${ow.repos.size-ow.halls.length===1?'':'s'} of ${ow.name} have no hall. Their issues queue at the gate as usual and walk to this board.`:''; },
     detail:null};
-  buildings.push(org.board);
+  org.board.fxs=[org.fx]; buildings.push(org.board);
   tree(bx+.6,by+4.2,'willow',()=>!org.board.over);
+  FXS=[org.fx];
   S(bx+by+4.5,()=>{ if(!org.board.over) return; const c1=pal('#c98a63'); box(bx+.38,by+4.04,.06,.06,0,.95,c1,LIGHT); box(bx+.8,by+4.04,.06,.06,0,.95,c1,LIGHT); box(bx+.35,by+4.0,.55,.25,.5,.4,pal('#f4ecd8'));
     seg([bx+.4,by+4.26,.82],[bx+.85,by+4.26,.82],LIGHT); seg([bx+.4,by+4.26,.7],[bx+.78,by+4.26,.7],LIGHT); seg([bx+.4,by+4.26,.58],[bx+.82,by+4.26,.58],LIGHT); });
+  FXS=null;
   tree(bx+4.4,by+4.2,'willow');
   return org;
 });
@@ -848,7 +852,7 @@ ponds.push([33.0,35.55,.4]); tree(31.5,31.6,'willow'); tree(35.3,33.5,'willow');
 /* Gate register: a signboard for every owner that has no gate. It lists all owners (see KIND.valley). */
 const placedCount=()=>PLOTS.reduce((n,o)=>n+(o.owner?1:0),0), unplacedCount=()=>Math.max(0,OWN.size-placedCount());
 const REG={id:'valley-register',label:true,district:'GitHub Valley',k:'cn',x:34.7,y:31.1,w:1.3,d:.9,h:1.6,cx:35.45,cy:31.55,labelZ:1.3,hitKey:-.5,
-  get name(){ const n=unplacedCount(); return n?`+${n>999?'999+':n} owners`:'Gate register'; }, get full(){ return 'Gate register'; }, get major(){ return unplacedCount()>0; },
+  get name(){ const n=unplacedCount(); return n?`${n>999?'999+':'+'+n} owners`:'Gate register'; }, get full(){ return 'Gate register'; }, get major(){ return unplacedCount()>0; },
   desc:'The register of GitHub Valley. Only three owners fit inside the gates, the most recently active first; every other owner is listed here. Open it to see all of them.',
   live:()=>`${OWN.size} GitHub owner${OWN.size===1?'':'s'} · ${placedCount()} at a gate`,detail:{label:'Open the gate register',open:()=>openDetail('valley',null,'board')}};
 buildings.push(REG);
@@ -1647,10 +1651,10 @@ function purgeOrg(name,repo){ let n=0;
   for(const [k,r] of QAS.repos) if(r.org===name&&(repo==null||r.repo===repo)) QAS.repos.delete(k);
   for(const [k,is] of issues) if(is.org===name&&(repo==null||is.repo===repo)){ const a=is.person; if(a){ kill(a); if(a.kids) for(const kd of a.kids) kill(kd); const org=orgBy[name]; if(org){ const i=org.queue.indexOf(a); if(i>=0) org.queue.splice(i,1); } } if(!is.closed) st.open=Math.max(0,st.open-1); issues.delete(k); }
   if(n){ GH.v++; } QAS.v++; }
-function bindSlot(org,j,repo,enter){ const p=org.products[j], ow=org.owner; if(p.bound&&repo&&p.repo===repo&&p.org===(ow&&ow.name)) return;
+function bindSlot(org,j,repo,enter,outInstant){ const p=org.products[j], ow=org.owner; if(p.bound&&repo&&p.repo===repo&&p.org===(ow&&ow.name)) return;
   if(sel===p) closeCard(); resetGh(p.gh); p.visual=null; p.wreck=null; const inst=calm();
-  if(!repo||!ow){ if(p.bound) fxGo(p.fx,0,inst?0:160); p.bound=false; p.repo=null; p.org=null; p.label=false; p.nohit=true; p.desc=''; p.detail=null; p.id='slot-'+org.plot+'-'+j; p.name=''; return; }
-  p.bound=true; p.repo=repo; p.org=ow.name; p.id=ow.name+'/'+repo; p.full=repo; p.name=cut(repo); p.label=true; p.nohit=false;
+  if(!repo||!ow){ if(p.bound){ if(outInstant) fxSet(p.fx,0); else fxGo(p.fx,0,inst?0:160); } p.bound=false; p.repo=null; p.org=null; p.label=false; p.nohit=true; p.desc=''; p.detail=null; p.id='slot-'+org.plot+'-'+j; p.name=''; return; }
+  p.bound=true; p.repo=repo; p.org=ow.name; p.id=ow.name+'/'+repo; p.full=repo; p.name=cut(repo,p.w<1.6?14:20); p.label=true;   // narrow halls: shorter label so three of them do not stack up the screen p.nohit=false;
   p.desc=`A repo of ${ow.name}. One agent handles one issue at a time, ticking off its tasks.`; p.detail={label:'Open the '+cut(ow.name)+' board',open:()=>openDetail('org',ow.name,'board')};
   if(enter&&!inst){ fxSet(p.fx,0); fxGo(p.fx,1,280); } else fxSet(p.fx,1); }
 function plotSync(org){ const ow=org.owner, ent=org.ent, bd=org.board;
@@ -1661,11 +1665,11 @@ function plotSync(org){ const ow=org.owner, ent=org.ent, bd=org.board;
   bd.detail=ow&&over?{label:'Open the '+cut(ow.name)+' board',open:()=>openDetail('org',ow.name,'board')}:null; VREG.v++; }
 /* put an owner (or nothing) at a gate. A new owner enters at once when the gate is free; replacing a bound owner fades it out first. */
 function bindOwner(org,ow,opt={}){ const gen=++org.gen, old=org.owner, inst=!!opt.instant||calm(), delay=opt.delay||0;
-  org.pend=ow; if(old){ delete orgBy[old.name]; old.plot=null; }
+  org.pend=ow; if(old){ delete orgBy[old.name]; old.plot=null; if(sel===org.ent||sel===org.board) closeCard(); }
   const finish=()=>{ if(org.gen!==gen) return;
     clearOrgRuntime(org); org.pend=null; org.owner=ow||null; org.id=ow?ow.name:null; org.stars=ow?ow.stars:{};
     if(ow){ ow.plot=org.plot; orgBy[ow.name]=org; }
-    for(let j=0;j<3;j++) bindSlot(org,j,ow?ow.sl[j]:null,false);
+    for(let j=0;j<3;j++) bindSlot(org,j,ow?ow.sl[j]:null,false,true);   // the gate fade already hid the old halls
     plotSync(org);
     if(ow){ if(inst) fxSet(org.fx,1); else { fxSet(org.fx,0); fxGo(org.fx,1,320,delay); setTimeout(()=>{ if(org.gen===gen) pop(org.gatePt[0],org.gatePt[1],.2,null,orgColor(ow.name)); },delay+330); } }
     else fxSet(org.fx,1); };
@@ -1694,7 +1698,7 @@ function trySwitch(){ if(VAL.live||VAL.switching||!VAL.streamOpen||!VAL.snapDone
   for(const org of PLOTS) if(org.owner) fxGo(org.fx,0,inst?0:160);             // the sample compounds fade out together
   setTimeout(finishSwitch,inst?0:170); }
 function finishSwitch(){
-  for(const org of PLOTS){ org.gen++; clearOrgRuntime(org); org.owner=null; org.pend=null; org.id=null; org.stars={}; for(let j=0;j<3;j++) bindSlot(org,j,null,false); plotSync(org); fxSet(org.fx,1); }
+  for(const org of PLOTS){ org.gen++; clearOrgRuntime(org); org.owner=null; org.pend=null; org.id=null; org.stars={}; for(let j=0;j<3;j++) bindSlot(org,j,null,false,true); plotSync(org); fxSet(org.fx,1); }
   for(const k of Object.keys(orgBy)) if(k!=='') delete orgBy[k];
   for(const cfg of CONFIG.orgs) purgeOrg(cfg.id);
   OWN=LOWN; for(const ow of LOWN.values()){ ow.plot=null; assignInit(ow); }
@@ -1722,6 +1726,8 @@ function removeRepo(ow,name){ ow.repos.delete(name); purgeOrg(ow.name,name);
   const ix=ow.halls.indexOf(name); if(ix>=0){ ow.halls.splice(ix,1); const s=ow.sl.indexOf(name); ow.sl[s]=null; const org=ow.plot!=null?PLOTS[ow.plot]:null; if(org) bindSlot(org,s,null,false);
     const nx=[...ow.repos.values()].filter(r=>!ow.halls.includes(r.name)).sort(byLast)[0]; if(nx){ const j=addHall(ow,nx.name); if(org&&j>=0) bindSlot(org,j,nx.name,true); } } }
 function removeOwner(ow){ LOWN.delete(ow.name); purgeOrg(ow.name);
+  if(ow.plot!=null){ const o=PLOTS[ow.plot]; if(sel===o.ent||sel===o.board) closeCard(); }   // privacy: no open card or detail may keep a removed owner's name
+  if(detail&&detail.kind==='org'&&detail.id===ow.name){ detail={kind:'valley',id:null,tab:'board',v:-1}; sceneReset(); renderDetail(true); }
   if(ow.plot!=null){ const org=PLOTS[ow.plot], nx=rankedOwners().find(o=>o.plot==null&&!PLOTS.some(q=>q.pend===o)); bindOwner(org,nx||null,{}); } else refill(); }
 function fetchTown(){ if(!VAL.api) return Promise.resolve(); if(VAL.fetching){ VAL.again=true; return Promise.resolve(); } VAL.fetching=true; const t0=Date.now();
   return fetch('/api/town',{cache:'no-store',headers:{accept:'application/json'}}).then(r=>{ if(!r.ok) throw new Error('town '+r.status); return r.json(); })
@@ -1904,7 +1910,7 @@ function disaster(){ after(rnd(170,300),disaster); const cand=BLD.filter(o=>!o.w
   pop(o.cx,o.cy,H+2.2,ufo?'Something is falling from the sky…':'Mayday! A plane is coming down','#c8472f');
   spawn(from[0],from[1],{ox:0,oy:0,hold:true,top:true,draw:a=>{ const f=Math.min(1,(T-t0)/fall), e=f*f, at=g=>P(from[0]+(o.cx-from[0])*g,from[1]+(o.cy-from[1])*g,from[2]+(H-from[2])*g+(ufo?Math.sin(g*40)*.35*(1-g):0)), q=at(e);
       for(let k=1;k<9;k++){ const g=Math.max(0,e-k*.03-((T*.9)%.03)), m=at(g); ctx.globalAlpha=.5*(1-k/9); ctx.beginPath(); ctx.arc(m[0],m[1]-2,2+k*1.1,0,7); ctx.fillStyle=ufo?'#9fe3e6':'#59636e'; ctx.fill(); } ctx.globalAlpha=1; craft(q,ufo,ufo?Math.sin(T*7)*.5:2.35+Math.sin(T*5)*.12,1.25); if(f>=1) kill(a); }});
-  after(fall,()=>{ const wr=o.wreck={t0:T,dur:rnd(22,32),ufo,crewT:0}; shake=1; pop(o.cx,o.cy,H+1.2,'CRASH!','#c8472f'); for(let k=0;k<5;k++) after(k*.25,()=>pop(o.cx+rnd(-.8,.8),o.cy+rnd(-.8,.8),H*rnd(.4,1),null,k%2?'#f0b93a':'#c8472f'));
+  after(fall,()=>{ if(o.bound===false) return; const wr=o.wreck={t0:T,dur:rnd(22,32),ufo,crewT:0}; shake=1; pop(o.cx,o.cy,H+1.2,'CRASH!','#c8472f'); for(let k=0;k<5;k++) after(k*.25,()=>pop(o.cx+rnd(-.8,.8),o.cy+rnd(-.8,.8),H*rnd(.4,1),null,k%2?'#f0b93a':'#c8472f'));
     highlight('bad',`${ufo?'A UFO':'A small plane'} crashed into ${o.name}. Nobody hurt; the building is wrecked and a repair crew is on its way.`,o.cx,o.cy);
     const road=nearRoad(o.cx,o.cy), g=GATES.slice().sort((a,b)=>Math.hypot(a[0]-o.cx,a[1]-o.cy)-Math.hypot(b[0]-o.cx,b[1]-o.cy))[0];
     // the survivor: a small alien who looks around and beams away, or a pilot who walks out of town
@@ -2082,7 +2088,7 @@ function orgBoard(id){ const ov=orgView(id), all=[...GH.issues.values()].filter(
   ${[...GH.repos.values()].filter(r=>r.org===id).map(repoStrip).join('')}
   <div class="board">
     <div class="col"><h4>Waiting <i>${q.length}</i></h4><p class="hint">Oldest first, per repo.</p>${q.length?q.map(x=>{ pos[x.repo]=(pos[x.repo]||0)+1; return issueCard(x,pos[x.repo]); }).join(''):none('The queue is empty.')}</div>
-    <div class="col"><h4>In progress <i>${all.filter(x=>x.state==='progress').length} of ${ov.yard?'∞':Math.max(1,ov.all||ov.repos.length)}</i></h4><p class="hint">Tasks tick off one at a time.</p>${col('progress','All agents are free.')}</div>
+    <div class="col"><h4>In progress <i>${all.filter(x=>x.state==='progress').length}${ov.yard?'':' of '+Math.max(1,ov.repos.length)}</i></h4><p class="hint">Tasks tick off one at a time.</p>${col('progress','All agents are free.')}</div>
     <div class="col"><h4>In review <i>${all.filter(x=>x.state==='review').length}</i></h4><p class="hint">Lint, tests and build must pass.</p>${col('review','No pull request is open.')}</div>
     <div class="col"><h4>Closed <i>latest 5</i></h4><p class="hint">Merged and done.</p>${col('closed','Nothing closed yet.')}</div>
   </div>
@@ -2105,6 +2111,7 @@ const KIND={
     intro:()=>`<p class="lede">Each row is one product and its QA bot running a Playwright script in a browser. The agent walks the six steps, each pad turns green or red, and the result is filed at the report desk. A failed run opens a bug for that product in GitHub Valley.</p><div class="legend">${PLOTS.filter(o=>o.owner).map(o=>`<span><i style="background:${orgColor(o.id)}"></i>${esc(cut(o.id))}</span>`).join('')}<span><i style="background:#9ccfb5"></i>other owners</span><span><i style="background:#cfd3d6"></i>no owner</span><span><i style="background:#2f8f6b"></i>step passed</span><span><i style="background:#c8472f"></i>step failed</span></div>`},
 };
 function renderDetail(force){ if(!detail) return; const kd=KIND[detail.kind], store=kd.store(); if(!force&&(store.v===detail.v||detail.tab==='people')) return; detail.v=store.v;
+  let vh=null; if(detail.kind==='valley'){ vh=kd.html(detail.tab); if(!force&&vh===detail.h) return; }   // the register list is rewritten only when it changed
   const tabs=$('d-tabs'); tabs.innerHTML='';
   for(const [k,t] of kd.views){ const b=document.createElement('button'); b.textContent=t; b.setAttribute('aria-pressed',detail.tab===k); b.onclick=()=>{ detail.tab=k; sceneReset(); renderDetail(true); }; tabs.append(b); }
   $('d-where').textContent=kd.where; $('d-title').textContent=kd.title();
@@ -2120,7 +2127,9 @@ function renderDetail(force){ if(!detail) return; const kd=KIND[detail.kind], st
   if(detail.tab==='people'){ body.innerHTML=kd.intro()+`<div class="scene-wrap"><canvas id="scene" style="aspect-ratio:1060/${kd.LH}" aria-label="Animated queue"></canvas></div>`;
     const sc=$('scene'); sc.onmousemove=e=>{ const r=sc.getBoundingClientRect(); scene.mx=(e.clientX-r.left)/r.width*1060; scene.my=(e.clientY-r.top)/r.width*1060; }; sc.onmouseleave=()=>{ scene.mx=scene.my=-99; };
     drawScene(0); }
-  else body.innerHTML=kd.html(detail.tab); }
+  else{ const fo=document.activeElement&&document.activeElement.dataset&&document.activeElement.dataset.own;
+    body.innerHTML=vh!=null?vh:kd.html(detail.tab); if(vh!=null) detail.h=vh;
+    if(fo){ const el=body.querySelector('[data-own="'+CSS.escape(fo)+'"]'); if(el) el.focus({preventScroll:true}); } } }
 function ago(ms){ if(!ms) return 'no events yet'; const s=Math.max(0,(Date.now()-ms)/1000); return s<60?'just now':s<3600?Math.floor(s/60)+' min ago':s<86400?Math.floor(s/3600)+' h ago':Math.floor(s/86400)+' d ago'; }
 function valleyBoard(){ const rows=rankedOwners(); if(!rows.length) return none('No GitHub owners yet. An owner appears with its first event.');
   return `<p class="lede">Every GitHub owner the town knows, most recently active first. The first three stand at a gate; the rest wait here until a gate is free. Open one to see its board.</p><div class="own-list">`+rows.map(ow=>{ const placed=ow.plot!=null&&orgBy[ow.name]===PLOTS[ow.plot], n=ow.repos.size, ty=ow.hidden||!ow.type?'':ow.type==='organization'?'org':'personal';
@@ -2539,7 +2548,7 @@ function layoutLabels(){ const k=1/cam.z, placed=[], L=buildings.filter(b=>{ b._
     for(let n=0;n<6;n++){ const hit=placed.find(r=>x<r[0]+r[2]+3*k&&x+w+3*k>r[0]&&y<r[1]+r[3]+3*k&&y+h+3*k>r[1]); if(!hit) break; y=hit[1]-h-4*k; }
     b._lr=[x,y,w,h]; b._ls=s; b._ln=nm; placed.push(b._lr); let under=false; for(const a of agents){ if(a.hidden||a.dead) continue; const q=P(a.x+(a.kind==='car'?(a.lx||0):a.ox),a.y+(a.kind==='car'?(a.ly||0):a.oy),0); if(q[0]>x-6&&q[0]<x+w+6&&q[1]>y+2&&q[1]<y+h+17){ under=true; break; } } b._al=(b._al??1)+((under?.3:1)-(b._al??1))*.18; }
   return L; }
-function label(b){ const k=1/cam.z, [x,y,w,h]=b._lr, s=b._ls; ctx.globalAlpha=sel===b?1:b._al; ctx.strokeStyle=INK; ctx.lineWidth=1*k; ctx.beginPath(); ctx.moveTo(s[0],y+h); ctx.lineTo(s[0],s[1]+7*k); ctx.stroke(); ctx.beginPath(); ctx.arc(s[0],s[1]+7*k,1.6*k,0,7); ctx.fillStyle=INK; ctx.fill();
+function label(b){ const fa=fxAlpha(b.fxs); if(fa<=.004) return; const k=1/cam.z, [x,y,w,h]=b._lr, s=b._ls; ctx.globalAlpha=(sel===b?1:b._al)*fa; ctx.strokeStyle=INK; ctx.lineWidth=1*k; ctx.beginPath(); ctx.moveTo(s[0],y+h); ctx.lineTo(s[0],s[1]+7*k); ctx.stroke(); ctx.beginPath(); ctx.arc(s[0],s[1]+7*k,1.6*k,0,7); ctx.fillStyle=INK; ctx.fill();
   ctx.font=`${b.major?600:500} ${11*k}px "IBM Plex Sans"`; ctx.textAlign='center'; ctx.fillStyle=sel===b?INK:'rgba(250,251,247,.96)'; ctx.fillRect(x,y,w,h); ctx.strokeRect(x,y,w,h); ctx.fillStyle=sel===b?'#fff':INK;
   if(b._lp){ ctx.textAlign='left'; ctx.fillText(b._ln,x+5*k,y+h-4.6*k);   // owner name, then a pill: shape and word carry the type, not colour alone
     const px=x+5*k+b._nw+6*k, ph=11*k, py=y+(h-ph)/2, org=b._lp==='org', inv=sel===b, fill=org?(inv?'#fff':INK):(inv?INK:'#fff'), ink=org?(inv?INK:'#fff'):(inv?'#fff':INK);
