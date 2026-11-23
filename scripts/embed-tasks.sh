@@ -10,6 +10,10 @@ import glob, json, os, sys
 src = open("src/backoffice.src.html", encoding="utf-8").read()
 tasks = {os.path.basename(f): open(f, encoding="utf-8").read()
          for f in sorted(glob.glob("artifacts/v1/*/brain-town/tasks/*.md"))}
+extra = {"brain-town-integration-animora.md": "docs/integrations/animora.md"}
+for key, path in extra.items():
+    assert os.path.isfile(path), "missing " + path
+    tasks[key] = open(path, encoding="utf-8").read()
 assert tasks, "no task files found under artifacts/v1/*/brain-town/tasks/"
 assert not any("</script" in t.lower() for t in tasks.values()), "task text must not contain </script"
 marker = "/*__TASKS__*/{}"
