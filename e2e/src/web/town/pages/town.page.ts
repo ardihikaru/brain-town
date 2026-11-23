@@ -1,5 +1,21 @@
 import { expect } from '@playwright/test';
+import { z } from 'zod';
 import { BasePage } from '@web/shared/base.page';
+
+const ValleySchema = z.object({
+  source: z.enum(['sample', 'live']),
+  owners: z.record(
+    z.string(),
+    z.object({
+      type: z.enum(['', 'user', 'organization']),
+      hidden: z.boolean(),
+      placed: z.boolean(),
+      halls: z.array(z.string()),
+      over: z.number().int().nonnegative(),
+    }),
+  ),
+});
+export type Valley = z.infer<typeof ValleySchema>;
 
 /** The town (/). It reads /events (SSE) live; `?sim=1` forces the built-in simulator. */
 export class TownPage extends BasePage {
@@ -18,5 +34,22 @@ export class TownPage extends BasePage {
   async gotoSimulated(): Promise<void> {
     await this.page.goto('./?sim=1');
     await this.expectLoaded();
+  }
+
+  /** The valley part of the read-only test hook `window.brainTown.snapshot()` (plain data, no titles). */
+  async valley(): Promise<Valley> {
+    const raw = await this.page.evaluate(() => {
+      const hook = (window as unknown as { brainTown: { snapshot: () => { valley: unknown } } }).brainTown;
+      return hook.snapshot().valley;
+    });
+    return ValleySchema.parse(raw);
+  }
+
+  /** The whole hook snapshot as text, to prove a name never reached the page's own state. */
+  async snapshotText(): Promise<string> {
+    return this.page.evaluate(() => {
+      const hook = (window as unknown as { brainTown: { snapshot: () => unknown } }).brainTown;
+      return JSON.stringify(hook.snapshot());
+    });
   }
 }
