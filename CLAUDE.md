@@ -1,7 +1,7 @@
 # Brain Town — agent guide
 
-Brain Town is a "town" page that visualises events from GAOS, the QA tool and mfardiansyah.id,
-plus a back-office to manage integrations, tokens, products and visibility.
+Brain Town is a "town" page that visualises events from GAOS, the QA tool, mfardiansyah.id
+and Animora, plus a back-office to manage integrations, tokens, products and visibility.
 Read `README.md`, `CONTRIBUTING.md` and `docs/architecture.md` first. Rules in `.claude/rules/`
 are binding.
 
@@ -14,8 +14,9 @@ are binding.
 - `deploy/` — nginx image, site config, edge vhost reference (live edge config is on `clino`).
 - `.claude/agents/` — lead-engineer, frontend-designer (Opus 5.5); frontend-engineer, backend-engineer,
   e2e-engineer, integration-tester (Sonnet 5.5); e2e-runner (Haiku 5.5, runs E2E/stress tests only).
-  `.claude/skills/` — Emil Kowalski design/motion skills (vendored, see `UPSTREAM.md`), plus own skill
-  `mfardiansyah-id-integration` (local both-sides check and the read-only production check).
+  `.claude/skills/` — Emil Kowalski design/motion skills (vendored, see `UPSTREAM.md`), plus own skills
+  `mfardiansyah-id-integration` and `animora-integration` (local both-sides check and the read-only
+  production check).
 - `backend/` — Go back-office service (ingest, admin API, SSE).
 - `e2e/` — E2E (Playwright) and performance (k6) suite against the local stack only. Rules: `e2e/AGENTS.md`
   and `.claude/rules/e2e-automation.md`.
