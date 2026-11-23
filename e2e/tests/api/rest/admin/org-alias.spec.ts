@@ -79,10 +79,12 @@ test.describe('admin · org alias', () => {
     async ({ adminApi, integration, cleanup }) => {
       const first = await freshOrg({ adminApi, integration, cleanup });
       const second = await freshOrg({ adminApi, integration, cleanup });
+      const own = uniqueId('Own Name');
+      await expectJson(await adminApi.putOrg(second, { alias: own }), OrgSchema);
 
       await expectError(await adminApi.putOrg(second, { alias: first.toUpperCase() }), 409);
 
-      expect(await aliasOf(adminApi, second)).toBe(second);
+      expect(await aliasOf(adminApi, second)).toBe(own);
     },
   );
 
