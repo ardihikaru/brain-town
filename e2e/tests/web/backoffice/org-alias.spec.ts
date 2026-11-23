@@ -26,7 +26,7 @@ test.describe('backoffice · org alias', () => {
 
       await backoffice.owner.setOrgAlias(alias);
 
-      await expect(backoffice.owner.orgAlias().note).toHaveText(`Shown in town as ${alias}`);
+      await expect(backoffice.owner.orgAlias().note).toHaveText(`Shown in town as “${alias}”.`);
       await expect(backoffice.owner.orgAlias().error).toBeHidden();
       await expect.poll(() => aliasOf(adminApi, login), { message: 'the alias is saved' }).toBe(alias);
     },
@@ -47,12 +47,12 @@ test.describe('backoffice · org alias', () => {
       await expectJson(await adminApi.putOrg(other, { alias: taken }), OrgSchema);
       await expectJson(await adminApi.putOrg(login, { alias: own }), OrgSchema);
       await backoffice.owner.open(target.id);
-      await expect(backoffice.owner.orgAlias().note).toHaveText(`Shown in town as ${own}`);
+      await expect(backoffice.owner.orgAlias().note).toHaveText(`Shown in town as “${own}”.`);
 
       await backoffice.owner.setOrgAlias(taken);
 
       await expect(backoffice.owner.orgAlias().error).toBeVisible();
-      await expect(backoffice.owner.orgAlias().note).toHaveText(`Shown in town as ${own}`);
+      await expect(backoffice.owner.orgAlias().note).toHaveText(`Shown in town as “${own}”.`);
       expect(await aliasOf(adminApi, login)).toBe(own);
     },
   );
