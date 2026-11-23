@@ -12,8 +12,10 @@ const ValleySchema = z.object({
       placed: z.boolean(),
       halls: z.array(z.string()),
       over: z.number().int().nonnegative(),
+      gate: z.union([z.literal(0), z.literal(1), z.literal(2), z.null()]).optional(),
     }),
   ),
+  unowned: z.unknown().optional(),
 });
 export type Valley = z.infer<typeof ValleySchema>;
 

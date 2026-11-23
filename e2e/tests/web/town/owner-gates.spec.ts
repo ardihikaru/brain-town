@@ -7,7 +7,9 @@ import { uniqueId } from '@utils/unique';
 import { Tag } from '@utils/tags';
 
 // The town draws one GitHub Valley gate per real owner from GET /api/town. The drawing itself is the designer's;
-// these tests read the plain-data hook (town.home.valley()) and assert facts that hold for any hall cap.
+// these tests read the plain-data hook (town.home.valley()) and assert facts that hold for any hall cap. The valley has
+// 3 gate plots and placement depends on recent activity, so `placed` is not deterministic on the shared stack: tests
+// assert owner, type, halls and over (halls and over are defined for unplaced owners too).
 
 function integrationFor(scope: GithubScope) {
   return { org: scope.org, ownerType: scope.ownerType ?? 'organization' };
@@ -33,7 +35,9 @@ test.describe('town · github valley owner gates', () => {
 
       await expect
         .poll(async () => (await town.home.valley()).owners[scope.org], { message: 'owner is drawn from the snapshot' })
-        .toMatchObject({ type: 'user', hidden: false, placed: true, halls: [scope.repo] });
+        .toMatchObject({ type: 'user', hidden: false, halls: [scope.repo], over: 0 });
+      const owner = (await town.home.valley()).owners[scope.org];
+      expect(typeof owner?.placed).toBe('boolean');
       expect((await town.home.valley()).source).toBe('live');
     },
   );
@@ -57,9 +61,13 @@ test.describe('town · github valley owner gates', () => {
         202,
       );
 
+      // The owner first appears with type '' and the town refetches /api/town (debounced) to learn the type.
       await expect
-        .poll(async () => (await town.home.valley()).owners[scope.org], { message: 'new owner gate is added' })
-        .toMatchObject({ placed: true, halls: [scope.repo] });
+        .poll(async () => (await town.home.valley()).owners[scope.org], {
+          message: 'new owner is added and its type is learned from the refetch',
+        })
+        .toMatchObject({ type: scope.ownerType ?? 'organization', halls: [scope.repo], over: 0 });
+      expect(typeof (await town.home.valley()).owners[scope.org]?.placed).toBe('boolean');
       expect((await town.home.valley()).source).toBe('live');
     },
   );
@@ -86,6 +94,7 @@ test.describe('town · github valley owner gates', () => {
         .toHaveLength(1);
       const owner = (await town.home.valley()).owners[scope.org];
       expect(owner?.halls[0]).toMatch(/^Product /);
+      expect(owner?.over).toBe(0);
       expect(await town.home.snapshotText()).not.toContain(scope.repo);
     },
   );

@@ -97,8 +97,10 @@ test.describe('town snapshot · GET /api/town', () => {
       const snapshot = await expectJson(response, TownSnapshotSchema);
 
       const owner = snapshot.owners.find((o) => o.name === alias);
-      expect(owner).toMatchObject({ hidden: true });
-      expect(owner?.repos.every((r) => r.hidden && /^Product /.test(r.name))).toBe(true);
+      // Hidden owners report no type (privacy). A public repo of a hidden org is published under the org's alias.
+      expect(owner).toMatchObject({ hidden: true, type: '' });
+      expect(owner?.repos).toHaveLength(1);
+      expect(owner?.repos.every((r) => r.hidden && r.name !== scope.repo && r.name !== scope.org)).toBe(true);
       const text = await response.text();
       expect(text).not.toContain(scope.org);
       expect(text).not.toContain(scope.repo);
