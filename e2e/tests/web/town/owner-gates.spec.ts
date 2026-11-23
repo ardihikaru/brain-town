@@ -47,7 +47,12 @@ test.describe('town · github valley owner gates', () => {
     { tag: [Tag.smoke] },
     async ({ town, apiContextFor, adminApi, cleanup }) => {
       const scope = buildGithubScope();
-      const { github, target } = await setupGithub({ apiContextFor, adminApi, cleanup }, integrationFor(scope));
+      // No org on the integration: the town lists an owner for every github integration with an org set, even with no
+      // products, so the org must be adopted from the first signed delivery for the owner to appear mid-session.
+      const { github, target } = await setupGithub(
+        { apiContextFor, adminApi, cleanup },
+        { ownerType: integrationFor(scope).ownerType },
+      );
       await town.home.goto();
       await expect(town.home.mode).toHaveText('live SSE');
       expect((await town.home.valley()).owners[scope.org]).toBeUndefined();
