@@ -1653,8 +1653,9 @@ function purgeOrg(name,repo){ let n=0;
   if(n){ GH.v++; } QAS.v++; }
 function bindSlot(org,j,repo,enter,outInstant){ const p=org.products[j], ow=org.owner; if(p.bound&&repo&&p.repo===repo&&p.org===(ow&&ow.name)) return;
   if(sel===p) closeCard(); resetGh(p.gh); p.visual=null; p.wreck=null; const inst=calm();
-  if(!repo||!ow){ if(p.bound){ if(outInstant) fxSet(p.fx,0); else fxGo(p.fx,0,inst?0:160); } p.bound=false; p.repo=null; p.org=null; p.label=false; p.nohit=true; p.desc=''; p.detail=null; p.id='slot-'+org.plot+'-'+j; p.name=''; return; }
-  p.bound=true; p.repo=repo; p.org=ow.name; p.id=ow.name+'/'+repo; p.full=repo; p.name=cut(repo,p.w<1.6?14:20); p.label=true;   // narrow halls: shorter label so three of them do not stack up the screen p.nohit=false;
+  if(!repo||!ow){ const fade=p.bound&&!outInstant&&!inst; if(p.bound){ if(outInstant) fxSet(p.fx,0); else fxGo(p.fx,0,inst?0:160); } p.bound=false; p.repo=null; p.org=null; p.nohit=true; p.desc=''; p.detail=null; p.id='slot-'+org.plot+'-'+j;
+    if(fade) setTimeout(()=>{ if(!p.bound){ p.label=false; p.name=''; } },170); else { p.label=false; p.name=''; } return; }   // keep the label until the 160 ms fade ends
+  p.bound=true; p.repo=repo; p.org=ow.name; p.id=ow.name+'/'+repo; p.full=repo; p.name=cut(repo,p.w<1.6?14:20); p.label=true; p.nohit=false;   // narrow halls: shorter label so three of them do not stack up the screen
   p.desc=`A repo of ${ow.name}. One agent handles one issue at a time, ticking off its tasks.`; p.detail={label:'Open the '+cut(ow.name)+' board',open:()=>openDetail('org',ow.name,'board')};
   if(enter&&!inst){ fxSet(p.fx,0); fxGo(p.fx,1,280); } else fxSet(p.fx,1); }
 function plotSync(org){ const ow=org.owner, ent=org.ent, bd=org.board;
