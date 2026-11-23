@@ -68,7 +68,7 @@ Grouped events (comments, reviews, pushes, labels, stars, CI runs, ...) are merg
 
 ## Streams
 
-- `GET /events`: public. Accepted events only, masked. `Last-Event-ID` replays missed events. `?replay=N` (1 to 500) starts a new subscriber with the newest N events, oldest first (ignored when `Last-Event-ID` is sent); `?kind=github|gaos|qa|site` keeps one source, for the replay and the live frames.
+- `GET /events`: public. Accepted events only, masked. `Last-Event-ID` replays missed events. `?replay=N` (1 to 500) starts a new subscriber with the newest N events, oldest first (ignored when `Last-Event-ID` is sent); `?kind=github|gaos|qa|site|animora` keeps one source, for the replay and the live frames.
 - `GET /admin/events`: admin session. Every delivery, raw payload plus the public view.
 
 Public `qa` events (every `/events` frame, including `Last-Event-ID` replay, and the public view in `/admin/events`)
