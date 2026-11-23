@@ -860,6 +860,12 @@ func (st *Store) SetOrg(key string, vis, alias *string) (Org, error) {
 					return Org{}, &OrgError{ErrConflict, "alias is already used by another org"}
 				}
 			}
+			for _, in := range st.s.Integrations {
+				// an org that exists only through an integration still owns its key
+				if in.Org != "" && in.Org != key && strings.EqualFold(in.Org, a) {
+					return Org{}, &OrgError{ErrConflict, "alias is already used by another org"}
+				}
+			}
 			c.Alias = a
 		}
 	}
