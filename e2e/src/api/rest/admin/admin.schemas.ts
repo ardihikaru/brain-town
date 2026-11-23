@@ -86,6 +86,8 @@ export const PublicEventSchema = z
     source: z.enum(['github', 'gaos', 'qa', 'site']),
     at: z.iso.datetime(),
     payload: z.record(z.string(), z.unknown()),
+    /** QA events only: the name of the QA integration that sent it, looked up when the event is viewed. */
+    tool: z.string().optional(),
   })
   .strict();
 export type PublicEvent = z.infer<typeof PublicEventSchema>;

@@ -9,6 +9,7 @@
 - **US-ING-03** — As mfardiansyah.id I want articles and visits accepted so that couriers and visitors appear, with no personal data stored.
 - **US-ING-04** — As the owner I want unauthenticated, malformed and flooding senders refused so that the town stays clean.
 - **US-ING-05** — As GitHub I want my signed organisation webhooks accepted once so that the town shows issues, pull requests and comments without any code in another repo.
+- **US-ING-06** — As the QA tool I want an omitted org filled from my integration so that every run is filed under the right org.
 
 ## Test cases
 
@@ -52,3 +53,5 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-ING-068 | US-ING-05 | Given an owner without a type, when an organization pings, then the type is organization                                                                           | +   | API   | P1  | automated | `tests/api/rest/github/github-owner.spec.ts`  |
 | ☑    | TC-ING-069 | US-ING-05 | Given a pinged repo, when an issue is delivered, then that repo counts 1 today with a last event and its sibling stays at 0                                        | +   | API   | P0  | automated | `tests/api/rest/github/github-owner.spec.ts`  |
 | ☑    | TC-ING-070 | US-ING-05 | Given a delivery for another owner, when it names a known repo or an unknown one, then 422 and it counts on the known repo only, adding none                       | -   | API   | P1  | automated | `tests/api/rest/github/github-owner.spec.ts`  |
+| ☑    | TC-ING-071 | US-ING-06 | Given a QA integration with an org, when a run is sent without org, then the stored event and the public payload carry the integration org                         | +   | API   | P1  | automated | `tests/api/rest/ingest/qa-org.spec.ts`        |
+| ☑    | TC-ING-072 | US-ING-06 | Given a QA integration with an org, when a run is sent with another org, then the given org is kept                                                                | +   | API   | P1  | automated | `tests/api/rest/ingest/qa-org.spec.ts`        |

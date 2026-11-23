@@ -95,6 +95,7 @@ main{overflow-x:clip}
 #chart{display:block;width:100%;height:170px}
 .health{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .hcard{padding:11px 13px;display:flex;flex-direction:column;gap:6px;position:relative}
+.hcard h3{min-width:0;overflow-wrap:anywhere;padding-right:16px}
 .hcard .dot{position:absolute;top:12px;right:12px;width:9px;height:9px;border-radius:50%;background:var(--good)}
 .hcard .dot.ping{animation:ping .7s ease-out}
 @keyframes ping{0%{box-shadow:0 0 0 0 rgba(47,143,107,.6)}100%{box-shadow:0 0 0 12px rgba(47,143,107,0)}}
@@ -358,10 +359,22 @@ body.still #gh-pop-scrim,body.still #gh-pop-scrim.on{transition:opacity 150ms ea
 #gh-create[hidden]{display:none}
 #gh-create label.panel{box-shadow:none}
 #gh-create label.panel:has(input:checked){box-shadow:inset 0 0 0 1px var(--ink)}
-#gh-create:not([hidden]){animation:ghform 160ms var(--ease-out) both}
+#qa-create[hidden]{display:none}
+#gh-create:not([hidden]),#qa-create:not([hidden]){animation:ghform 160ms var(--ease-out) both}
 @keyframes ghform{from{opacity:0;transform:translateY(4px)}}
-@media (prefers-reduced-motion:reduce){ #gh-create:not([hidden]){animation:none} }
-body.still #gh-create:not([hidden]){animation:none}
+@media (prefers-reduced-motion:reduce){ #gh-create:not([hidden]),#qa-create:not([hidden]){animation:none} }
+body.still #gh-create:not([hidden]),body.still #qa-create:not([hidden]){animation:none}
+/* ---------- rename any integration ---------- */
+.title-row{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.title-row h1{min-width:0}
+.title-row button{padding:3px 9px;font-size:12px}
+.title-row[hidden],.title-row button[hidden]{display:none}
+#su-title,#own-title,.icard h2{overflow-wrap:anywhere}
+form.rename{width:100%}
+form.rename input{width:100%;font-family:var(--font-display);font-size:17px}
+.head form.rename{width:min(480px,100%)}
+.head form.rename input{font-size:20px}
+@media (pointer:coarse){ form.rename input{font-size:16px} }
 </style>
 </head>
 <body>
@@ -420,7 +433,7 @@ body.still #gh-create:not([hidden]){animation:none}
 
     <!-- SETUP -->
     <section class="page" data-page="setup">
-      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / setup</div><h1 id="su-title"></h1><p id="su-lede"></p></div><span class="pill" id="su-pill"></span></div>
+      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / setup</div><div class="row title-row" id="su-title-row"><h1 id="su-title" data-testid="setup-title" dir="auto"></h1><button type="button" class="quiet" id="su-rename" aria-label="Rename this integration" data-rename-page="su" data-testid="su-rename">Rename</button></div><p id="su-lede"></p></div><span class="pill" id="su-pill"></span></div>
       <div class="setup">
         <div class="panel pad" style="display:flex;flex-direction:column;gap:14px">
           <h2>Set it up</h2>
@@ -445,7 +458,7 @@ body.still #gh-create:not([hidden]){animation:none}
 
     <!-- GITHUB OWNER -->
     <section class="page" data-page="owner" data-testid="owner-page">
-      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / GitHub owner</div><h1 id="own-title" data-testid="owner-title"></h1><p id="own-lede"></p></div><span class="pill" id="own-type" data-testid="owner-type"></span><span class="pill" id="own-pill" data-testid="owner-health"></span></div>
+      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / GitHub owner</div><div class="row title-row" id="own-title-row"><h1 id="own-title" data-testid="owner-title" dir="auto"></h1><button type="button" class="quiet" id="own-rename" aria-label="Rename this integration" data-rename-page="own" data-testid="own-rename">Rename</button></div><p class="small muted mono" id="own-login" data-testid="owner-login" dir="auto" hidden></p><p id="own-lede"></p></div><span class="pill" id="own-type" data-testid="owner-type"></span><span class="pill" id="own-pill" data-testid="owner-health"></span></div>
       <div class="panel pad" id="own-hook" style="order:1"><h2>Shared webhook</h2><p class="small muted" id="own-hook-note"></p>
         <div class="two" style="margin-top:6px"><div id="own-url-wrap"></div><div id="own-sec-wrap"></div></div></div>
       <div class="panel scroll" style="order:3"><table class="stack" id="own-table"><thead><tr><th>Repo</th><th>Visibility</th><th>Public name in town</th><th>Last event</th><th>Today</th><th>Rejected</th><th>Events</th></tr></thead><tbody id="own-body" data-testid="owner-repos" data-empty=""></tbody></table></div>
@@ -558,7 +571,8 @@ const INTS=[
     demoDev('dotfiles',true,['issues','pull_request','push'],9,0,Date.now()-180000,0,'hidden','Workbench',true,'Product H','dotfiles'),
     demoDev('homelab',true,['issues','push'],13,1,Date.now()-480000,Date.now()-300000,'hidden','Product I',false,'Product I','homelab'),
     demoDev('scratchpad',false,['issues','pull_request'],0,0,Date.now()-1200000,0,'public','',false,'','')]},
-  {id:'qa-main',kind:'qa',name:'QA tool',state:'ok',today:324,err:0,last:Date.now()-2000},
+  {id:'qa-company',kind:'qa',name:'QA · Company',org:'sismedika',state:'ok',today:324,err:0,last:Date.now()-2000,events:[]},
+  {id:'qa-personal',kind:'qa',name:'QA · Personal',org:'',state:'ok',today:57,err:0,last:Date.now()-40000,events:[]},
   {id:'gaos-main',kind:'gaos',name:'GAOS',state:'ok',today:186,err:2,last:Date.now()-6000},
   {id:'site-main',kind:'site',name:'mfardiansyah.id',state:'waiting',today:0,err:0,last:0},
 ];
@@ -628,6 +642,12 @@ const ago=t=>{ if(!t) return 'never'; const s=Math.max(0,Math.round((Date.now()-
 const stateOf=i=>i.state==='waiting'?['off','waiting for first event']:i.state==='paused'?['off','paused']:i.err>0&&Date.now()-i.lastErr<60000?['bad','delivery rejected']:['ok','receiving'];
 /* GitHub owners: one integration per owner, repos listed under it */
 const ownerName=i=>i.org||i.name;
+let ren=null, intDirty=false;
+const ghDefaultName=i=>'GitHub · '+i.org;
+const ghCustom=i=>i.kind==='github'&&i.name.trim()!==ghDefaultName(i);
+const intTitle=i=>i.kind==='github'?(ghCustom(i)?i.name:(i.org||i.name)):i.name;
+const nameTaken=(kind,v,id)=>INTS.some(x=>x.kind===kind&&x.id!==id&&x.name.trim().toLowerCase()===v.toLowerCase());
+const renameBtn=(i,m)=>`<button class="quiet" type="button" data-rename="${esc(i.id)}" data-testid="int-rename-${esc(i.id)}" aria-label="Rename ${esc(intTitle(i))}">Rename</button>`;
 const ownerKind=i=>i.ownerType==='user'?'user':i.ownerType==='organization'?'organization':'unknown';
 const ghMissing=events=>events&&events.length?GH_EVENTS.filter(e=>e.tier==='m'&&!ghHas(events,e.id)).map(e=>e.id):[];
 const ownerLast=i=>Math.max(i.last||0,...(i.repos||[]).map(r=>r.last||0));
@@ -636,7 +656,7 @@ function ownerState(i){ if(i.state==='paused') return ['off','paused']; if(!owne
   const n=(i.repos||[]).filter(r=>ghMissing(r.events).length).length; if(n) return ['warn',n===1?'1 repo missing events':n+' repos missing events']; return ['ok','receiving']; }
 const lastOf=i=>i.kind==='github'?ownerLast(i):i.last;
 const num=n=>(n||0).toLocaleString('en-US');
-function paintHealth(){ $('health').innerHTML=INTS.map(i=>{ const gh=i.kind==='github', [cl,tx]=gh?ownerState(i):stateOf(i); return `<a class="panel hcard ${cl==='off'?'off':''}" href="#${gh?'integration':'setup'}-${i.id}" style="text-decoration:none"><span class="dot" id="dot-${i.id}"></span><div class="row"><span class="kind k-${i.kind}"></span><h3>${esc(i.name)}</h3></div><span class="pill ${cl}"><i></i>${tx}</span><span class="small muted">last event <span data-ago="${i.id}">${ago(lastOf(i))}</span> · ${i.today} today</span></a>`; }).join(''); }
+function paintHealth(){ $('health').innerHTML=INTS.map(i=>{ const gh=i.kind==='github', [cl,tx]=gh?ownerState(i):stateOf(i); return `<a class="panel hcard ${cl==='off'?'off':''}" href="#${gh?'integration':'setup'}-${i.id}" style="text-decoration:none"><span class="dot" id="dot-${i.id}"></span><div class="row"><span class="kind k-${i.kind}"></span><h3 dir="auto">${esc(i.name)}</h3></div><span class="pill ${cl}"><i></i>${tx}</span><span class="small muted">last event <span data-ago="${i.id}">${ago(lastOf(i))}</span> · ${i.today} today</span></a>`; }).join(''); }
 function tailRow(ev,isNew){ const li=document.createElement('li'); if(isNew) li.className='new'; li.innerHTML=`<time>${hhmmss(ev.at)}</time><span><span class="kind k-${ev.kind}" style="margin-right:6px"></span><b style="font-weight:500">${esc(ev.type)}</b> ${esc(ev.sum)}</span>`; return li; }
 
 /* ============================ integrations ============================ */
@@ -646,19 +666,19 @@ const typePill=(i,tid)=>{ const k=ownerKind(i); return `<span class="pill${k==='
 const repoCount=n=>n?n+(n===1?' repo':' repos'):'No repos yet';
 function ownerCard(i){ const [cl,tx]=ownerState(i), k=ownerKind(i), id=esc(i.id), n=(i.repos||[]).length;
   return `<div class="panel icard" style="border-top-color:${KCOL.github}" data-testid="owner-card-${id}"><div class="row">${typePill(i,'owner-type-'+i.id)}<span class="grow"></span><span class="pill ${cl}" data-testid="owner-health-${id}"><i></i>${tx}</span></div>
-    <h2 style="overflow-wrap:anywhere"><a href="#integration-${id}" data-testid="owner-open-${id}">${esc(ownerName(i))}</a></h2>
-    <p class="small muted">${OWN_SUB[k]} · <span data-testid="owner-repos-${id}">${repoCount(n)}</span></p>
+    <h2 style="overflow-wrap:anywhere" dir="auto" data-testid="int-name-${id}"><a href="#integration-${id}" data-testid="owner-open-${id}">${esc(intTitle(i))}</a></h2>
+    <p class="small muted">${ghCustom(i)?`<span data-testid="owner-login-${id}" dir="auto">@${esc(i.org)}</span> · `:''}${OWN_SUB[k]} · <span data-testid="owner-repos-${id}">${repoCount(n)}</span></p>
     <dl><div><dt>Last event</dt><dd data-ago="${id}">${ago(ownerLast(i))}</dd></div><div><dt>Today</dt><dd>${num(i.today)}</dd></div><div><dt>Rejected</dt><dd>${num(i.err)}</dd></div></dl>
-    <div class="row"><a href="#integration-${id}"><button class="primary" tabindex="-1">Repos</button></a><a href="#setup-${id}"><button tabindex="-1">Setup guide</button></a><button data-pause="${id}">${i.state==='paused'?'Resume':'Pause'}</button><button class="quiet" data-rotate="${id}">Rotate secret</button></div></div>`; }
-function plainCard(i){ const [cl,tx]=stateOf(i); return `<div class="panel icard" style="border-top-color:${KCOL[i.kind]}"><div class="row"><h2 class="grow">${esc(i.name)}</h2><span class="pill ${cl}"><i></i>${tx}</span></div>
-    <dl><div><dt>Last event</dt><dd data-ago="${i.id}">${ago(i.last)}</dd></div><div><dt>Today</dt><dd>${i.today}</dd></div><div><dt>Rejected</dt><dd>${i.err}</dd></div></dl>
-    <div class="row"><a href="#setup-${i.id}"><button class="primary" tabindex="-1">Setup guide</button></a><button data-pause="${i.id}">${i.state==='paused'?'Resume':'Pause'}</button><button class="quiet" data-rotate="${i.id}">Rotate secret</button></div></div>`; }
-function paintIntegrations(){ $('n-int').textContent=INTS.length; placeMark();
+    <div class="row"><a href="#integration-${id}"><button class="primary" tabindex="-1">Repos</button></a><a href="#setup-${id}"><button tabindex="-1">Setup guide</button></a><button data-pause="${id}">${i.state==='paused'?'Resume':'Pause'}</button>${renameBtn(i)}<button class="quiet" data-rotate="${id}">Rotate secret</button></div></div>`; }
+function plainCard(i){ const [cl,tx]=stateOf(i), id=esc(i.id), qa=i.kind==='qa'; return `<div class="panel icard" style="border-top-color:${KCOL[i.kind]}"${qa?` data-testid="qa-card-${id}"`:''}><div class="row"><h2 class="grow" style="overflow-wrap:anywhere" dir="auto" data-testid="int-name-${id}">${esc(i.name)}</h2><span class="pill ${cl}" style="margin-left:auto"><i></i>${tx}</span></div>
+    ${qa?`<p class="small muted" data-testid="qa-card-org-${id}">${i.org?`org <b style="font-weight:500" dir="auto">${esc(i.org)}</b>`:'No org set'}</p>`:''}<dl><div><dt>Last event</dt><dd data-ago="${i.id}">${ago(i.last)}</dd></div><div><dt>Today</dt><dd>${i.today}</dd></div><div><dt>Rejected</dt><dd>${i.err}</dd></div></dl>
+    <div class="row"><a href="#setup-${i.id}"><button class="primary" tabindex="-1">Setup guide</button></a><button data-pause="${i.id}">${i.state==='paused'?'Resume':'Pause'}</button>${renameBtn(i)}<button class="quiet" data-rotate="${i.id}">Rotate secret</button></div></div>`; }
+function paintIntegrations(){ $('n-int').textContent=INTS.length; placeMark(); if(ren&&ren.surface==='card'){ intDirty=true; return; }
   $('igroups').innerHTML=Object.keys(KIND).map(k=>{ const list=INTS.filter(i=>i.kind===k); if(!list.length) return ''; const n=list.length, unit=k==='github'?'owner':'integration';
     return `<section data-testid="igroup-${k}" aria-labelledby="ig-${k}"><div class="row"><span class="kind k-${k}"></span><h2 id="ig-${k}">${KIND[k].label}</h2><span class="small muted">${n} ${unit}${n===1?'':'s'}</span></div><div class="cards" style="margin-top:10px">${list.map(k==='github'?ownerCard:plainCard).join('')}</div></section>`; }).join(''); }
 /* "Add an integration" is rendered once: the create form lives in it and must survive every repaint of the list */
 function renderAdd(){ const radio=(v,t,d)=>`<label class="panel pad row" style="flex-direction:row;color:var(--ink);font-size:14px;cursor:pointer"><input type="radio" name="ot" value="${v}" data-testid="gh-owner-type-${v}"><span class="grow"><b style="font-weight:600">${t}</b><span class="small muted" style="display:block">${d}</span></span></label>`;
-  $('iadd').innerHTML=`<div class="panel icard add"><h2>Add an integration</h2><p class="small muted">Pick a platform to open its tutorial.</p><div class="row"><button type="button" data-testid="gh-create-open" aria-expanded="false" aria-controls="gh-create"><span class="kind k-github" style="margin-right:6px"></span>GitHub</button>${Object.keys(KIND).filter(k=>k!=='github').map(k=>`<a href="#setup-new-${k}"><button tabindex="-1"><span class="kind k-${k}" style="margin-right:6px"></span>${KIND[k].label}</button></a>`).join('')}</div>
+  $('iadd').innerHTML=`<div class="panel icard add"><h2>Add an integration</h2><p class="small muted">Pick a platform. GitHub and QA tool ask for a name first; the others open their tutorial.</p><div class="row"><button type="button" data-testid="gh-create-open" aria-expanded="false" aria-controls="gh-create"><span class="kind k-github" style="margin-right:6px"></span>GitHub</button><button type="button" data-testid="qa-create-open" aria-expanded="false" aria-controls="qa-create"><span class="kind k-qa" style="margin-right:6px"></span>QA tool</button>${Object.keys(KIND).filter(k=>k!=='github'&&k!=='qa').map(k=>`<a href="#setup-new-${k}"><button tabindex="-1"><span class="kind k-${k}" style="margin-right:6px"></span>${KIND[k].label}</button></a>`).join('')}</div>
     <form id="gh-create" data-testid="gh-create-form" class="stackf" novalidate hidden>
       <fieldset aria-describedby="gh-owner-err" style="border:0;padding:0;margin:0;display:flex;flex-direction:column;gap:8px"><legend class="eyebrow">Who owns the repos?</legend>
         ${radio('user','Personal account','GitHub has no account-wide webhook, so each repo gets its own. All of them share one URL and secret.')}
@@ -666,13 +686,22 @@ function renderAdd(){ const radio=(v,t,d)=>`<label class="panel pad row" style="
       <label>GitHub owner<input type="text" id="gh-owner" data-testid="gh-owner-name" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-username or your-org" aria-describedby="gh-owner-help gh-owner-err"></label>
       <p class="small muted" id="gh-owner-help">As in github.com/<b>owner</b>. Shown as “GitHub · <span id="gh-owner-prev">owner</span>”.</p>
       <p class="small" id="gh-owner-err" data-testid="gh-owner-error" role="alert" style="color:var(--bad)" hidden></p>
-      <div class="row"><button class="primary" data-testid="gh-create-submit">Connect owner</button><button type="button" class="quiet" data-testid="gh-create-cancel">Cancel</button></div></form></div>`; }
+      <div class="row"><button class="primary" data-testid="gh-create-submit">Connect owner</button><button type="button" class="quiet" data-testid="gh-create-cancel">Cancel</button></div></form>
+    <form id="qa-create" data-testid="qa-create-form" class="stackf" novalidate hidden>
+      <p class="small muted">Add one integration per QA deployment, for example the company one and your personal one.</p>
+      <label>Name<input type="text" id="qa-name" data-testid="qa-name" dir="auto" required autocomplete="off" spellcheck="false" placeholder="QA · Company" aria-describedby="qa-name-help qa-name-err"></label>
+      <p class="small muted" id="qa-name-help">Public: the town shows this name above this deployment’s test runs.</p>
+      <p class="small" id="qa-name-err" data-testid="qa-name-error" role="alert" style="color:var(--bad)" hidden></p>
+      <label>Org <span class="muted">(optional)</span><input type="text" id="qa-org" data-testid="qa-org" maxlength="80" pattern="[A-Za-z0-9_.\-]+" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-org" aria-describedby="qa-org-help qa-org-err"></label>
+      <p class="small muted" id="qa-org-help">Use the same value as BRAIN_TOWN_ORG in the executor env file. Runs sent without an org get this one.</p>
+      <p class="small" id="qa-org-err" data-testid="qa-org-error" role="alert" style="color:var(--bad)" hidden></p>
+      <div class="row"><button class="primary" data-testid="qa-create-submit">Add QA tool</button><button type="button" class="quiet" data-testid="qa-create-cancel">Cancel</button></div></form></div>`; }
 const GH_NAME_RE=/^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
 let ghCreateWanted=false;
 const ghOwnerClean=v=>v.trim().replace(/^@/,'').replace(/^https?:\/\/(?:www\.)?github\.com\//i,'').replace(/^@/,'').replace(/\/+$/,'');
 function ghCreateErr(html,el){ const e=$('gh-owner-err'); e.innerHTML=html; e.hidden=false; if(el){ if(el.id==='gh-owner') el.setAttribute('aria-invalid','true'); el.focus(); } }
 function ghCreateClearErr(){ $('gh-owner-err').hidden=true; $('gh-owner-err').textContent=''; $('gh-owner').removeAttribute('aria-invalid'); document.querySelectorAll('#gh-create input[type=radio]').forEach(r=>r.removeAttribute('aria-invalid')); }
-function openGhCreate(){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f||!b) return; f.hidden=false; b.setAttribute('aria-expanded','true'); f.querySelector('input[type=radio]').focus({preventScroll:true}); f.closest('.icard').scrollIntoView({block:'nearest',behavior:isStill()?'auto':'smooth'}); }
+function openGhCreate(){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f||!b) return; closeQaCreate(false); f.hidden=false; b.setAttribute('aria-expanded','true'); f.querySelector('input[type=radio]').focus({preventScroll:true}); f.closest('.icard').scrollIntoView({block:'nearest',behavior:isStill()?'auto':'smooth'}); }
 function closeGhCreate(refocus){ const f=$('gh-create'), b=document.querySelector('[data-testid=gh-create-open]'); if(!f) return; f.reset(); ghCreateClearErr(); $('gh-owner').placeholder='your-username or your-org'; $('gh-owner-prev').textContent='owner'; f.hidden=true; b.setAttribute('aria-expanded','false'); const s=f.querySelector('[data-testid=gh-create-submit]'); s.disabled=false; s.removeAttribute('aria-busy'); s.textContent='Connect owner'; if(refocus) b.focus(); }
 async function ghCreateSubmit(){ const f=$('gh-create'), sel=f.querySelector('input[name=ot]:checked'), owner=ghOwnerClean($('gh-owner').value), field=$('gh-owner');
   if(!sel) return ghCreateErr('Choose personal account or organization.',f.querySelector('input[type=radio]'));
@@ -687,12 +716,74 @@ async function ghCreateSubmit(){ const f=$('gh-create'), sel=f.querySelector('in
     rec=mapInt(r.data.integration); rec.token=r.data.token; }
   else { let id='gh-'+owner.toLowerCase(), n=1; while(INTS.some(x=>x.id===id)) id='gh-'+owner.toLowerCase()+'-'+(++n); rec={id,kind:'github',name:'GitHub · '+owner,org:owner,ownerType,state:'waiting',today:0,err:0,last:0,events:[],repos:[]}; }
   INTS.push(rec); fillFilters(); paintIntegrations(); paintHealth(); closeGhCreate(false); location.hash=(ownerType==='user'?'#integration-':'#setup-')+rec.id; }
-$('iadd').addEventListener('click',e=>{ const b=e.target.closest('[data-testid=gh-create-open]'); if(b){ if($('gh-create').hidden) openGhCreate(); else closeGhCreate(true); return; } if(e.target.closest('[data-testid=gh-create-cancel]')) closeGhCreate(true); });
-$('iadd').addEventListener('submit',e=>{ e.preventDefault(); ghCreateClearErr(); ghCreateSubmit(); });
-$('iadd').addEventListener('input',e=>{ if(e.target.id!=='gh-owner') return; ghCreateClearErr(); $('gh-owner-prev').textContent=ghOwnerClean(e.target.value)||'owner'; });
+/* QA tool: one integration per QA deployment, named, with an optional org */
+let qaCreateWanted=false;
+const QA_ORG_RE=/^[A-Za-z0-9_.-]+$/, qaSlug=v=>v.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'');
+function qaClearErr(w){ if(!w){ qaClearErr('name'); qaClearErr('org'); return; } const e=$('qa-'+w+'-err'); if(!e) return; e.hidden=true; e.textContent=''; $('qa-'+w).removeAttribute('aria-invalid'); }
+function qaErr(w,html){ const e=$('qa-'+w+'-err'), f=$('qa-'+w); e.innerHTML=html; e.hidden=false; f.setAttribute('aria-invalid','true'); f.focus(); }
+function openQaCreate(){ const f=$('qa-create'), b=document.querySelector('[data-testid=qa-create-open]'); if(!f||!b) return; closeGhCreate(false); f.hidden=false; b.setAttribute('aria-expanded','true'); $('qa-name').focus({preventScroll:true}); f.closest('.icard').scrollIntoView({block:'nearest',behavior:isStill()?'auto':'smooth'}); }
+function closeQaCreate(refocus){ const f=$('qa-create'), b=document.querySelector('[data-testid=qa-create-open]'); if(!f||!b) return; f.reset(); qaClearErr(); f.hidden=true; b.setAttribute('aria-expanded','false'); const s=f.querySelector('[data-testid=qa-create-submit]'); s.disabled=false; s.removeAttribute('aria-busy'); s.textContent='Add QA tool'; if(refocus) b.focus(); }
+async function qaCreateSubmit(){ const f=$('qa-create'), name=$('qa-name').value.trim(), org=$('qa-org').value.trim();
+  if(!name) return qaErr('name','Enter a name for this QA deployment.');
+  if([...name].length>80) return qaErr('name',`Use 80 characters or fewer. This name has ${[...name].length}.`);
+  const dupMsg=()=>{ const x=INTS.find(x=>x.kind==='qa'&&x.name.trim().toLowerCase()===name.toLowerCase()); qaErr('name',`“${esc(name)}” is already used by another QA integration.${x?` <a href="#setup-${esc(x.id)}">Open it</a>`:''}`); };
+  if(nameTaken('qa',name,'')) return dupMsg();
+  if(org&&!QA_ORG_RE.test(org)) return qaErr('org','Use letters, numbers, dots, hyphens and underscores only.');
+  const btn=f.querySelector('[data-testid=qa-create-submit]'); btn.disabled=true; btn.setAttribute('aria-busy','true'); btn.textContent='Adding…'; const undo=()=>{ btn.disabled=false; btn.removeAttribute('aria-busy'); btn.textContent='Add QA tool'; };
+  let rec;
+  if(LIVE){ const r=await apiCall('POST','/api/admin/integrations',{kind:'qa',name,org});
+    if(!r.ok){ undo(); if(r.status===409) return dupMsg(); toast(r.data&&r.data.error||'Could not create the integration'); return; }
+    rec=mapInt(r.data.integration); rec.token=r.data.token; }
+  else { const base='qa-'+(qaSlug(name)||'tool'); let id=base, n=1; while(INTS.some(x=>x.id===id)) id=base+'-'+(++n); rec={id,kind:'qa',name,org,state:'waiting',today:0,err:0,last:0,events:[]}; }
+  INTS.push(rec); fillFilters(); paintIntegrations(); paintHealth(); closeQaCreate(false); location.hash='#setup-'+rec.id; }
+$('iadd').addEventListener('click',e=>{ const b=e.target.closest('[data-testid=gh-create-open]'); if(b){ if($('gh-create').hidden) openGhCreate(); else closeGhCreate(true); return; } if(e.target.closest('[data-testid=gh-create-cancel]')) closeGhCreate(true);
+  const q=e.target.closest('[data-testid=qa-create-open]'); if(q){ if($('qa-create').hidden) openQaCreate(); else closeQaCreate(true); return; } if(e.target.closest('[data-testid=qa-create-cancel]')) closeQaCreate(true); });
+$('iadd').addEventListener('submit',e=>{ e.preventDefault(); if(e.target.id==='qa-create'){ qaClearErr(); qaCreateSubmit(); return; } ghCreateClearErr(); ghCreateSubmit(); });
+$('iadd').addEventListener('input',e=>{ if(e.target.id==='qa-name'||e.target.id==='qa-org'){ qaClearErr(e.target.id.slice(3)); return; } if(e.target.id!=='gh-owner') return; ghCreateClearErr(); $('gh-owner-prev').textContent=ghOwnerClean(e.target.value)||'owner'; });
 $('iadd').addEventListener('change',e=>{ if(e.target.name!=='ot') return; ghCreateClearErr(); $('gh-owner').placeholder=e.target.value==='user'?'your-username':'your-org'; });
-$('iadd').addEventListener('keydown',e=>{ if(e.key==='Escape'&&e.target.closest('#gh-create')){ e.preventDefault(); closeGhCreate(true); } });
+$('iadd').addEventListener('keydown',e=>{ if(e.key==='Escape'&&e.target.closest('#gh-create')){ e.preventDefault(); closeGhCreate(true); } if(e.key==='Escape'&&e.target.closest('#qa-create')){ e.preventDefault(); closeQaCreate(true); } });
 $('igroups').addEventListener('click',e=>{ const p=e.target.dataset.pause, r=e.target.dataset.rotate; if(p&&LIVE){ toast('Pause is not available yet. Rotate the secret to cut a sender off.'); return; } if(p){ const i=INTS.find(x=>x.id===p); i.state=i.state==='paused'?(lastOf(i)?'ok':'waiting'):'paused'; paintIntegrations(); paintHealth(); toast(i.name+(i.state==='paused'?' paused':' resumed')); } if(r&&LIVE){ liveRotate(r); return; } if(r){ const ri=INTS.find(x=>x.id===r); toast(ri&&ownerKind(ri)==='user'?'New secret generated. Update it in every repo’s webhook.':'New secret generated. Update it on the platform side.'); } });
+
+/* ============================ rename any integration ============================ */
+/* One inline editor at a time, on a card, the setup title or the owner title. ren = {i,surface,title,hide,btn,form}. */
+function renTargets(i,surface){ if(surface==='su') return {title:$('su-title'),hide:$('su-title-row'),btn:$('su-rename')};
+  if(surface==='own') return {title:$('own-title'),hide:$('own-title-row'),btn:$('own-rename')};
+  const title=[...document.querySelectorAll('[data-testid^="int-name-"]')].find(h=>h.dataset.testid==='int-name-'+i.id), btn=[...document.querySelectorAll('[data-rename]')].find(b=>b.dataset.rename===i.id);
+  return {title,hide:title,btn}; }
+function renOpen(i,surface){ if(!i||i.draft) return; renClose(false); const t=renTargets(i,surface); if(!t.title) return;
+  const gh=i.kind==='github', def=gh?ghDefaultName(i):KIND[i.kind].label, w=document.createElement('div');
+  w.innerHTML=`<form class="stackf rename" data-testid="int-rename-form" novalidate><label>Display name<input type="text" id="int-rename-input" data-testid="int-rename-input" dir="auto" autocomplete="off" spellcheck="false" value="${esc(i.name)}" placeholder="${esc(def)}" aria-describedby="${gh?'int-rename-help ':''}int-rename-err"></label>${gh?`<p class="small muted" id="int-rename-help">Changes the name in Brain Town only. The GitHub owner stays @${esc(i.org)}.</p>`:''}<p class="small" id="int-rename-err" data-testid="int-rename-error" role="alert" style="color:var(--bad)" hidden></p><div class="row"><button class="primary" data-testid="int-rename-save">Save</button><button type="button" class="quiet" data-testid="int-rename-cancel">Cancel</button></div></form>`;
+  const form=w.firstElementChild, anchor=surface==='card'&&t.title.parentElement.classList.contains('row')?t.title.parentElement:t.hide;
+  t.hide.hidden=true; anchor.after(form); ren={i,surface,form,...t}; const inp=form.querySelector('input'); inp.focus(); inp.select(); }
+function renClose(refocus){ const r=ren; if(!r) return; ren=null; r.form.remove(); r.hide.hidden=false;
+  if(intDirty){ intDirty=false; paintIntegrations(); }
+  if(refocus) renBtn(r.i,r.surface)?.focus(); }
+const renBtn=(i,surface)=>surface==='su'?$('su-rename'):surface==='own'?$('own-rename'):[...document.querySelectorAll('[data-rename]')].find(b=>b.dataset.rename===i.id);
+function renFail(r,m){ const inp=r.form.querySelector('input'), e=r.form.querySelector('#int-rename-err'); e.textContent=m; e.hidden=false; inp.setAttribute('aria-invalid','true'); inp.focus(); }
+async function renSubmit(){ const r=ren; if(!r) return; const i=r.i, inp=r.form.querySelector('input'), v=inp.value.trim(), len=[...v].length, gh=i.kind==='github';
+  const dupMsg=n=>gh?`Another GitHub owner is already called “${n}”.`:`Another ${KIND[i.kind].label} integration is already called “${n}”.`;
+  if(!v) return renFail(r,'Enter a name.');
+  if(len>80) return renFail(r,`Use 80 characters or fewer. This name has ${len}.`);
+  if(v===i.name) return renClose(true);
+  if(nameTaken(i.kind,v,i.id)) return renFail(r,dupMsg(v));
+  const save=r.form.querySelector('[data-testid=int-rename-save]'); save.disabled=true; save.setAttribute('aria-busy','true'); save.textContent='Saving…'; inp.readOnly=true;
+  const undo=()=>{ if(ren!==r) return; save.disabled=false; save.removeAttribute('aria-busy'); save.textContent='Save'; inp.readOnly=false; };
+  if(LIVE){ const res=await apiCall('PATCH','/api/admin/integrations/'+encodeURIComponent(i.id),{name:v});
+    if(!res.ok){ undo(); if(res.status===404){ renClose(false); toast('That integration no longer exists.'); try{ const a=await apiCall('GET','/api/admin/integrations'); if(a.ok){ INTS.splice(0,INTS.length,...a.data.map(mapInt)); fillFilters(); paintIntegrations(); paintHealth(); } }catch(_){} return; }
+      if(ren!==r) return; if(res.status===422) return renFail(r,len>80?`Use 80 characters or fewer. This name has ${len}.`:'Enter a name.'); if(res.status===409) return renFail(r,dupMsg(v)); return renFail(r,'Couldn’t save the name. Try again.'); }
+    const body=res.data||{}, nm=(body.integration||body).name; i.name=typeof nm==='string'&&nm?nm:v; }
+  else i.name=v;
+  const was=ren===r; if(was) renClose(false); paintIntegrations(); paintHealth(); fillFilters();
+  if(su&&su.id===i.id) $('su-title').textContent=i.name; if(own&&own.id===i.id) paintOwnerHead();
+  toast(gh&&!ghCustom(i)?`Name reset. Showing @${i.org}.`:`Renamed to “${i.name}”.`);
+  if(was) renBtn(i,r.surface)?.focus(); }
+document.addEventListener('click',e=>{ const t=e.target.closest&&e.target.closest('[data-rename],[data-rename-page],[data-testid=int-rename-cancel]'); if(!t) return;
+  if(t.dataset.testid==='int-rename-cancel'){ renClose(true); return; }
+  if(t.dataset.rename){ renOpen(INTS.find(x=>x.id===t.dataset.rename),'card'); return; }
+  const s=t.dataset.renamePage; renOpen(s==='su'?su:own,s); });
+document.addEventListener('submit',e=>{ if(!e.target.matches||!e.target.matches('form.rename')) return; e.preventDefault(); renSubmit(); });
+document.addEventListener('input',e=>{ if(e.target.id!=='int-rename-input') return; const er=$('int-rename-err'); if(er){ er.hidden=true; er.textContent=''; } e.target.removeAttribute('aria-invalid'); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&ren&&e.target.closest&&e.target.closest('form.rename')){ e.preventDefault(); e.stopPropagation(); renClose(true); } },true);
 
 /* ============================ setup ============================ */
 let su=null, wait=null;
@@ -706,12 +797,18 @@ function secHTML(i){ const label=secLabel(i);
   if(i.kind==='github'&&!i.token) return ghSecHTML(label,'su');
   if(LIVE&&!i.token) return `<div><span class="small muted">${label}</span><div class="copy" id="su-sec-row">${secRowHidden(i)}</div></div>`;
   return field(label,secretOf(i),'su-sec',true); }
-function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&id!=='new-github'&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true,events:[]}; }
+function qaEnvHTML(i,url){ const hint=i.hint?`  # ends in ${i.hint}`:'', tok='<paste BRAIN_TOWN_TOKEN>'+hint, org=i.org||'<your-org>  # required: the executor sends example-org when unset';
+  const keys=PRODUCTS.filter(p=>i.org&&p.org===i.org&&/QA/.test(p.src)).map(p=>p.key), prods='<id>=<product-key>'+(keys.length?'  # keys: '+keys.join(', '):'');
+  let slug=i.name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); if(!slug||slug==='qa'){ const sfx=String(i.id).replace(/^[^-_]*[-_]/,'').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,6); slug='qa'+(sfx?'_'+sfx:''); } else if(!/^[a-z]/.test(slug)) slug='qa_'+slug; slug=slug.slice(0,32).replace(/_+$/,''); const SUF=slug.toUpperCase().replace(/-/g,'_');
+  const block=lines=>`<pre>${lines.map(esc).join('\n')}</pre>`;
+  return `<div data-testid="su-qa-env"><span class="small muted">playwright-executor.env · default instance</span>${block(['BRAIN_TOWN_URL='+url,'BRAIN_TOWN_TOKEN='+tok,'BRAIN_TOWN_ORG='+org,'BRAIN_TOWN_PRODUCTS='+prods])}</div>`
+   +`<details data-testid="su-qa-env-named"><summary>Named instance (second deployment on this executor)</summary><div><span class="small muted">playwright-executor.env · named instance</span>${block(['EXECUTOR_EXTRA_TOKENS='+slug+':<executor token, 32+ chars>','BRAIN_TOWN_URL__'+SUF+'='+url,'BRAIN_TOWN_TOKEN__'+SUF+'='+tok,'BRAIN_TOWN_ORG__'+SUF+'='+org,'BRAIN_TOWN_PRODUCTS__'+SUF+'='+prods])}</div></details>`; }
+function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&id!=='new-github'&&id!=='new-qa'&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true,events:[]}; }
   ghSecClear('su'); ghPopClose(false); su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
-  $('su-title').textContent=i.name; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;
+  $('su-title').textContent=i.name; $('su-rename').hidden=!!i.draft; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;
   const steps={
     github:['In GitHub, open the organization, then Settings, Webhooks, Add webhook.','Paste the payload URL below. Set content type to <code>application/json</code>.','Paste the secret below into the Secret field.','Choose “Let me select individual events” and tick the events below. Tap ⋯ on any event to see what it becomes in town.','Click Add webhook. GitHub sends a ping; this step ticks and each event below shows ✓ or ⚠.'],
-    qa:['Copy the task file below into the QA tool repo and hand it to the agent or developer working there.','It adds <code>brain-town-reporter.ts</code> and one line in <code>playwright.config.ts</code>.','Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> as CI secrets, using the values below.','Wrap the main actions of each spec in <code>test.step(…)</code>. Those names become the steps shown in the QA Lab.','Run one spec. This page ticks the last step when the first run arrives.'],
+    qa:['Open the executor env file <code>~/.config/qa-automation/playwright-executor.env</code> on the machine that runs this QA tool.','Add the block below for this instance: <code>BRAIN_TOWN_URL</code>, <code>BRAIN_TOWN_TOKEN</code>, <code>BRAIN_TOWN_ORG</code> and <code>BRAIN_TOWN_PRODUCTS</code>. Paste the token shown above; always set the org, the executor sends <code>example-org</code> otherwise.','Second QA deployment on the same executor? Use the named block instead: the same variables with a <code>__NAME</code> suffix, selected by a <code>name:token</code> entry in <code>EXECUTOR_EXTRA_TOKENS</code> (the executor’s own token for that qa-tool instance, not the Brain Town token).','Restart the executor so it reads the env file again.','Wrap the main actions of each spec in <code>test.step(…)</code>. Those names become the steps shown in the QA Lab.','Run one spec. This page ticks the last step when the first run arrives.'],
     gaos:['Copy the task file below into the GAOS repo and hand it to the agent or developer working there.','It adds an outbound event emitter that posts whenever a product or task changes state.','Set <code>BRAIN_TOWN_URL</code>, <code>BRAIN_TOWN_TOKEN</code> and <code>BRAIN_TOWN_ENABLED=true</code> in GAOS, using the values below.','On Products and visibility, choose which GAOS products are public and which town building each one uses.','Create or move one task in GAOS. This page ticks the last step when it arrives.'],
     site:['Copy the task file below into the site repo and hand it to the agent or developer working there.','Part 1 adds a feed. Paste its URL in the field below and Brain Town starts pulling every 5 minutes.','Part 2 adds a publish hook and Part 3 a visit beacon that reports only the page and the visitor’s country. Set <code>BRAIN_TOWN_URL</code> and <code>BRAIN_TOWN_TOKEN</code> in the server secrets.','Check that <code>https://mfardiansyah.id/office</code> loads. The pendopo in town links to it.','Publish one article. This page ticks the last step when it arrives.'],
   }[k];
@@ -719,7 +816,7 @@ function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWit
   $('su-steps').innerHTML=steps.map((s,n)=>`<li class="${(i.last||(k==='github'&&i.events&&i.events.length))&&n===steps.length-1?'done':''}"><div>${s}${k==='github'&&n===3?ghBoxHTML(i):''}</div></li>`).join('');
   let extra=field(k==='github'?'Payload URL':'BRAIN_TOWN_URL',url,'su-url')+`<div id="su-sec-wrap">${secHTML(i)}</div>`;
   if(k==='site') extra+=`<label>Feed URL to pull (optional)<input type="text" id="su-feed" value="https://mfardiansyah.id/feed.json"></label>`;
-  if(k==='qa') extra+=`<div><span class="small muted">playwright.config.ts</span><pre>reporter: [\n  ['list'],\n  ['./brain-town-reporter.ts', { product: 'sipreport', org: 'sismedika' }],\n],</pre></div>`;
+  if(k==='qa') extra+=qaEnvHTML(i,url);
   if(K.task) extra+=`<div class="panel pad" style="box-shadow:none;display:flex;flex-direction:column;gap:8px"><div class="row"><h3 class="grow">Task file for the repo</h3><button type="button" class="primary" data-task="${K.task}">Copy task file</button></div><p class="small muted"><code>${K.task}</code> describes exactly what that repo has to build, with the payload contract and a done checklist.</p><details><summary>Read it here</summary><pre class="md" style="margin-top:8px">${esc(TASKS[K.task]||'')}</pre></details></div>`;
   $('su-extra').innerHTML=extra;
   const maps={
@@ -960,7 +1057,7 @@ function repoRow(i,r,forced){ const n=esc(r.name), hint=`rh-${n}`, none=r.produc
    +`<td data-l="Visibility">${vis}</td><td data-l="Public name"><input type="text" data-repo-alias data-testid="repo-alias-${n}" aria-label="Public name in town for ${n}" value="${esc(val)}" placeholder="${esc(ph)}"${none?` aria-describedby="${hint}"`:''}${canEdit?'':' disabled'} autocomplete="off" spellcheck="false"></td>`
    +`<td class="t" data-l="Last event"><span data-at="${r.last}">${ago(r.last)}</span></td><td class="t" data-l="Today">${num(r.today)}</td><td class="t" data-l="Rejected"${d}>${num(r.rejected)}</td><td data-l="Events" data-testid="repo-events-${n}">${repoEvents(r)}</td></tr>`; }
 function paintOwnerHead(){ const i=own; if(!i) return; const k=ownerKind(i), pg=document.querySelector('.page[data-page=owner]'); pg.dataset.ownerId=i.id; pg.dataset.ownerType=k;
-  $('own-title').textContent=ownerName(i); $('own-lede').textContent=OWN_LEDE[k]; const t=$('own-type'); t.className='pill'+(k==='unknown'?' off':''); t.dataset.ownerType=k; t.textContent=OWN_TYPE[k];
+  $('own-title').textContent=intTitle(i); const ol=$('own-login'); ol.hidden=!ghCustom(i); ol.textContent=ghCustom(i)?'@'+i.org:''; $('own-lede').textContent=OWN_LEDE[k]; const t=$('own-type'); t.className='pill'+(k==='unknown'?' off':''); t.dataset.ownerType=k; t.textContent=OWN_TYPE[k];
   const [cl,tx]=ownerState(i), h=$('own-pill'); h.className='pill '+cl; h.innerHTML='<i></i>'+tx; $('own-hook-note').textContent=k==='user'?'Use this payload URL and secret in every repo’s webhook.':'Set once on the organization.'; }
 function paintOwnerTable(o={}){ const i=own, ob=$('own-body'); if(!i) return;
   const a=document.activeElement; if(!o.force&&(ownBusy||(ob.contains(a)&&a.tagName==='INPUT'))){ ownDirty=true; return; } ownDirty=false;
@@ -1070,14 +1167,15 @@ setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=
 const ORDER=['dashboard','integrations','owner','setup','events','products','prefs']; let curPage=null, swapT=0;
 const isStill=()=>document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
 function placeMark(){ const a=document.querySelector('#rail nav a[aria-current=page]'), m=$('navmark'); if(!a){ m.style.width='0'; return; } m.style.width=a.offsetWidth+'px'; m.style.height=a.offsetHeight+'px'; m.style.transform=`translate(${a.offsetLeft}px,${a.offsetTop}px)`; }
-function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'dashboard'; if(h==='setup-new-github'){ ghCreateWanted=true; location.replace('#integrations'); return; }
+function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'dashboard'; if(h==='setup-new-github'){ ghCreateWanted=true; location.replace('#integrations'); return; } if(h==='setup-new-qa'){ qaCreateWanted=true; location.replace('#integrations'); return; }
+  renClose(false);
   let page=h.startsWith('setup-')?'setup':h.startsWith('integration-')?'owner':h; if(!document.querySelector(`.page[data-page="${page}"]`)){ page=h='dashboard'; }
   const pages=[...document.querySelectorAll('.page')], next=pages.find(p=>p.dataset.page===page), prev=curPage&&pages.find(p=>p.dataset.page===curPage);
   const dir=!prev?1:(Math.sign(ORDER.indexOf(page)-ORDER.indexOf(curPage))||1), dx=(dir*26)+'px';
   document.querySelectorAll('#rail nav a').forEach(a=>{ const on=a.getAttribute('href')==='#'+(page==='setup'||page==='owner'?'integrations':page); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); placeMark();
   $('drawer').classList.remove('on'); ghPopClose(false); ghSecClear('su'); ghSecClear('own'); clearTimeout(swapT);
   const swap=()=>{ pages.forEach(p=>p.classList.remove('on','leave','enter')); next.style.setProperty('--dx',dx); next.classList.add('on'); void next.offsetWidth; next.classList.add('enter'); curPage=page;
-    if(page==='setup') openSetup(h.slice(6)); if(page==='owner') openOwner(h.slice(12)); if(page==='integrations'){ paintIntegrations(); if(ghCreateWanted){ ghCreateWanted=false; openGhCreate(); } } if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
+    if(page==='setup') openSetup(h.slice(6)); if(page==='owner') openOwner(h.slice(12)); if(page==='integrations'){ paintIntegrations(); if(ghCreateWanted){ ghCreateWanted=false; openGhCreate(); } if(qaCreateWanted){ qaCreateWanted=false; openQaCreate(); } } if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
     window.scrollTo(0,0); swapT=setTimeout(()=>next.classList.remove('enter'),1100); };
   if(prev&&!isStill()){ const w=$('wipe'); w.style.transformOrigin=dir>0?'left':'right'; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); pages.forEach(p=>p.classList.remove('enter')); prev.style.setProperty('--dx',dx); prev.classList.add('leave'); swapT=setTimeout(swap,150); }
   else swap(); }
@@ -1125,7 +1223,7 @@ async function liveSave(kind,id,body,msg){ const r=await apiCall('PUT','/api/adm
 async function rotateToken(id){ const r=await apiCall('POST','/api/admin/integrations/'+encodeURIComponent(id)+'/token'); return r.ok&&r.data&&r.data.token?r.data.token:null; }
 async function liveRotate(id){ const token=await rotateToken(id); if(!token){ toast('Could not rotate the secret'); return; }
   const i=INTS.find(x=>x.id===id); i.token=token; toast('New secret ready. Copy it now: it is shown once.'); location.hash='#setup-'+id; }
-async function liveCreate(kind){ const r=await apiCall('POST','/api/admin/integrations',{kind,name:KIND[kind].label}); if(!r.ok){ toast(r.data&&r.data.error||'Could not create the integration'); location.hash='#integrations'; return; }
+async function liveCreate(kind){ if(kind==='qa'){ location.replace('#setup-new-qa'); return; } const r=await apiCall('POST','/api/admin/integrations',{kind,name:KIND[kind].label}); if(!r.ok){ toast(r.data&&r.data.error||'Could not create the integration'); location.hash='#integrations'; return; }
   const i=mapInt(r.data.integration); i.token=r.data.token; INTS.push(i); paintIntegrations(); fillFilters(); location.replace('#setup-'+i.id); }
 async function liveTest(i){ if(i.kind==='github') return; if(!i.token){ toast('The secret is only shown once. Use Rotate and copy above to send a test event.'); return; }
   const at=new Date().toISOString(), id='test-'+Date.now().toString(36), base={id,at};

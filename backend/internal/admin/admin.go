@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ardihikaru/brain-town/backend/internal/config"
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
@@ -269,8 +270,12 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, "ownerType must be user or organization")
 		return
 	}
-	if !kinds[in.Kind] || strings.TrimSpace(in.Name) == "" || len(in.Name) > 80 {
+	if !kinds[in.Kind] || strings.TrimSpace(in.Name) == "" || utf8.RuneCountInString(strings.TrimSpace(in.Name)) > 80 {
 		fail(w, 422, "kind must be github, qa, gaos or site, and name is required")
+		return
+	}
+	if in.Kind == "qa" && a.nameTaken("qa", in.Name, "") {
+		fail(w, 409, "another QA integration already uses this name")
 		return
 	}
 	if in.Kind == "github" {
@@ -289,6 +294,17 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 	i, tok := a.St.CreateIntegration(in.Kind, strings.TrimSpace(in.Name), in.Org)
 	// The plaintext token is shown only here and on rotate.
 	writeJSON(w, 201, map[string]any{"integration": i, "token": tok, "ingestPath": ingestPath(i)})
+}
+
+// nameTaken reports whether another integration of the same kind (not except) has the same trimmed name, ignoring case.
+func (a *API) nameTaken(kind, name, except string) bool {
+	name = strings.TrimSpace(name)
+	for _, o := range a.St.Integrations() {
+		if o.Kind == kind && o.ID != except && strings.EqualFold(strings.TrimSpace(o.Name), name) {
+			return true
+		}
+	}
+	return false
 }
 
 func ingestPath(i store.Integration) string {
@@ -310,6 +326,23 @@ func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
 			fail(w, 422, "feedUrl must be an https URL (or empty to disable pulling)")
 			return
 		}
+	}
+	if in.Name != nil {
+		cur, found := a.St.GetIntegration(r.PathValue("id"))
+		if !found {
+			fail(w, 404, "no such integration")
+			return
+		}
+		n := strings.TrimSpace(*in.Name)
+		if n == "" || utf8.RuneCountInString(n) > 80 {
+			fail(w, 422, "name is required (max 80 characters)")
+			return
+		}
+		if a.nameTaken(cur.Kind, n, cur.ID) {
+			fail(w, 409, "another "+cur.Kind+" integration already uses this name")
+			return
+		}
+		in.Name = &n
 	}
 	i, ok := a.St.UpdateIntegration(r.PathValue("id"), in.Name, in.Org, in.FeedURL)
 	if !ok {

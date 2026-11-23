@@ -10,6 +10,7 @@
 - **US-BO-04** — As the admin I want Copy on the setup page to never copy a masked token so that I never paste a dead credential; when the token is no longer shown I rotate it and copy the new one.
 - **US-BO-05** — As the admin I want a GitHub setup page that shows the secret on demand and which events are ticked so that I can wire the org webhook without guessing.
 - **US-BO-06** — As the admin I want owner cards and an owner page for GitHub, with per-repo visibility, alias and events, and an add-a-repo script, so that I can run a personal account or an organization.
+- **US-BO-07** — As the admin I want to create named QA integrations and rename any integration in the page so that each deployment is recognisable.
 
 ## Test cases
 
@@ -46,5 +47,10 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-BO-046 | US-BO-06 | Given a personal owner, when repo names are typed, then the add-a-repo script asks for the secret (read -rs), uses the payload URL, normalises owner/repo to repo, drops invalid names and never contains the secret | +   | E2E   | P0  | automated | `tests/web/backoffice/github-owner.spec.ts` |
 | ☑    | TC-BO-047 | US-BO-06 | Given the create form, when Personal and an owner name are submitted, then the owner page opens and ownerType is user                                                                                                | +   | E2E   | P0  | automated | `tests/web/backoffice/github-owner.spec.ts` |
 | ☑    | TC-BO-048 | US-BO-06 | Given the create form, when Organization and a name are submitted, then the setup page opens and ownerType is organization                                                                                           | +   | E2E   | P1  | automated | `tests/web/backoffice/github-owner.spec.ts` |
+| ☑    | TC-BO-050 | US-BO-07 | Given the QA create form, when a name and an org are submitted, then the setup page opens and the card shows the org                                                                                                 | +   | E2E   | P0  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
+| ☑    | TC-BO-051 | US-BO-07 | Given a QA integration, when another is created with the same name, then the form shows the name error                                                                                                               | -   | E2E   | P1  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
+| ☑    | TC-BO-052 | US-BO-07 | Given a QA card, when it is renamed with Enter, then its name updates and the API has it                                                                                                                             | +   | E2E   | P0  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
+| ☑    | TC-BO-053 | US-BO-07 | Given a GitHub owner card, when it is renamed, then its name updates and the @login stays visible                                                                                                                    | +   | E2E   | P1  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
+| ☑    | TC-BO-054 | US-BO-07 | Given two QA cards, when one is renamed to the other name, then the rename shows an error and the name is kept                                                                                                       | -   | E2E   | P1  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
 
 **Fixed bug (TC-BO-003).** `paintProducts()` in `src/backoffice.src.html` read `o.vis` for the product's org, and `o` was undefined for a product without an org (every GAOS product), so the live back-office failed to load. It is guarded now and TC-BO-001/010/020/021 run without `test.fail()`.

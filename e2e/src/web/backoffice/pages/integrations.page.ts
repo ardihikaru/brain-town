@@ -48,4 +48,48 @@ export class IntegrationsPage extends BasePage {
     await this.createName.fill(ownerName);
     await this.createSubmit.click();
   }
+
+  /** The QA create form: a name (required) and an org (optional). */
+  readonly qaCreateOpen = this.page.getByTestId('qa-create-open');
+  readonly qaName = this.page.getByTestId('qa-name');
+  readonly qaOrg = this.page.getByTestId('qa-org');
+  readonly qaNameError = this.page.getByTestId('qa-name-error');
+  readonly qaCreateSubmit = this.page.getByTestId('qa-create-submit');
+
+  async createQa(name: string, org = ''): Promise<void> {
+    await this.qaCreateOpen.click();
+    await this.qaName.fill(name);
+    await this.qaOrg.fill(org);
+    await this.qaCreateSubmit.click();
+  }
+
+  /** A QA card, its org line and the shown name of any integration card (plain or owner card). */
+  qaCard(id: string) {
+    return this.page.getByTestId(`qa-card-${id}`);
+  }
+
+  qaCardOrg(id: string) {
+    return this.page.getByTestId(`qa-card-org-${id}`);
+  }
+
+  name(id: string) {
+    return this.page.getByTestId(`int-name-${id}`);
+  }
+
+  /** The "@login" shown on a GitHub owner card whose name was customised. */
+  ownerLogin(id: string) {
+    return this.page.getByTestId(`owner-login-${id}`);
+  }
+
+  /** The one inline rename editor (at most one is open anywhere). */
+  readonly renameForm = this.page.getByTestId('int-rename-form');
+  readonly renameInput = this.page.getByTestId('int-rename-input');
+  readonly renameError = this.page.getByTestId('int-rename-error');
+
+  /** Opens the editor on a card, types the new name and presses Enter, which saves. */
+  async rename(id: string, name: string): Promise<void> {
+    await this.page.getByTestId(`int-rename-${id}`).click();
+    await this.renameInput.fill(name);
+    await this.renameInput.press('Enter');
+  }
 }

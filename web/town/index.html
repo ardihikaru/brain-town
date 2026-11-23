@@ -128,6 +128,10 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .col h4{font-family:var(--font-display);font-size:14px;margin:0;display:flex;gap:8px;align-items:baseline}
 .col h4 i{font-family:var(--font-mono);font-style:normal;font-weight:400;font-size:11px;color:var(--ink-soft)}
 .col h4:not(:first-child){margin-top:8px}
+.bhead{font-family:var(--font-display);font-size:15px;margin:0 0 8px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:baseline;overflow-wrap:anywhere}
+.bhead i{font-family:var(--font-mono);font-style:normal;font-weight:400;font-size:11px;color:var(--ink-soft);white-space:nowrap}
+.qgrp+.qgrp{margin-top:18px}
+.chip.tool{border-style:dashed;display:inline-block;max-width:18ch;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 .hint{margin:-4px 0 0;font-size:11.5px;color:var(--ink-soft);line-height:1.4}
 .empty{font-size:12px;color:var(--ink-soft);border:1px dashed var(--rule);border-radius:3px;padding:8px}
 .kc{background:var(--ground);border:1px solid var(--ink);border-radius:3px;padding:8px 9px;font-size:12.5px;line-height:1.35;border-left-width:4px}
@@ -310,8 +314,8 @@ const CONFIG = {
      video.scheduled       {id,source,title,channel}          video.stage {id,stage,rework?}
      video.ready           {id,kind,publishAt,targets:[platform]}   video.published {id,platform}
      article.scheduled     {id,title,to,publishAt}
-     qa.run.started        {org,repo,run,spec,steps}          qa.step {org,repo,run,index,status}
-     qa.run.finished       {org,repo,run,spec,passed,failed,total}
+     qa.run.started        {org,repo,run,spec,steps,tool?}    qa.step {org,repo,run,index,status,tool?}
+     qa.run.finished       {org,repo,run,spec,passed,failed,total,tool?}   (tool = name of the QA deployment)
      imago.requested / imago.delivered {id,kind:"image"|"video",from,title}
    Added for the live stream (made by fromPublic below; a GAOS task is an issue):
      task.column           {org,repo,number,title,column,from?}   a task moved to a GAOS column
@@ -442,7 +446,7 @@ function makePublicAdapter(){
       case 'task.failed': { const {rec,base}=ensure(env,out), reason=d.reason==='canceled'?'canceled':'failed'; rec.column=reason; out.push({type:'task.failed',...base,reason}); break; }
       case 'gate.requested': { const {base}=ensure(env,out); out.push({type:'gate.requested',...base}); break; }
       case 'gate.decided': { const {base}=ensure(env,out); out.push({type:'gate.decided',...base,decision:d.decision==='rejected'?'rejected':'approved'}); break; }
-      case 'qa.run.started': case 'qa.step': case 'qa.run.finished': { const s=slotFor(env.product,env.org), id={org:s.org,repo:s.repo,run:env.run};
+      case 'qa.run.started': case 'qa.step': case 'qa.run.finished': { const s=slotFor(env.product,env.org), xt=(typeof msg.tool==='string'?msg.tool:env.tool), id={org:s.org,repo:s.repo,run:env.run,tool:(typeof xt==='string'&&xt.trim())?[...xt.trim()].slice(0,80).join(''):undefined};
         if(type==='qa.run.started') out.push({type,...id,spec:d.spec||'run',steps:Array.isArray(d.steps)&&d.steps.length?d.steps.map(String):undefined});
         else if(type==='qa.step') out.push({type,...id,index:d.index|0,step:d.step,status:d.status==='failed'?'failed':'passed',duration_ms:d.duration_ms});
         else out.push({type,...id,spec:d.spec||'run',passed:d.passed|0,failed:d.failed|0,total:d.total|0,duration_ms:d.duration_ms}); break; }
@@ -1588,7 +1592,7 @@ const Sim={ vis:0, active:0,
         const now=absH(), slot=Math.max(this.liNext+3,Math.ceil((now+.3)/3)*3); this.liNext=slot; bus.emit({type:'article.scheduled',id,title,to,publishAt:hh(slot)});
         after((slot-now)*CONFIG.dayLength/24,()=>{ this.liQ--; bus.emit({type:'article.published',id,title,to}); }); }); artLoop(); }); artLoop();
     const illLoop=()=>after(rnd(24,42),()=>{ if(!this.run) return; bus.emit({type:'illustration.published',id:++this.artId,title:pick(TITLES.ill)}); illLoop(); }); illLoop();
-    for(const cfg of CONFIG.orgs) for(const repo of cfg.repos){ const qa=()=>after(rnd(14,38),()=>{ if(!this.run) return; const run=++this.qaRun, spec=pick(['smoke','login','export','settings'])+'.spec.ts', id={org:cfg.id,repo,run,spec};
+    for(const cfg of CONFIG.orgs) for(const repo of cfg.repos){ const qa=()=>after(rnd(14,38),()=>{ if(!this.run) return; const run=++this.qaRun, spec=pick(['smoke','login','export','settings'])+'.spec.ts', id={org:cfg.id,repo,run,spec,tool:QA_DEMO_TOOL(cfg.id)};
         bus.emit({type:'qa.run.started',...id,steps:QSTEPS}); let passed=0;
         const step=k=>after(rnd(1.5,2.6),()=>{ const ok=k<2||Math.random()>.035; bus.emit({type:'qa.step',...id,index:k,step:QSTEPS[k],status:ok?'passed':'failed'}); if(ok) passed++;
           if(ok&&k+1<QSTEPS.length) return step(k+1);
@@ -1772,7 +1776,9 @@ function ghSnapshot(){ const o={orgs:{},halls:{},tea:{seated:TEA.guests.length,w
     for(const p of org.products){ if(!p.bound) continue; const g=p.gh; o.halls[org.id+'/'+p.repo]={repo:g.name||p.repo,visual:p.visual?p.visual.number:null,lanterns:g.lan.filter(x=>!x.die).length,banners:g.ban.filter(x=>!x.die).length,carts:g.carts.map(c=>({run:c.run,status:c.st})),stamp:g.stamp?(g.stamp.ok?'approved':'changes'):null}; } }
   for(const [n,ow] of OWN) o.valley.owners[n]={type:ow.hidden?'':ow.type,hidden:ow.hidden,placed:ow.plot!=null&&orgBy[n]===PLOTS[ow.plot],gate:ow.plot!=null&&orgBy[n]===PLOTS[ow.plot]?ow.plot:null,halls:[...ow.halls],over:Math.max(0,ow.repos.size-ow.halls.length)};
   return o; }
-window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>deliver({live:true,...ev}), config:CONFIG, fromPublic, snapshot:ghSnapshot };
+window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>deliver({live:true,...ev}), config:CONFIG, fromPublic, snapshot:ghSnapshot,
+  /* test hook: open a building detail (e.g. 'qa') and optionally a view tab (e.g. 'board') */
+  openDetail(id,view){ const kd=KIND[id]; if(!kd) return false; openDetail(id,undefined,kd.views.some(v=>v[0]===view)?view:undefined); return true; } };
 
 /* ============================================================
    UI: feed log, stats, controls
@@ -1950,7 +1956,8 @@ function hit(mx,my){ const [wx,wy]=toWorld(mx,my); let best=null,bk=-9;
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const PLS={v:0,items:new Map(),seq:0}, PNAME={youtube:'YouTube',facebook:'Facebook',instagram:'Instagram',tiktok:'TikTok'}, PCULT={youtube:'jp',facebook:'eu',instagram:'ar',tiktok:'cn'};
 const YTS={v:0,items:new Map(),seq:0}, GH={v:0,issues:new Map(),seq:0,repos:new Map(),disc:new Map()}, LIS={v:0,items:new Map(),seq:0}, QAS={v:0,seq:0,repos:new Map()};
-for(const cfg of CONFIG.orgs) for(const repo of cfg.repos) QAS.repos.set(cfg.id+'/'+repo,{key:cfg.id+'/'+repo,org:cfg.id,repo,run:null,runs:0,pass:0,fail:0,act:++QAS.seq});   // sample rows; live rows are created by the first qa.* event
+const QA_DEMO_TOOL=org=>org==='sismedika'?'QA · Company':'QA · Personal';
+for(const cfg of CONFIG.orgs) for(const repo of cfg.repos) QAS.repos.set(QA_DEMO_TOOL(cfg.id)+'|'+cfg.id+'/'+repo,{key:QA_DEMO_TOOL(cfg.id)+'|'+cfg.id+'/'+repo,tool:QA_DEMO_TOOL(cfg.id),org:cfg.id,repo,run:null,runs:0,pass:0,fail:0,act:++QAS.seq});   // sample rows; live rows are created by the first qa.* event
 const STAGES=[
   ['script','Script','An agent rewrites the source as a short narration and splits it into scenes.'],
   ['voice','Voice','An English voice-over clip is generated for each scene.'],
@@ -1975,8 +1982,8 @@ bus.on(ev=>{ const t=ev.type, now=clockStr();
     else if(t==='article.published'){ it.state='published'; it.publishedAt=now; it.seq=++LIS.seq;
       const pub=[...LIS.items.values()].filter(x=>x.state==='published').sort((a,b)=>a.seq-b.seq); while(pub.length>6) LIS.items.delete(pub.shift().id); }
     LIS.v++; return; }
-  if(t.startsWith('qa.')){ const key=(ev.org||'~')+'/'+ev.repo; let r=QAS.repos.get(key);
-    if(!r){ r={key,org:ev.org||'',repo:ev.repo,run:null,runs:0,pass:0,fail:0,act:0}; QAS.repos.set(key,r);
+  if(t.startsWith('qa.')){ const key=(ev.tool||'')+'|'+(ev.org||'~')+'/'+ev.repo; let r=QAS.repos.get(key);
+    if(!r){ r={key,tool:ev.tool||'',org:ev.org||'',repo:ev.repo,run:null,runs:0,pass:0,fail:0,act:0}; QAS.repos.set(key,r);
       if(QAS.repos.size>40){ const old=[...QAS.repos.values()].sort((a,b)=>a.act-b.act)[0]; QAS.repos.delete(old.key); } }
     r.act=++QAS.seq;
     if(t==='qa.run.started'){ r.run={run:ev.run,spec:ev.spec,state:'running',steps:(ev.steps||QSTEPS).map(x=>({t:x,s:'todo'}))}; r.run.steps[0].s='doing'; }
@@ -2143,9 +2150,15 @@ function liBoard(){ const all=[...LIS.items.values()], col=(stt,meta,emptyT)=>{ 
     <div class="col"><h4>Scheduled <i>${all.filter(x=>x.state==='scheduled').length}</i></h4><p class="hint">Finished, waiting for a posting slot.</p>${col('scheduled',it=>'posts at '+esc(it.publishAt),'Nothing is waiting.')}</div>
     <div class="col"><h4>Published <i>${st.linkedin}</i></h4><p class="hint">Latest posts, newest first.</p>${col('published',it=>'posted '+it.publishedAt,'Nothing posted yet.')}</div>
   </div>`; }
-function qaBoard(){ const cls={passed:'done',doing:'doing',failed:'fail'};
-  return `<p class="lede">One automated Playwright script per product. Each card shows the current or latest run, step by step.</p><div class="board" style="grid-template-columns:repeat(3,minmax(215px,1fr))">`+[...QAS.repos.values()].map(r=>{ const run=r.run, stt=run?(run.state==='running'?'running':run.failed?'failed':'passed'):'';
-    return `<div class="col"><h4>${esc(r.repo)} <i>${esc(r.org||'no owner')}</i></h4><p class="hint">${r.runs} runs · ${r.pass} passed · ${r.fail} failed</p>`+(run?`<article class="kc" style="border-left-color:${orgColor(r.org)}"><div class="top"><span class="chip">${esc(run.spec)}</span><span class="chip ${stt}">${stt}</span></div><ul class="tasks" style="border-top:0;margin-top:2px;padding-top:0">${run.steps.map(x=>`<li class="${cls[x.s]||'todo'}">${esc(x.t)}</li>`).join('')}</ul>${run.state==='done'?`<div class="m">finished ${run.at}${run.failed?' · bug opened':''}</div>`:''}</article>`:none('No run yet.'))+'</div>'; }).join('')+'</div>'; }
+function qaBoard(){ const cls={passed:'done',doing:'doing',failed:'fail'}, rows=[...QAS.repos.values()], grouped=rows.some(r=>r.tool);
+  const card=r=>{ const run=r.run, stt=run?(run.state==='running'?'running':run.failed?'failed':'passed'):'';
+    return `<div class="col"><h4>${esc(r.repo)} <i>${esc(r.org||'no owner')}</i></h4><p class="hint">${r.runs} runs · ${r.pass} passed · ${r.fail} failed</p>`+(run?`<article class="kc" data-testid="qa-card" data-key="${esc(r.key)}" style="border-left-color:${orgColor(r.org)}"><div class="top">${r.tool?`<span class="chip tool" dir="auto" data-testid="qa-tool-chip" title="${esc(r.tool)}">${esc(r.tool)}</span>`:''}<span class="chip">${esc(run.spec)}</span><span class="chip ${stt}">${stt}</span></div><ul class="tasks" style="border-top:0;margin-top:2px;padding-top:0">${run.steps.map(x=>`<li class="${cls[x.s]||'todo'}">${esc(x.t)}</li>`).join('')}</ul>${run.state==='done'?`<div class="m">finished ${run.at}${run.failed?' · bug opened':''}</div>`:''}</article>`:none('No run yet.'))+'</div>'; };
+  const grid='<div class="board" style="grid-template-columns:repeat(3,minmax(215px,1fr))">';
+  if(!grouped) return `<p class="lede">One automated Playwright script per product. Each card shows the current or latest run, step by step.</p>${grid}`+rows.map(card).join('')+'</div>';
+  const groups=new Map(); for(const r of rows){ const l=r.tool||''; if(!groups.has(l)) groups.set(l,[]); groups.get(l).push(r); }
+  const names=[...groups.keys()].filter(l=>l!=='').sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true})).concat(groups.has('')?['']:[]);
+  return `<p class="lede">Automated Playwright runs, grouped by the QA deployment that sent them. Each card shows the current or latest run of one product, step by step.</p>`+names.map(l=>{ const g=groups.get(l), n=g.length, runs=g.reduce((t,r)=>t+r.runs,0);
+    return `<section class="qgrp" data-testid="qa-group" data-tool="${esc(l)}"><h3 class="bhead"><bdi>${esc(l||'QA tool')}</bdi> <i>${n} ${n===1?'product':'products'} · ${runs} ${runs===1?'run':'runs'}</i></h3>${grid}${g.map(card).join('')}</div></section>`; }).join(''); }
 
 /* ---------- People mode: the same stores, drawn as walking figures ---------- */
 const LABELC={bug:'#eba595',feature:'#a9c6de',chore:'#d2d6d9',issue:'#a9c6de',pr:'#c7b3e0'};

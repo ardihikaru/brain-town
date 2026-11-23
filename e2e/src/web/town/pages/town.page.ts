@@ -1,4 +1,4 @@
-import { expect } from '@playwright/test';
+import { expect, type Locator } from '@playwright/test';
 import { z } from 'zod';
 import { BasePage } from '@web/shared/base.page';
 
@@ -31,6 +31,28 @@ export class TownPage extends BasePage {
 
   async expectLoaded(): Promise<void> {
     await expect(this.page.getByRole('heading', { name: 'Live feed' })).toBeVisible();
+  }
+
+  /**
+   * Opens the QA Lab "Board" view through the town's own hook. The canvas has no accessible building list, so the
+   * detail is opened with window.brainTown.openDetail(id, view).
+   */
+  async openQaBoard(): Promise<void> {
+    const opened = await this.page.evaluate(() => {
+      const town = (window as unknown as { brainTown: { openDetail(id: string, view: string): boolean } }).brainTown;
+      return town.openDetail('qa', 'board');
+    });
+    expect(opened).toBe(true);
+  }
+
+  /** One QA tool group of the board, found by the tool name it was given. */
+  qaGroup(tool: string) {
+    return this.page.locator(`[data-testid="qa-group"][data-tool=${JSON.stringify(tool)}]`);
+  }
+
+  /** The run card of one spec inside a group. */
+  qaCard(group: Locator, spec: string) {
+    return group.getByTestId('qa-card').filter({ hasText: spec });
   }
 
   async gotoSimulated(): Promise<void> {
