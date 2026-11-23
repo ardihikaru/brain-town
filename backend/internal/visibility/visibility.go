@@ -204,13 +204,15 @@ func Town(r Resolver, orgs []store.Org, products []store.Product, integrations [
 		}
 		name := o.Key
 		hidden := o.Visibility == store.Hidden
+		typ := typeOf[o.Key]
 		if hidden {
+			typ = "" // the type of an alias would reveal a personal account
 			if name = o.Alias; name == "" {
 				name = "Hidden org"
 			}
 		}
 		rs, last := flat(repos)
-		ow := TownOwner{Name: name, Type: typeOf[o.Key], Hidden: hidden, Repos: rs}
+		ow := TownOwner{Name: name, Type: typ, Hidden: hidden, Repos: rs}
 		if !last.IsZero() {
 			ow.LastEventAt = last.UTC().Format(time.RFC3339)
 		}

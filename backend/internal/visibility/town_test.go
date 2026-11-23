@@ -59,6 +59,19 @@ func TestTownMasking(t *testing.T) {
 				t.Fatalf("%+v", r)
 			}
 		}},
+		{"hidden github owner does not reveal its type", func(st *store.Store) {
+			g := st.CreateSecretIntegration("github", "g", "acme-secret", "s", "h")
+			st.AdoptOwnerType(g.ID, "user")
+			st.RegisterProduct("acme-secret", "repo", "github", false)
+			hide(st, "acme-secret")
+		}, func(t *testing.T, v visibility.TownView, body string) {
+			if len(v.Owners) != 1 || !v.Owners[0].Hidden || v.Owners[0].Type != "" {
+				t.Fatalf("%+v", v)
+			}
+			if strings.Contains(body, `"type":"user"`) {
+				t.Fatal("owner type leaked: " + body)
+			}
+		}},
 		{"private repo shows alias", func(st *store.Store) {
 			st.RegisterProduct("alice", "secret-repo", "github", true)
 			st.RegisterProduct("alice", "open", "github", false)

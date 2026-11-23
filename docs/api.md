@@ -81,7 +81,7 @@ Masked snapshot the town page loads once to draw GitHub owners (gates) and their
 
 - `owners`: one per org that has a product or is the org of a `github` integration, sorted by `name`. `name` is
   the org alias when the org is hidden, else the org key. `type` is the integration's `ownerType` (`user`,
-  `organization`, or `""`).
+  `organization`, or `""`); it is always `""` for hidden owners, since the type of an alias would reveal a personal account.
 - `repos` (and `unowned`, the products with no org): `name` is the public product name exactly as `/events`
   publishes it (alias when the product or its org is hidden). Repos sharing a public name inside one owner are
   merged, so a hidden org shows only distinct aliases. Sorted by `name`; arrays are never `null`.
