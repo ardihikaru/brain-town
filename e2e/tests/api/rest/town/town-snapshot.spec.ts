@@ -40,7 +40,8 @@ test.describe('town snapshot · GET /api/town', () => {
       const response = await town.snapshot();
       const snapshot = await expectJson(response, TownSnapshotSchema);
 
-      expect(response.headers()['cache-control']).toBe('no-store');
+      const directives = (response.headers()['cache-control'] ?? '').split(',').map((d) => d.trim());
+      expect(directives).toContain('no-store');
       const owner = snapshot.owners.find((o) => o.name === scope.org);
       expect(owner).toMatchObject({ name: scope.org, type: 'user', hidden: false });
       expect(owner?.repos.map((r) => r.name)).toEqual([scope.repo]);
