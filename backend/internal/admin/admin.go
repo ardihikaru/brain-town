@@ -273,6 +273,10 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, "kind must be github, qa, gaos or site, and name is required")
 		return
 	}
+	if in.Kind == "qa" && a.qaNameTaken(in.Name, "") {
+		fail(w, 409, "another QA integration already uses this name")
+		return
+	}
 	if in.Kind == "github" {
 		sealed, hint, plain, err := a.newWebhookSecret()
 		if err != nil {
@@ -289,6 +293,17 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 	i, tok := a.St.CreateIntegration(in.Kind, strings.TrimSpace(in.Name), in.Org)
 	// The plaintext token is shown only here and on rotate.
 	writeJSON(w, 201, map[string]any{"integration": i, "token": tok, "ingestPath": ingestPath(i)})
+}
+
+// qaNameTaken reports whether another QA integration (not except) has the same trimmed name, ignoring case.
+func (a *API) qaNameTaken(name, except string) bool {
+	name = strings.TrimSpace(name)
+	for _, o := range a.St.Integrations() {
+		if o.Kind == "qa" && o.ID != except && strings.EqualFold(strings.TrimSpace(o.Name), name) {
+			return true
+		}
+	}
+	return false
 }
 
 func ingestPath(i store.Integration) string {
@@ -310,6 +325,10 @@ func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
 			fail(w, 422, "feedUrl must be an https URL (or empty to disable pulling)")
 			return
 		}
+	}
+	if cur, found := a.St.GetIntegration(r.PathValue("id")); found && cur.Kind == "qa" && in.Name != nil && a.qaNameTaken(*in.Name, cur.ID) {
+		fail(w, 409, "another QA integration already uses this name")
+		return
 	}
 	i, ok := a.St.UpdateIntegration(r.PathValue("id"), in.Name, in.Org, in.FeedURL)
 	if !ok {

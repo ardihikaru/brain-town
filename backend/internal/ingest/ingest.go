@@ -62,7 +62,7 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		reply(w, 422, "body is not a JSON object", "body")
 		return
 	}
-	a, err := validate(kind, raw)
+	a, err := validate(kind, integ.Org, raw)
 	if err != nil {
 		var ve verr
 		errors.As(err, &ve)
@@ -125,7 +125,7 @@ func obj(m map[string]any, k string) map[string]any {
 }
 
 // validate checks the body against the integration contract in docs/integrations/.
-func validate(kind string, raw map[string]any) (store.Accept, error) {
+func validate(kind, integOrg string, raw map[string]any) (store.Accept, error) {
 	var a store.Accept
 	a.ID, a.Type, a.Raw = str(raw, "id"), str(raw, "type"), raw
 	if a.ID == "" || len(a.ID) > 128 {
@@ -162,6 +162,11 @@ func validate(kind string, raw map[string]any) (store.Accept, error) {
 			return a, verr{"run", "run is required"}
 		}
 		a.Product, a.Org = str(raw, "product"), str(raw, "org")
+		// An omitted org is filled from the integration so stored and public payloads carry it; a given org is kept.
+		if a.Org == "" && integOrg != "" {
+			a.Org = integOrg
+			raw["org"] = integOrg
+		}
 	case "site":
 		if a.Type == "site.visit" {
 			// Privacy: keep only the page, the country and an optional blog title.

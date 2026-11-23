@@ -14,6 +14,7 @@ import (
 type Resolver interface {
 	GetOrg(key string) (store.Org, bool)
 	GetProduct(key string) (store.Product, bool)
+	GetIntegration(id string) (store.Integration, bool)
 }
 
 // sensitive data fields removed when the event is about a hidden org or product.
@@ -66,10 +67,17 @@ func View(r Resolver, ev store.Event) map[string]any {
 			}
 		}
 	}
-	return map[string]any{
+	out := map[string]any{
 		"seq": ev.Seq, "id": ev.ID, "type": ev.Type, "source": ev.Kind,
 		"at": ev.At.UTC().Format(time.RFC3339), "payload": payload,
 	}
+	// QA events carry the admin-chosen tool name (public by design, not masked). Looked up only for qa events.
+	if ev.Kind == "qa" {
+		if i, ok := r.GetIntegration(ev.Integration); ok && i.Name != "" {
+			out["tool"] = i.Name
+		}
+	}
+	return out
 }
 
 func clone(m map[string]any) map[string]any {

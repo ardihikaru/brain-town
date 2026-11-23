@@ -33,6 +33,10 @@ shown once, when an integration is created or its secret is rotated.
 
 `site.visit` keeps only `page`, `country` (two uppercase letters) and an optional `title`;
 anything else the sender adds (an IP, a user agent) is dropped before storage.
+
+QA events (`/ingest/qa/<id>`): if `org` is omitted, Brain Town fills it from the integration's org (stored and public
+payload both carry it); an `org` the sender gives is kept, even when it differs from the integration's. Each QA tool
+instance is its own integration with an admin-chosen name, see [`integrations/qa-tool.md`](integrations/qa-tool.md).
 Rejected deliveries (401 for a known integration, 422) are logged and show in the event log.
 
 ### GitHub
@@ -60,6 +64,11 @@ Grouped events (comments, reviews, pushes, labels, stars, CI runs, ...) are merg
 
 - `GET /events`: public. Accepted events only, masked. `Last-Event-ID` replays missed events.
 - `GET /admin/events`: admin session. Every delivery, raw payload plus the public view.
+
+Public `qa` events (every `/events` frame, including `Last-Event-ID` replay, and the public view in `/admin/events`)
+carry a top-level `tool`, the name of the QA integration that sent them (next to `seq`, `id`, `type`, `source`, `at`,
+`payload`). The name is admin-chosen and public, so it is not masked. It is omitted when the integration was deleted
+or has no name, and never present on other sources.
 
 Both send `id: <seq>`, `event: <type>`, `data: <json>` and a heartbeat comment every 15 s.
 
@@ -104,8 +113,8 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | Method and path | Purpose |
 | --- | --- |
 | `POST /api/admin/login`, `/logout`; `GET /session` | Sign in (10 failures/min cap), out, check. |
-| `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). A `github` create may carry `ownerType` (`user` or `organization`; anything else is `422`; ignored for other kinds). |
-| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `ownerType` (`github` only, same validation), set `feedUrl` (https JSON Feed 1.1 URL of a `site` integration, pulled every 5 minutes; empty disables), delete. |
+| `GET/POST /api/admin/integrations` | List (with today and rejected counts) or create (returns the token once). A `github` create may carry `ownerType` (`user` or `organization`; anything else is `422`; ignored for other kinds). A `qa` create whose trimmed name equals another QA integration's name (case-insensitive) is `409` `{"error": "..."}`. |
+| `PATCH/DELETE /api/admin/integrations/{id}` | Rename, set org, set `ownerType` (`github` only, same validation), set `feedUrl` (https JSON Feed 1.1 URL of a `site` integration, pulled every 5 minutes; empty disables), delete. Renaming a `qa` integration to a name another QA integration uses is `409` (same rule, excluding itself). |
 | `POST /api/admin/integrations/{id}/token` | Rotate the secret; the old one stops working. For a `github` integration this makes a new `whsec_` secret (returned in the same `token` field). |
 | `GET /api/admin/integrations/{id}/secret` | `github` only, `Cache-Control: no-store`: `{"secret":"whsec_…"}` so the setup page can show it again. `404` for an unknown id or another kind, `503` when it cannot be decrypted. |
 | `GET /api/admin/products` | Orgs and products. |
