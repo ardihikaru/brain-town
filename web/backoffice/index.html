@@ -569,12 +569,13 @@ const OA_DRAFT={}, OA_SHOWN=new Set(), OA_RESERVED=/^Org ([A-Z]|\d{6})$/, OA_CH=
 const OA_GENERIC='That alias isn’t allowed. Use 1–60 letters, digits, spaces or . , \' & ( ) _ + - : # !';
 const orgOf=k=>ORGS.find(o=>o.id===k)||{id:k,vis:'public',alias:k};
 const orgCustom=o=>!!o.alias&&o.alias.toLowerCase()!==String(o.id).toLowerCase()&&!OA_RESERVED.test(o.alias);
+const oaDraft=(scope,key)=>{ const d=OA_DRAFT[scope]; if(d&&d.key!==undefined&&d.key!==key){ delete OA_DRAFT[scope]; return undefined; } return d; };
 const oaSaved=k=>{ const o=orgOf(k); return orgCustom(o)?o.alias:''; };
 const oaGenerated=o=>OA_RESERVED.test(o.alias||'')?o.alias:'Org '+String.fromCharCode(65+Math.max(0,ORGS.indexOf(o)));
 const oaShown=k=>{ const o=orgOf(k); return o.alias||o.id; };
 const oaDup=v=>`Another org already uses “${v}” in town. Pick another alias.`;
 function oaNone(scope){ return `<p class="small muted" data-testid="org-alias-none-${esc(scope)}">Set an org for this QA tool to give it a name in town.</p>`; }
-function orgAliasField(key,scope,o={}){ const org=orgOf(key), hidden=org.vis==='hidden', custom=orgCustom(org), sc=esc(scope), k=esc(key), d=OA_DRAFT[scope], val=d?d.value:(custom?org.alias:'');
+function orgAliasField(key,scope,o={}){ const org=orgOf(key), hidden=org.vis==='hidden', custom=orgCustom(org), sc=esc(scope), k=esc(key), d=oaDraft(scope,key), val=d&&d.value!==undefined?d.value:(custom?org.alias:'');
   const ph=hidden?(custom?'Generated name':org.alias):key;
   const help=(hidden?'Hidden org. Leave empty for a generated name.':`The town shows this instead of ${k}. Leave empty to show ${k}.`)+(o.owner?` The GitHub owner stays @${k}.`:'');
   const inp=`<input type="text"${o.id?` id="${esc(o.id)}"`:''} data-testid="org-alias-input-${sc}" dir="auto" autocomplete="off" spellcheck="false" autocapitalize="off" maxlength="120" value="${esc(val)}" placeholder="${esc(ph)}" aria-describedby="oa-help-${sc} oa-note-${sc} oa-err-${sc}"${o.compact?` aria-label="Alias in town for ${k}"`:''}>`;
@@ -594,7 +595,7 @@ function oaCheck(key,v){ v=v.trim(); const o=orgOf(key), lv=v.toLowerCase(), n=[
   if(ORGS.some(x=>x.id!==key&&(String(x.alias).toLowerCase()===lv||String(x.id).toLowerCase()===lv))) return {error:oaDup(v)};
   return {value:v}; }
 /* bring one field's DOM in line with its draft */
-function oaSync(box){ const scope=box.dataset.scope, key=box.dataset.orgAlias, d=OA_DRAFT[scope], saved=oaSaved(key), inp=box.querySelector('input'), act=box.querySelector('.oa-act'), err=box.querySelector('.oa-err'), save=box.querySelector('[data-oa=save]'), cancel=box.querySelector('[data-oa=cancel]');
+function oaSync(box){ const scope=box.dataset.scope, key=box.dataset.orgAlias, d=oaDraft(scope,key), saved=oaSaved(key), inp=box.querySelector('input'), act=box.querySelector('.oa-act'), err=box.querySelector('.oa-err'), save=box.querySelector('[data-oa=save]'), cancel=box.querySelector('[data-oa=cancel]');
   const val=d&&d.value!==undefined?d.value:saved, busy=!!(d&&d.busy), dirty=busy||(!!d&&val.trim()!==saved), msg=(d&&d.error)||'';
   if(inp.value!==val) inp.value=val; inp.readOnly=busy; act.hidden=!dirty; box.classList.toggle('dirty',dirty);
   if(dirty&&!OA_SHOWN.has(scope)){ OA_SHOWN.add(scope); act.classList.remove('fade'); void act.offsetWidth; act.classList.add('fade'); } else if(!dirty){ OA_SHOWN.delete(scope); act.classList.remove('fade'); }
@@ -612,10 +613,11 @@ function paintOwnerAlias(){ const i=own, el=$('own-alias'); if(!i||!el) return; 
   oaPaint(el,`<div class="oa-head"><h2>Name in town</h2><a class="pill${hidden?' off':''}" href="#products" data-testid="own-alias-vis" title="Change on Products and visibility">${hidden?'Hidden':'Public'}</a></div>`+orgAliasField(i.org,'owner',{owner:true})); }
 function oaRepaintAll(){ paintProducts(); paintIntegrations(); paintSetupAlias(); if(own&&curPage==='owner') paintOwnerAlias(); }
 function oaFocus(scope){ const b=oaBox(scope), i=b&&b.querySelector('input'); if(i) i.focus(); }
+function oaFocusIf(scope){ const a=document.activeElement, b=oaBox(scope); if(!b||(a&&a!==document.body&&!b.contains(a))) return; oaFocus(scope); }
 function oaRevert(box){ const scope=box.dataset.scope, d=OA_DRAFT[scope]; if(d&&d.busy) return; delete OA_DRAFT[scope]; oaSync(box); }
-async function oaSave(box){ const scope=box.dataset.scope, key=box.dataset.orgAlias, d=OA_DRAFT[scope]; if(!d||d.busy) return; const v=d.value.trim(), saved=oaSaved(key); if(v===saved) return oaRevert(box);
-  const fail=m=>{ d.busy=false; d.error=m; const b=oaBox(scope); if(b){ oaSync(b); oaFocus(scope); } };
-  const c=oaCheck(key,v); if(c.error){ d.error=c.error; oaSync(box); oaFocus(scope); return; }
+async function oaSave(box){ const scope=box.dataset.scope, key=box.dataset.orgAlias, d=oaDraft(scope,key); if(!d||d.busy||d.value===undefined) return; const v=d.value.trim(), saved=oaSaved(key); if(v===saved) return oaRevert(box);
+  const fail=m=>{ d.busy=false; d.error=m; const b=oaBox(scope); if(b){ oaSync(b); oaFocusIf(scope); } };
+  const c=oaCheck(key,v); if(c.error){ d.error=c.error; oaSync(box); oaFocusIf(scope); return; }
   const next=c.reset?'':c.value;
   if(c.reset&&saved===''){ delete OA_DRAFT[scope]; oaSync(box); return; }
   d.busy=true; d.error=''; oaSync(box);
@@ -623,16 +625,17 @@ async function oaSave(box){ const scope=box.dataset.scope, key=box.dataset.orgAl
     if(!r.ok){ if(r.status===401) return fail('Your session ended. Sign in again to save.');
       if(r.status===409) return fail(oaDup(v)); if(r.status===422) return fail((r.data&&r.data.error)||OA_GENERIC);
       return fail('Couldn’t save the alias. Try again.'); }
-    const b=await apiCall('GET','/api/admin/products'); if(b.ok) applyProducts(b.data); }
+    const b=await apiCall('GET','/api/admin/products'); if(b.ok) applyProducts(b.data);
+    else if(r.data&&r.data.key){ const ex=ORGS.find(x=>x.id===r.data.key), n={id:r.data.key,vis:r.data.visibility,alias:r.data.alias}; if(ex) Object.assign(ex,n); else ORGS.push(n); } }
   else{ const ex=ORGS.find(x=>x.id===key);
     if(!ex) ORGS.push({id:key,vis:'public',alias:next||key}); else ex.alias=next||(ex.vis==='public'?ex.id:oaGenerated(ex));
     demoSyncRepos(); }
-  delete OA_DRAFT[scope]; oaRepaintAll(); oaFocus(scope);
+  delete OA_DRAFT[scope]; oaRepaintAll(); oaFocusIf(scope);
   toast(next?`Alias saved. Shown in town as “${next}”.`:`Alias cleared. The town shows ${oaShown(key)}.`); }
-document.addEventListener('input',e=>{ const box=e.target.closest&&e.target.closest('[data-org-alias]'); if(!box||e.target.tagName!=='INPUT') return; const scope=box.dataset.scope, d=OA_DRAFT[scope]||(OA_DRAFT[scope]={});
-  if(d.busy) return; d.value=e.target.value; d.error=''; if(d.value.trim()===oaSaved(box.dataset.orgAlias)) delete OA_DRAFT[scope]; oaSync(box); });
+document.addEventListener('input',e=>{ const box=e.target.closest&&e.target.closest('[data-org-alias]'); if(!box||e.target.tagName!=='INPUT') return; const scope=box.dataset.scope, key=box.dataset.orgAlias, d=oaDraft(scope,key)||(OA_DRAFT[scope]={key});
+  d.key=key; if(d.busy) return; d.value=e.target.value; d.error=''; oaSync(box); });
 document.addEventListener('keydown',e=>{ const box=e.target.closest&&e.target.closest('[data-org-alias]'); if(!box||e.isComposing) return;
-  if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); oaRevert(box); return; }
+  if(e.key==='Escape'){ const d=oaDraft(box.dataset.scope,box.dataset.orgAlias), err=box.querySelector('.oa-err'); if(!((d&&(d.busy||(d.value!==undefined&&d.value.trim()!==oaSaved(box.dataset.orgAlias))))||(err&&!err.hidden))) return; e.preventDefault(); e.stopPropagation(); oaRevert(box); return; }
   if(e.key==='Enter'&&e.target.tagName==='INPUT'){ e.preventDefault(); oaSave(box); } },true);
 document.addEventListener('click',e=>{ const b=e.target.closest&&e.target.closest('[data-oa]'); if(!b) return; const box=b.closest('[data-org-alias]'); if(!box) return;
   if(b.dataset.oa==='save') oaSave(box); else { oaRevert(box); oaFocus(box.dataset.scope); } });
@@ -893,6 +896,7 @@ function qaEnvHTML(i,url){ const hint=i.hint?`  # ends in ${i.hint}`:'', tok='<p
   return `<div data-testid="su-qa-env"><span class="small muted">playwright-executor.env · default instance</span>${block(['BRAIN_TOWN_URL='+url,'BRAIN_TOWN_TOKEN='+tok,'BRAIN_TOWN_ORG='+org,'BRAIN_TOWN_PRODUCTS='+prods])}</div>`
    +`<details data-testid="su-qa-env-named"><summary>Named instance (second deployment on this executor)</summary><div><span class="small muted">playwright-executor.env · named instance</span>${block(['EXECUTOR_EXTRA_TOKENS='+slug+':<executor token, 32+ chars>','BRAIN_TOWN_URL__'+SUF+'='+url,'BRAIN_TOWN_TOKEN__'+SUF+'='+tok,'BRAIN_TOWN_ORG__'+SUF+'='+org,'BRAIN_TOWN_PRODUCTS__'+SUF+'='+prods])}</div></details>`; }
 function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWith('new-')&&id!=='new-github'&&id!=='new-qa'&&KIND[id.slice(4)]){ liveCreate(id.slice(4)); return; } if(!i){ const k=id.replace('new-',''); if(!KIND[k]) return location.hash='#integrations'; i={id:k+'-new',kind:k,name:KIND[k].label+' (new)',state:'waiting',today:0,err:0,last:0,draft:true,events:[]}; }
+  if(!su||su.id!==i.id) delete OA_DRAFT.qasetup;
   ghSecClear('su'); ghPopClose(false); su=i; const k=i.kind, K=KIND[k], url=`${LIVE?location.origin:HOST}/ingest/${k}/${i.id}`;
   $('su-title').textContent=i.name; $('su-rename').hidden=!!i.draft; $('su-lede').textContent=K.lede; const [cl,tx]=stateOf(i); $('su-pill').className='pill '+cl; $('su-pill').innerHTML='<i></i>'+tx;
   const steps={
@@ -907,7 +911,7 @@ function openSetup(id){ let i=INTS.find(x=>x.id===id); if(!i&&LIVE&&id.startsWit
   if(k==='site') extra+=`<label>Feed URL to pull (optional)<input type="text" id="su-feed" value="https://mfardiansyah.id/feed.json"></label>`;
   if(k==='qa') extra+=`<div class="panel pad" id="su-alias" data-testid="su-alias" style="box-shadow:none;display:flex;flex-direction:column;gap:8px">${setupAliasHTML(i)}</div>`+qaEnvHTML(i,url);
   if(K.task) extra+=`<div class="panel pad" style="box-shadow:none;display:flex;flex-direction:column;gap:8px"><div class="row"><h3 class="grow">Task file for the repo</h3><button type="button" class="primary" data-task="${K.task}">Copy task file</button></div><p class="small muted"><code>${K.task}</code> describes exactly what that repo has to build, with the payload contract and a done checklist.</p><details><summary>Read it here</summary><pre class="md" style="margin-top:8px">${esc(TASKS[K.task]||'')}</pre></details></div>`;
-  $('su-extra').innerHTML=extra;
+  $('su-extra').innerHTML=extra; if(k==='qa') paintSetupAlias();
   const maps={
     github:[['Issue opened or reopened','issue.opened'],['Issue assigned','issue.assigned'],['Checklist box ticked in an issue','task.done'],['Issue labeled','issue.labeled',1],['Issue closed','issue.closed'],['Sub-issue added or removed','issue.subissues',1],['Pull request opened, reopened or ready for review','pr.opened'],['Pull request merged','pr.merged'],['Pull request closed without merging','pr.closed'],['Review submitted','pr.reviewed',1],['Comment on an issue or pull request','issue.commented',1],['Check run finished on a pull request','pr.checks'],['Workflow run or job changes','ci.run',1],['Push','repo.pushed',1],['Branch or tag created','ref.created',1],['Branch or tag deleted','ref.deleted',1],['Repo label created, edited or deleted','repo.labels',1],['Discussion created','discussion.opened'],['Discussion answered','discussion.answered'],['Discussion comment','discussion.commented',1],['Repo starred','repo.starred',1],['Webhook saved (ping)','ping, no town object']],
     qa:[['First test of a spec begins','qa.run.started'],['A test.step ends','qa.step'],['Last test of a spec ends','qa.run.finished']],
@@ -1176,6 +1180,7 @@ function ownAddHTML(i){ const k=ownerKind(i), o=esc(ownerName(i)), id=esc(i.id);
 function openOwner(id){ const i=INTS.find(x=>x.id===id);
   if(!i){ location.replace('#integrations'); toast('That integration no longer exists.'); return; }
   if(i.kind!=='github'){ location.replace('#setup-'+id); return; }
+  if(!own||own.id!==i.id) delete OA_DRAFT.owner;
   own=i; ownDirty=false; ownBusy=0; ghSecClear('own'); $('own-hook').querySelectorAll('[data-testid=own-sec-503]').forEach(x=>x.remove());
   $('own-url-wrap').innerHTML=field('Payload URL',ownUrl(i),'own-url'); $('own-sec-wrap').innerHTML=ghSecHTML('Webhook secret','own');
   const add=$('own-add'); add.dataset.ownerType=ownerKind(i)==='user'?'user':'organization'; add.innerHTML=ownAddHTML(i); if(ownerKind(i)==='user') $('own-script').textContent=ghScript(i,'');
@@ -1225,12 +1230,12 @@ const visSwitch=(kind,id,v,o={})=>`<span class="switch"${o.tid?` role="group" ar
 function demoSyncRepos(){ for(const i of INTS) for(const r of i.repos||[]){ const p=r.product&&PRODUCTS.find(x=>x.key===r.product); if(!p) continue; r.vis=p.vis; r.alias=p.alias;
     if(p.vis==='public') r.defaultAlias=r.name; if(p.vis==='hidden'&&r.defaultAlias===r.name&&/^Product [A-Z]$/.test(p.alias)) r.defaultAlias=p.alias; r.aliasCustom=p.vis==='hidden'&&p.alias!==r.defaultAlias; } }
 function paintProducts(){
-  oaPaint($('org-body'),ORGS.map(o=>`<tr><td class="lead"><b style="font-weight:600">${o.id}</b></td><td data-l="Visibility">${visSwitch('org',o.id,o.vis)}</td><td data-l="Public name">${orgAliasField(o.id,'org-'+o.id,{compact:true,id:'oa-'+o.id})}</td><td class="small muted" data-l="Products">${PRODUCTS.filter(p=>p.org===o.id).map(p=>p.key).join(', ')}</td></tr>`).join(''));
+  oaPaint($('org-body'),ORGS.map(o=>`<tr><td class="lead"><b style="font-weight:600">${esc(o.id)}</b></td><td data-l="Visibility">${visSwitch('org',o.id,o.vis)}</td><td data-l="Public name">${orgAliasField(o.id,'org-'+o.id,{compact:true,id:'oa-'+o.id})}</td><td class="small muted" data-l="Products">${PRODUCTS.filter(p=>p.org===o.id).map(p=>p.key).join(', ')}</td></tr>`).join(''));
   $('prod-body').innerHTML=PRODUCTS.map(p=>{ const o=ORGS.find(o=>o.id===p.org), forced=!!o&&o.vis==='hidden'; return `<tr><td class="lead"><b style="font-weight:600">${p.key}</b></td><td class="small" data-l="Sources">${p.src}</td><td class="small" data-l="Org">${p.org?esc(p.org):'<span class="muted">—</span>'}</td><td data-l="Visibility">${forced?'<span class="pill off">hidden by its org</span>':visSwitch('prod',p.key,p.vis)}</td><td data-l="Public name"><input type="text" id="pa-${p.key}" data-alias="prod:${p.key}" value="${esc(p.alias)}" aria-label="Public name for ${p.key}" ${!forced&&p.vis==='public'?'disabled':''}></td><td data-l="Town building"><select id="ph-${p.key}" data-hall="${p.key}" aria-label="Town building for ${p.key}">${HALLS.map(h=>`<option ${h===p.hall?'selected':''}>${h}</option>`).join('')}</select></td></tr>`; }).join('');
   const sample={id:'01JD3X9T2M8Q4W6Z7K5B',type:'issue.opened',int:'gh-sismedika',kind:'github',at:Date.now(),st:'ok',data:{org:'sismedika',repo:'sipreport',number:48,title:'Email bounces for director list'}};
   $('vis-raw').textContent='stored\n'+JSON.stringify(rawView(sample).data,null,2); $('vis-pub').textContent='public stream\n'+JSON.stringify(publicView(sample).data,null,2); }
 document.querySelector('[data-page=products]').addEventListener('click',e=>{ const v=e.target.dataset.vis; if(!v) return; const [kind,id,val]=v.split(':'); if(LIVE){ liveSave(kind,id,{visibility:val},id+' is now '+val+' in the town'); return; } const o=kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id); o.vis=val; if(kind==='org'){ if(!orgCustom(o)) o.alias=val==='public'?o.id:oaGenerated(o); } else if(val==='public') o.alias=o.key; else if(o.alias===o.key) o.alias='Product '+String.fromCharCode(65+PRODUCTS.indexOf(o)); demoSyncRepos(); oaRepaintAll(); toast((o.id||o.key)+' is now '+val+' in the town'); });
-document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(LIVE){ if(a){ const [kind,id]=a.split(':'); liveSave(kind,id,{alias:e.target.value.trim()},'Public name saved'); } if(h) liveSave('prod',h,{hall:e.target.value},h+' now shows at '+e.target.value); return; } if(a){ const [kind,id]=a.split(':'); (kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id)).alias=e.target.value.trim()||'Hidden'; demoSyncRepos(); paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
+document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(LIVE){ if(a){ const [kind,id]=a.split(':'); liveSave(kind,id,{alias:e.target.value.trim()},'Public name saved'); } if(h) liveSave('prod',h,{hall:e.target.value},h+' now shows at '+e.target.value); return; } if(a){ const [kind,id]=a.split(':'); PRODUCTS.find(x=>x.key===id).alias=e.target.value.trim()||'Hidden'; demoSyncRepos(); paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
 
 /* ============================ settings ============================ */
 function paintDb(){ if(LIVE){ const c=liveStats, rows=c?[['Integration (vertex)',c.Integrations],['Org (vertex)',c.Orgs],['Product (vertex)',c.Products],['Event (vertex, newest 5,000)',c.Events],['Rejected deliveries',c.Rejected]]:[];
@@ -1308,7 +1313,7 @@ function startStream(){ if(startStream.es) return; const es=new EventSource('/ad
   es.onopen=()=>{ $('sse-pill').className='pill ok'; $('sse-pill').innerHTML='<i></i>stream connected'; };
   es.onerror=()=>{ $('sse-pill').className='pill bad'; $('sse-pill').innerHTML='<i></i>reconnecting'; }; }
 async function liveSave(kind,id,body,msg){ const r=await apiCall('PUT','/api/admin/'+(kind==='org'?'orgs/':'products/')+encodeURIComponent(id),body); if(!r.ok){ toast(r.data&&r.data.error||'Could not save'); return false; }
-  const b=await apiCall('GET','/api/admin/products'); if(b.ok) applyProducts(b.data); paintProducts(); if(msg) toast(msg); return true; }
+  const b=await apiCall('GET','/api/admin/products'); if(b.ok) applyProducts(b.data); if(kind==='org') oaRepaintAll(); else paintProducts(); if(msg) toast(msg); return true; }
 async function rotateToken(id){ const r=await apiCall('POST','/api/admin/integrations/'+encodeURIComponent(id)+'/token'); return r.ok&&r.data&&r.data.token?r.data.token:null; }
 async function liveRotate(id){ const token=await rotateToken(id); if(!token){ toast('Could not rotate the secret'); return; }
   const i=INTS.find(x=>x.id===id); i.token=token; toast('New secret ready. Copy it now: it is shown once.'); location.hash='#setup-'+id; }
