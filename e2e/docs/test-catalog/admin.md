@@ -11,6 +11,7 @@
 - **US-ADM-05** — As the admin I want an event log and settings so that I can see every delivery and control retention.
 - **US-ADM-06** — As the admin I want to see, copy and rotate a GitHub webhook secret so that I can paste it into GitHub and cut off a leaked one.
 - **US-ADM-07** — As the admin I want a GitHub owner to have a type and per-repo state, with a resettable alias for hidden repos, so that personal accounts (one webhook per repo) work like organizations.
+- **US-ADM-08** — As the admin I want each QA deployment to have its own name, and any integration to be renamed with checks, so that the town can say which tool ran a test.
 
 ## Test cases
 
@@ -54,5 +55,11 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-ADM-072 | US-ADM-07 | Given a GitHub integration, when ownerType is changed, then the list shows the new value                                           | +   | API   | P2  | automated   | `tests/api/rest/github/github-owner.spec.ts`  |
 | ☑    | TC-ADM-073 | US-ADM-07 | Given a hidden repo, when a custom alias is set and then an empty alias is sent, then aliasCustom flips and it resets to Product X | +   | API   | P0  | automated   | `tests/api/rest/github/github-owner.spec.ts`  |
 | ☑    | TC-ADM-074 | US-ADM-07 | Given a public repo, when an empty alias is sent, then nothing changes                                                             | +   | API   | P2  | automated   | `tests/api/rest/github/github-owner.spec.ts`  |
+| ☑    | TC-ADM-080 | US-ADM-08 | Given a QA integration, when another QA integration is created with the same name in another case, then 409                        | -   | API   | P1  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
+| ☑    | TC-ADM-081 | US-ADM-08 | Given a QA integration, when a GAOS integration is created with the same name, then 201                                            | +   | API   | P2  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
+| ☑    | TC-ADM-082 | US-ADM-08 | Given a GitHub owner, when it is renamed, then 200 with the new name and the same org and ownerType                                | +   | API   | P1  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
+| ☑    | TC-ADM-083 | US-ADM-08 | Given two integrations of one kind, when one is renamed to the other name in another case, then 409                                | -   | API   | P1  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
+| ☑    | TC-ADM-084 | US-ADM-08 | Given an integration, when it is renamed to an empty name or to 81 characters, then 422 and the name is kept                       | -   | API   | P1  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
+| ☑    | TC-ADM-085 | US-ADM-08 | Given an unknown id, when it is renamed, then 404                                                                                  | -   | API   | P2  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
 
 TC-ADM-007 is `manual-only`: the failure cap is global for the whole API, so tripping it would break every other sign-in for a minute during a parallel run.
