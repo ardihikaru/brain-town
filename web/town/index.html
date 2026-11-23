@@ -345,6 +345,15 @@ const CONFIG = {
      discussion.opened     {org,repo,number,title,...}                     guest at the Tea House
      discussion.answered   {org,repo,number,...}      discussion.commented {org,repo,number,count,...}
      repo.starred          {org,repo,count,total,ghOrg,...}                lanterns rise above the org gate
+   Animora (anim:true; made by fromPublic from source "animora" envelopes; see docs/integrations/animora.md).
+     platform is the vendor (youtube|facebook|instagram|tiktok). id is a correlation key (the video code, else the title, or the
+     envelope id when hidden). Hidden events carry no title/channel: the town shows "Private video" and no channel chip.
+     video.ready           {id,title,channel,kind,targets:[],publishAt:null,anim}   a render finished at the Video Generator
+     upload.planned        {id,platform,title,channel,publishAt,anim}   a box car takes the file to that company; waits for its slot
+     video.published       {id,platform,title,channel,kind,anim}       the same event as the simulator's, now from Animora
+     upload.failed         {id,platform,title,channel,attempt,anim}    calm "not published" mark; no error text exists
+     channel.connected     {platform,channel,anim}                     a channel joins that platform company
+   Live mode: the simulator's video data is cleared when the stream opens; GEN/YT/FB/IG/TT then show only Animora events.
    Issue and task events may also carry productName (shown instead of repo) and hidden:true.
    GitHub Valley layout: sample layout (CONFIG.orgs, three compounds) while the simulator runs or no real owner is known yet; live layout
    (one gate per real owner, built from GET /api/town and the first events) as soon as the stream is open and an owner is known.
@@ -432,10 +441,31 @@ function makePublicAdapter(){
       case 'repo.starred': out.push(repoEv({count:d.count|0||1,total:d.total|0,ghOrg:env.org})); break;
       default: break; }
     return out; }
+  /* ---- Animora: a video is rendered, scheduled, published or fails to publish; see docs/integrations/animora.md ----
+     Pure and DOM-free. Hidden events arrive without title/channel; the town never builds a title from the envelope id. */
+  const VEND=new Set(['youtube','facebook','instagram','tiktok']);
+  function fmtDue(v){ const t=new Date(v), n=new Date(); if(!v||isNaN(t)) return undefined;
+    if(t.toDateString()===n.toDateString()) return String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
+    return t.toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).replace(',',''); }
+  function fromAnimora(env,type,d,out){ d=(d&&typeof d==='object')?d:{};
+    const vendor=String(d.vendor||'').toLowerCase(), hidden=type==='channel.connected'?!d.channel:!d.title;
+    if(type!=='video.rendered'&&!VEND.has(vendor)) return out;
+    const title=hidden?'Private video':String(d.title), channel=hidden?'':String(d.channel||''),
+      code=/^[A-Za-z0-9_-]{1,32}$/.test(String(d.code||''))?String(d.code):'',
+      vkey=code?'c:'+code:(hidden?'id:'+env.id:'t:'+title.toLowerCase()), anim=true;
+    switch(type){
+      case 'video.rendered': out.push({type:'video.ready',id:vkey,title,channel,kind:d.format==='reel'?'reel':'video',targets:[],publishAt:null,anim,hidden}); break;
+      case 'video.scheduled': out.push({type:'upload.planned',id:vkey,platform:vendor,title,channel,publishAt:fmtDue(d.dueAt),anim,hidden}); break;
+      case 'video.published': out.push({type:'video.published',id:vkey,platform:vendor,title,channel,kind:'video',anim,hidden}); break;
+      case 'video.publish_failed': out.push({type:'upload.failed',id:vkey,platform:vendor,title,channel,attempt:+(/-fail(\d+)$/.exec(String(env.id))||[])[1]||1,anim,hidden}); break;
+      case 'channel.connected': out.push({type:'channel.connected',id:'c:'+env.id,platform:vendor,channel,anim,hidden}); break;
+      default: break; }
+    return out; }
   return function fromPublic(msg){ if(!msg||typeof msg!=='object') return [];
     const env=(msg.payload&&typeof msg.payload==='object')?msg.payload:msg, type=env.type||msg.type, d=env.data||{}, out=[];
     if(env.id!=null){ const k=type+'|'+env.id; if(seen.has(k)) return []; seen.add(k); if(seen.size>4000) seen.delete(seen.values().next().value); }
     if(msg.source==='github'||String(env.id).startsWith('gh-')) return fromGithub(env,type,d,out);
+    if(msg.source==='animora') return fromAnimora(env,type,d,out);
     switch(type){
       case 'product.upserted': break;
       case 'task.created': { const {rec,isNew,base}=ensure(env,out), c=(env.task||{}).column;
@@ -752,9 +782,14 @@ const stalls=[]; [[31.2,16.25,-1],[33.9,16.25,-1],[25.4,19.1,1],[26.8,19.1,1],[2
 gate(24.55,17.85,'x','arch');
 for(const [x,y] of [[30.6,14],[35.4,16.4],[29.4,21],[30.9,22.6],[35.3,20.4],[25.5,23.4],[31.4,20.4]]) tree(x,y,'palm');
 
+/* Animora live mode: VID.live is set when the stream opens and the simulator's video data is cleared (resetVideoSample) */
+const VID={live:false}, CHAN={youtube:new Set(),facebook:new Set(),instagram:new Set(),tiktok:new Set()};
+function schedCount(pf){ let n=0; for(const it of PLS.items.values()) if(it.platform===pf&&it.state==='slot') n++; return n; }
+function vidLabel(pf,withCh){ const s=schedCount(pf), c=CHAN[pf].size; if(!plat[pf]&&!s&&!(withCh&&c)) return 'No Animora activity yet';
+  return `${plat[pf]} published · ${s} scheduled`+(withCh?` · ${c} channel${c===1?'':'s'}`:''); }
 /* YouTube Company (Japanese) */
 const YT = B({id:'yt',name:'YouTube Company',label:true,major:true,district:'YouTube Company',k:'jp',x:13.8,y:25.8,w:3.2,d:3.2,h:4,tiers:3,door:[15,30],detail:{label:'Open the YouTube upload room',open:()=>openDetail('plat','youtube')},entry:[15.4,29.3],
-  desc:'Head office pagoda. Box cars from the Video Generator deliver each finished video here, and it goes live at its slot.',live:()=>`${st.videos} videos shipped · ${st.reels} of them reels`},pagoda);
+  desc:'Head office pagoda. Box cars from the Video Generator deliver each finished video here, and it goes live at its slot.',live:()=>VID.live?vidLabel('youtube'):`${st.videos} videos shipped · ${st.reels} of them reels`},pagoda);
 const chColors=['#d9523c','#2f6f8f','#7a5ea8','#2f8f6b'];
 const studios=[[19.3,26.2,[20,30]],[22,26.2,[23,30]],[13.3,32.2,[14,36]],[16,32.2,[17,36]]].map(([x,y,door],i)=>{
   const o=B({id:'ch'+i,name:CONFIG.channels[i],label:true,district:'YouTube Company',k:'jp',x,y,w:1.9,d:2.2,h:2,color:chColors[i],door,entry:[x+.95,y+2.5],job:null,rec:()=>o.job,detail:{label:'Open the video factory',open:()=>openDetail('yt')},
@@ -955,9 +990,9 @@ buildings.push({id:'shrine',name:'Abandoned Shrine',district:'Countryside',k:'jp
 
 /* North row: Imago, the Video Generator, Social Row and the QA Lab — all face the top road */
 patches.push([28.9,8.1,15,3.8,'#eceff4'],[13.15,13.95,4.7,3.95,'#f0e6df'],[13.3,37.2,4,3.5,K.jv.tint]);
-const genState={n:0}, plat={youtube:0,facebook:0,instagram:0,tiktok:0}, PCOL={youtube:'#d9523c',facebook:'#1877f2',instagram:'#d6337a',tiktok:'#25b8b2'};
-const GEN = B({id:'gen',name:'Video Generator',label:true,major:true,district:'Press Quarter',k:'eu',x:13.4,y:14.2,w:4.2,d:3.4,h:2.4,door:[15,18],entry:[15.5,17.75],busy:()=>genState.n,detail:{label:'Open the video factory',open:()=>openDetail('yt')},
-  desc:'The factory that builds every video. Finished videos leave in box cars for the YouTube, Facebook, Instagram and TikTok companies.',live:()=>`${genState.n} in production`},factory);
+const genState={n:0,rendered:0,last:-1e9}, plat={youtube:0,facebook:0,instagram:0,tiktok:0}, PCOL={youtube:'#d9523c',facebook:'#1877f2',instagram:'#d6337a',tiktok:'#25b8b2'};
+const GEN = B({id:'gen',name:'Video Generator',label:true,major:true,district:'Press Quarter',k:'eu',x:13.4,y:14.2,w:4.2,d:3.4,h:2.4,door:[15,18],entry:[15.5,17.75],busy:()=>genState.n||(VID.live&&performance.now()-genState.last<6000?1:0),detail:{label:'Open the video factory',open:()=>openDetail('yt')},
+  desc:'The factory that builds every video. Finished videos leave in box cars for the YouTube, Facebook, Instagram and TikTok companies.',live:()=>VID.live?(genState.rendered?`${genState.rendered} rendered`:'No videos rendered yet'):`${genState.n} in production`},factory);
 patches.push([12.9,40.85,5.35,5.9,'#f3ecf1']);
 // gallery wall: finished pictures on show
 [['#bfe0f0','#7fb685','#f0b93a'],['#f6cfd6','#b0568a','#fbfcfa'],['#2f3b55','#dcae45','#fbfcfa'],['#f4d9a0','#d9523c','#2f6f8f']].forEach((c,i)=>{ const x=13.3+i*1.2, y=41.5; S(x+.45+y,()=>{ seg([x+.1,y+.04,0],[x+.1,y+.04,.4],HEAVY); seg([x+.8,y+.04,0],[x+.8,y+.04,.4],HEAVY); box(x,y,.9,.08,.4,.72,pal('#fbfcfa'),LIGHT); quadL(x,y+.08,.06,.84,.46,1.06,c[0]); quadL(x,y+.08,.06,.84,.46,.66,c[1],0); const q=P(x+.62,y+.08,.9); ctx.beginPath(); ctx.arc(q[0],q[1],2.6,0,7); ctx.fillStyle=c[2]; ctx.fill(); poly([[x+.06,y+.08,.46],[x+.84,y+.08,.46],[x+.84,y+.08,1.06],[x+.06,y+.08,1.06]],null,LIGHT); }); });
@@ -973,11 +1008,11 @@ for(const [x,y] of [[16.45,44.75],[18.05,44.55]]) S(x+y,()=>{ seg([x,y,0],[x,y,.
 const IMG = B({id:'imago',name:'Imago',label:true,major:true,district:'Countryside',k:'jv',x:13.6,y:37.5,w:3.4,d:2.9,h:2.1,banner:'Imago · image+video',door:[15,36],entry:[15.3,37.1],
   desc:'Handles image and video requests. Each client comes into town through a gate, on foot or dropped off by car, hands in the request, waits inside, and leaves with the finished image or clip.',live:()=>`${st.imagoOpen} in progress · ${st.imagoDone} delivered`},joglo);
 const FB = B({id:'fb',name:'Facebook Company',label:true,major:true,district:'Social Row',k:'eu',x:29.2,y:8.4,w:3.2,d:2.8,floors:3,h:2.9,accent:'#1877f2',seed:6,detail:{label:'Open the Facebook upload room',open:()=>openDetail('plat','facebook')},door:[30,12],entry:[30.8,11.6],
-  desc:'Receives videos from the Video Generator by box car.',live:()=>`${plat.facebook} videos received`},euHotel);
+  desc:'Receives videos from the Video Generator by box car.',live:()=>VID.live?vidLabel('facebook',1):`${plat.facebook} videos received`},euHotel);
 const IG = B({id:'ig',name:'Instagram Company',label:true,major:true,district:'Social Row',k:'ar',x:33,y:8.4,w:3.2,d:2.8,h:3.2,band:'#d6337a',domec:'#e98ab5',detail:{label:'Open the Instagram upload room',open:()=>openDetail('plat','instagram')},door:[34,12],entry:[34.6,11.6],
-  desc:'Receives reels from the Video Generator by box car.',live:()=>`${plat.instagram} reels received`},arHall);
+  desc:'Receives reels from the Video Generator by box car.',live:()=>VID.live?vidLabel('instagram',1):`${plat.instagram} reels received`},arHall);
 const TT = B({id:'tt',name:'TikTok Company',label:true,major:true,district:'Social Row',k:'cn',x:37,y:8.5,w:2.7,d:2.7,h:3.1,tiers:2,red:true,wall:'#56606c',roofc:'#3cc8c2',detail:{label:'Open the TikTok upload room',open:()=>openDetail('plat','tiktok')},door:[38,12],entry:[38.4,11.6],
-  desc:'Receives reels from the Video Generator by box car.',live:()=>`${plat.tiktok} reels received`},pagoda);
+  desc:'Receives reels from the Video Generator by box car.',live:()=>VID.live?vidLabel('tiktok',1):`${plat.tiktok} reels received`},pagoda);
 const QA = B({id:'qa',name:'QA Lab',label:true,major:true,district:'Social Row',k:'jp',x:40.6,y:8.5,w:3.1,d:2.6,h:2.1,color:'#2f8f6b',door:[42,12],entry:[42.1,11.5],detail:{label:'Open the test runs',open:()=>openDetail('qa')},
   desc:'The QA tool company. Every product has an automated browser script, written with Playwright, that a QA agent runs against it again and again. A failed run opens a bug in GitHub Valley.',live:()=>`${st.qaRuns} runs · ${st.qaFail} failed`},machiya);
 const PLAT={youtube:YT,facebook:FB,instagram:IG,tiktok:TT};
@@ -1226,10 +1261,16 @@ const React={
   'video.started'(ev){ genState.n++; pop(GEN.cx,GEN.cy,3.3,'⚙ '+short(ev.title));
     if(ev.collab){ const c=creators.find(x=>x.name===ev.collab)||creators[0]; pop(c.cx,c.cy,2,'crew out to the generator'); const cart=spawn(c.entry[0],c.entry[1],{kind:'car',model:'van',color:'#7d8791',speed:2.5});
       travel(cart,GEN.door,[GEN.entry],()=>{ after(4,()=>travel(cart,c.door,[c.entry],kill)); }); } },
-  'video.ready'(ev){ genState.n=Math.max(0,genState.n-1);
-    (ev.targets||['youtube']).forEach((t,i)=>{ const b=PLAT[t]; if(!b) return; after(i*.7,()=>{ const car=spawn(GEN.entry[0],GEN.entry[1],{kind:'car',model:'truck',color:PCOL[t],speed:2.5});
-      travel(car,b.door,[b.entry],()=>{ pop(b.cx,b.cy,(b.h||3)+.3,'video delivered',PCOL[t]); after(1.5,()=>travel(car,GEN.door,[GEN.entry],kill)); }); }); }); },
-  'video.published'(ev){ const t=ev.platform||'youtube', b=PLAT[t]||YT; plat[t]=(plat[t]||0)+1; if(t==='youtube'){ st.videos++; if(ev.kind==='reel') st.reels++; } if(Math.random()<.2) highlight('good',`New reel live on ${t[0].toUpperCase()+t.slice(1)}: ${short(ev.title,30)}`,b.cx,b.cy); pop(b.cx,b.cy,(b.h||3)+.8,'▶ '+short(ev.title,22),PCOL[t]); sendViewers(b.door,()=>b.entry,true,1+Math.floor(Math.random()*3)); },
+  'video.ready'(ev){ if(ev.anim){ genState.rendered++; genState.last=performance.now(); pop(GEN.cx,GEN.cy,3.3,'✓ '+short(ev.title),'#2f8f6b'); return; }
+    genState.n=Math.max(0,genState.n-1);
+    (ev.targets||['youtube']).forEach((t,i)=>boxCar(t,'video delivered',i*.7)); },
+  'upload.planned'(ev){ boxCar(ev.platform,ev.publishAt?'scheduled '+ev.publishAt:'scheduled',0,true); },
+  'upload.failed'(ev){ const b=PLAT[ev.platform]; if(b) pop(b.cx,b.cy,(b.h||3)+.8,'↺ not published','#8a929b'); },
+  'channel.connected'(ev){ const b=PLAT[ev.platform]; if(!b) return; pop(b.cx,b.cy,(b.h||3)+.5,'+ '+short(ev.channel||'a channel',20),PCOL[ev.platform]); if(!calm()) sendViewers(b.door,()=>b.entry,true,1); },
+  'video.published'(ev){ const t=ev.platform||'youtube', b=PLAT[t]||YT; plat[t]=(plat[t]||0)+1; if(t==='youtube'){ st.videos++; if(ev.kind==='reel') st.reels++; }
+    if(ev.anim){ if(t==='youtube'||Math.random()<.2) highlight('good',ev.hidden?`A private video went live on ${PNAME[t]}.`:`New ${ev.kind==='reel'?'reel':'video'} live on ${PNAME[t]}: ${short(ev.title,30)}`,b.cx,b.cy); }
+    else if(Math.random()<.2) highlight('good',`New reel live on ${t[0].toUpperCase()+t.slice(1)}: ${short(ev.title,30)}`,b.cx,b.cy);
+    pop(b.cx,b.cy,(b.h||3)+.8,'▶ '+short(ev.title,22),PCOL[t]); if(!(ev.anim&&calm())) sendViewers(b.door,()=>b.entry,true,1+Math.floor(Math.random()*3)); },
   'qa.run.started'(ev){ const org=orgBy[ev.org], p=hallOf(ev); if(!p) return; const key=ev.org+'/'+ev.repo;
     const a=spawn(QA.entry[0],QA.entry[1],{color:'#9ccfb5',carry:'paper',mark:'#2f8f6b',speed:2.5,tag:'QA',orgRef:org}); qaAgents.set(key,a);
     const rt=p.multi?org.route(p):[[p.doorPt[0]+.45,p.doorPt[1]+.3]];
@@ -1316,6 +1357,11 @@ function photoEvent(a){ if(a.dead||a.hidden||a.vstate!=='in'||a.hold) return; co
     for(const jr of press){ jr.hold=false; jr.tick=null; walk(jr,[[van.x+(van.lx||0),van.y+(van.ly||0)]],kill); } if(van.parked) after(press.length?2.6:0,vanHome); };
   const check=()=>{ if(!live) return; const age=T-t0; if(a.dead||age>48||(age>=26&&(pressAt?T-pressAt>9:age>=40))) end(); else after(1,check); }; after(26,check); }
 let viewers=0;
+/* a box car from the Video Generator to a platform company; anim:true is calm-aware (no car, the arrival pop at once) */
+function boxCar(pf,label,delay,anim){ const b=PLAT[pf]; if(!b) return; const arrive=()=>pop(b.cx,b.cy,(b.h||3)+.3,label,PCOL[pf]);
+  if(anim&&calm()){ arrive(); return; }
+  after(delay||0,()=>{ const car=spawn(GEN.entry[0],GEN.entry[1],{kind:'car',model:'truck',color:PCOL[pf],speed:2.5});
+    travel(car,b.door,[b.entry],()=>{ arrive(); after(1.5,()=>travel(car,GEN.door,[GEN.entry],kill)); }); }); }
 function sendViewers(door,stand,hide,n){ for(let i=0;i<n;i++){ if(viewers>22) return; viewers++; const g=pick(GATES), P0=PERSONA[pick(['artist','student','tourist','engineer','walker','business'])];
     after(i*rnd(.6,1.5),()=>{ const a=spawn(g[0]+.5,g[1]+.5,{color:P0.color,hat:P0.hat,carry:'phone',speed:rnd(1.9,2.4)}); travel(a,door,[stand(i)],()=>{ a.ox*=.2; a.oy*=.2; if(hide) a.hidden=true; after(rnd(4,8),()=>{ a.hidden=false; viewers--; travel(a,pick(GATES),null,kill); }); }); }); } }
 const imgClients=new Map();
@@ -1753,7 +1799,9 @@ const LIVE_TYPES=['product.upserted','task.created','task.moved','task.claimed',
   'qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit',
   /* GitHub (no 'ping': it never reaches the town) */
   'issue.opened','issue.assigned','issue.closed','issue.labeled','issue.subissues','issue.commented','pr.opened','pr.checks','pr.merged','pr.closed','pr.reviewed',
-  'ci.run','repo.pushed','ref.created','ref.deleted','repo.labels','discussion.opened','discussion.answered','discussion.commented','repo.starred'];
+  'ci.run','repo.pushed','ref.created','ref.deleted','repo.labels','discussion.opened','discussion.answered','discussion.commented','repo.starred',
+  /* Animora */
+  'video.rendered','video.scheduled','video.published','video.publish_failed','channel.connected'];
 const modeEl=document.getElementById('mode');
 let btMode='demo';
 function setBrand(m){ if(m===btMode) return; btMode=m;
@@ -1767,18 +1815,18 @@ function connectLive(url,onFail){ let opened=false, es;
   const onMsg=e=>{ let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
     for(const ev of fromPublic(m)) deliver(ev); };
   for(const t of LIVE_TYPES) es.addEventListener(t,onMsg);
-  es.onopen=()=>{ opened=true; Sim.stop(); bus.live=true; setMode('live SSE'); VAL.streamOpen=true; trySwitch(); };
+  es.onopen=()=>{ opened=true; Sim.stop(); if(!VID.live) resetVideoSample(); bus.live=true; setMode('live SSE'); VAL.streamOpen=true; trySwitch(); };
   es.onerror=()=>{ if(!opened){ es.close(); if(onFail) onFail(); } else setMode('reconnecting'); };
   return es; }
 /* read-only view for tests: plain data only, halls keyed by org/<real repo or alias>, never titles */
-function ghSnapshot(){ const o={orgs:{},halls:{},tea:{seated:TEA.guests.length,waiting:TEA.wait.length,answered:TEA.answered},ghIssues:GH.issues.size,valley:{source:VAL.live?'live':'sample',owners:{},unowned:{products:[...VAL.unowned]}}};
+function ghSnapshot(){ const o={video:videoSnapshot(),orgs:{},halls:{},tea:{seated:TEA.guests.length,waiting:TEA.wait.length,answered:TEA.answered},ghIssues:GH.issues.size,valley:{source:VAL.live?'live':'sample',owners:{},unowned:{products:[...VAL.unowned]}}};
   for(const org of orgs){ if(org.yard||!org.owner||orgBy[org.id]!==org) continue; o.orgs[org.id]={queue:org.queue.length,over:org.waitOver,stars:orgStars(org)};
     for(const p of org.products){ if(!p.bound) continue; const g=p.gh; o.halls[org.id+'/'+p.repo]={repo:g.name||p.repo,visual:p.visual?p.visual.number:null,lanterns:g.lan.filter(x=>!x.die).length,banners:g.ban.filter(x=>!x.die).length,carts:g.carts.map(c=>({run:c.run,status:c.st})),stamp:g.stamp?(g.stamp.ok?'approved':'changes'):null}; } }
   for(const [n,ow] of OWN) o.valley.owners[n]={type:ow.hidden?'':ow.type,hidden:ow.hidden,placed:ow.plot!=null&&orgBy[n]===PLOTS[ow.plot],gate:ow.plot!=null&&orgBy[n]===PLOTS[ow.plot]?ow.plot:null,halls:[...ow.halls],over:Math.max(0,ow.repos.size-ow.halls.length)};
   return o; }
 window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>deliver({live:true,...ev}), config:CONFIG, fromPublic, snapshot:ghSnapshot,
   /* test hook: open a building detail (e.g. 'qa') and optionally a view tab (e.g. 'board') */
-  openDetail(id,view){ const kd=KIND[id]; if(!kd) return false; openDetail(id,undefined,kd.views.some(v=>v[0]===view)?view:undefined); return true; } };
+  openDetail(id,view,sub){ const kd=KIND[id]; if(!kd) return false; openDetail(id,sub,kd.views.some(v=>v[0]===view)?view:undefined); return true; } };
 
 /* ============================================================
    UI: feed log, stats, controls
@@ -1811,7 +1859,10 @@ function describe(ev){ switch(ev.type){
   case 'site.pageview': return `${ev.id} → /${ev.page==='home'?'':ev.page}`;
   case 'site.leave': return `${ev.id} after ${ev.pages} page${ev.pages===1?'':'s'}`;
   case 'upload.stage': return `${ev.platform}: ${ev.title} · ${ev.stage}`;
-  case 'video.ready': return `${ev.channel}: ${ev.title}, slot ${ev.publishAt}`;
+  case 'video.ready': return ev.anim?`${ev.title} rendered${ev.channel?' for '+ev.channel:''}`:`${ev.channel}: ${ev.title}, slot ${ev.publishAt}`;
+  case 'upload.planned': return `${PNAME[ev.platform]}: ${ev.title}${ev.publishAt?' at '+ev.publishAt:''}`;
+  case 'upload.failed': return `${PNAME[ev.platform]}: ${ev.title} not published (attempt ${ev.attempt})`;
+  case 'channel.connected': return `${PNAME[ev.platform]}: ${ev.channel||'a channel'} connected`;
   case 'task.column': return `${ev.productName||ev.repo} #${ev.number} → ${ev.column}`;
   case 'task.failed': return `${ev.productName||ev.repo} #${ev.number} ${ev.reason}`;
   case 'gate.requested': return `${ev.productName||ev.repo} #${ev.number} waits at the design gate`;
@@ -1964,8 +2015,30 @@ const STAGES=[
   ['scenes','Scenes','Each scene gets an animated illustration timed to its voice clip. On a collab reel the creator studio joins here.'],
   ['render','Render','Scenes, captions and audio are composed into one portrait video.'],
   ['review','Review','A checking agent verifies length, audio sync and captions. A failed check sends the video back to Scenes.']];
-const chColor=n=>chColors[Math.max(0,CONFIG.channels.indexOf(n))%chColors.length];
+const chColor=n=>{ const i=CONFIG.channels.indexOf(n); if(i>=0) return chColors[i%chColors.length]; if(!n) return '#8a929b'; let h=0; for(const ch of String(n)) h=(h*31+ch.codePointAt(0))>>>0; return chColors[h%chColors.length]; };
+/* Animora video store: one YTS item per video (ready, scheduled, published) and one PLS item per video and platform (slot, failed, live) */
+const ARANK={ready:1,scheduled:2,published:3};
+function resetVideoSample(){ YTS.items.clear(); PLS.items.clear(); for(const k in plat) plat[k]=0; genState.n=0; genState.rendered=0; genState.last=-1e9; st.videos=0; st.reels=0;
+  for(const k in CHAN) CHAN[k]=new Set(); YTS.v++; PLS.v++; VID.live=true; if(detail) sceneReset(); }
+function videoSnapshot(){ const platforms={}; for(const pf in PNAME){ const l=[...PLS.items.values()].filter(x=>x.platform===pf), n=k=>l.filter(x=>x.state===k).length;
+    platforms[pf]={scheduled:n('slot'),failed:n('failed'),live:n('live'),published:plat[pf],channels:CHAN[pf].size}; }
+  return {source:VID.live?'live':'sample',rendered:genState.rendered,platforms}; }
+function animStore(ev,now){ const t=ev.type, pf=ev.platform, key=pf+'|'+ev.id;
+  const pget=st0=>{ let it=PLS.items.get(key); if(!it){ it={key,id:ev.id,platform:pf,title:ev.title,channel:ev.channel,kind:ev.kind||'video',state:st0,publishAt:null,at:now,seq:++PLS.seq,anim:true}; PLS.items.set(key,it); } return it; };
+  const pcap=state=>{ const l=[...PLS.items.values()].filter(x=>x.platform===pf&&x.state===state).sort((a,b)=>a.seq-b.seq); while(l.length>6) PLS.items.delete(l.shift().key); };
+  const yget=create=>{ let it=YTS.items.get(ev.id); if(!it&&create){ it={id:ev.id,source:'anim',title:ev.title,channel:ev.channel,kind:ev.kind||'video',state:'',at:now,reworks:0,plans:{},platforms:[],failed:null,upd:0}; YTS.items.set(ev.id,it); } if(it) it.upd=++YTS.seq; return it; };
+  const up=(it,s2)=>{ if((ARANK[s2]||0)>=(ARANK[it.state]||0)) it.state=s2; };
+  const ycap=(state,n)=>{ const l=[...YTS.items.values()].filter(x=>x.state===state).sort((a,b)=>state==='published'?a.seq-b.seq:a.upd-b.upd); while(l.length>n) YTS.items.delete(l.shift().id); };
+  if(t==='video.ready'){ const y=yget(true); up(y,'ready'); y.kind=ev.kind||y.kind; ycap('ready',8); YTS.v++; }
+  else if(t==='upload.planned'){ const p=pget('slot'); if(p.state!=='live') p.state='slot'; p.publishAt=ev.publishAt; pcap('slot'); PLS.v++;
+    const y=yget(true); y.plans[pf]=ev.publishAt||''; y.failed=null; up(y,'scheduled'); ycap('scheduled',8); YTS.v++; }
+  else if(t==='upload.failed'){ const p=pget('failed'); if(p.state!=='live') p.state='failed'; p.attempt=ev.attempt; p.seq=++PLS.seq; pcap('failed'); PLS.v++;
+    const y=yget(false); if(y&&y.state!=='published') y.failed=pf; YTS.v++; }
+  else if(t==='video.published'){ const p=pget('slot'); p.state='live'; p.liveReal=performance.now(); p.liveAt=now; p.seq=++PLS.seq; pcap('live'); PLS.v++;
+    const y=yget(true); up(y,'published'); if(!y.platforms.includes(pf)) y.platforms.push(pf); y.publishedAt=now; y.seq=++YTS.seq; y.failed=null; ycap('published',6); YTS.v++; }
+  else if(t==='channel.connected'){ CHAN[pf].add(ev.channel||ev.id||'id:'+PLS.seq); PLS.v++; } }
 bus.on(ev=>{ const t=ev.type, now=clockStr();
+  if(ev.anim){ animStore(ev,now); return; }
   if(t.startsWith('site.')){ let v=SITE.vis.get(ev.id);
     if(t==='site.visit'){ const pr=visitorProfile(ev), cc=ev.country||'ID'; v={id:ev.id,country:cc,persona:pr.persona,via:pr.via,state:ev.page||ev.landing||'home',title:ev.title,pages:1,at:now,seq:++SITE.seq,chats:0}; SITE.vis.set(ev.id,v); SITE.today++; SITE.pv++; SITE.ctry[cc]=(SITE.ctry[cc]||0)+1; SITE.pages[v.state]=(SITE.pages[v.state]||0)+1; }
     else if(v){ if(t==='site.pageview'){ v.state=ev.page; v.title=ev.title; v.pages++; v.seq=++SITE.seq; SITE.pv++; SITE.pages[ev.page]++; }
@@ -2044,9 +2117,29 @@ function openDetail(kind,id,tab){ detail={kind,id,tab:tab||'people',v:-1}; scene
 function closeDetail(){ detail=null; $('detail').classList.remove('on'); }
 $('d-close').onclick=closeDetail; window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&detail) closeDetail(); });
 const none=t=>`<div class="empty">${t}</div>`;
-function vCard(it,extra=''){ return `<article class="kc" style="border-left-color:${chColor(it.channel)}"><div class="top"><span class="chip">${esc(it.channel)}</span>${it.kind==='reel'?'<span class="chip reel">reel</span>':''}${extra}</div><div class="t">${esc(it.title)}</div>`; }
+function vCard(it,extra=''){ return `<article class="kc" data-testid="video-card" data-state="${esc(it.state)}" style="border-left-color:${chColor(it.channel)}"><div class="top">${it.channel?`<span class="chip">${esc(it.channel)}</span>`:''}${it.kind==='reel'?'<span class="chip reel">reel</span>':''}${extra}</div><div class="t">${esc(it.title)}</div>`; }
 function trackHtml(it){ const k=STAGES.findIndex(s=>s[0]===it.stage); return '<div class="track">'+STAGES.map((s,i)=>`<span class="${i<k?'done':i===k?'now':''}">${s[1]}</span>`).join('')+'</div>'; }
-function ytQueues(){ const all=[...YTS.items.values()], sch=all.filter(x=>x.state==='scheduled');
+const emptyBox=(id,strong,line)=>`<div class="empty" data-testid="${id}" style="text-align:center;padding:20px 12px"><strong style="display:block;font-size:13px;color:var(--ink)">${strong}</strong>${line}</div>`;
+function animQueues(){ const all=[...YTS.items.values()], lede='<p class="lede">Videos from Animora: rendered, scheduled and published.</p>';
+  if(!all.length) return lede+emptyBox('video-board-empty','No videos yet.','Videos appear here when Animora renders one.');
+  const by=(state,key)=>all.filter(x=>x.state===state).sort((a,b)=>b[key]-a[key]), card=(it,chips,meta)=>vCard(it,chips)+`<div class="m">${meta}</div></article>`,
+    col=(name,hint,l,f,emptyT)=>`<div class="col"><h4>${name} <i>${l.length}</i></h4><p class="hint">${hint}</p>${l.length?l.map(f).join(''):none(emptyT)}</div>`, plans=it=>Object.keys(it.plans);
+  return lede+`<div class="board" style="grid-template-columns:repeat(3,minmax(170px,1fr))">`
+    +col('Rendered','Finished files from Animora.',by('ready','upd'),it=>card(it,'','rendered '+esc(it.at)),'No finished video is waiting.')
+    +col('Scheduled','Planned uploads, by platform.',by('scheduled','upd'),it=>card(it,plans(it).map(v=>`<span class="chip">${esc(PNAME[v])}</span>`).join(''),plans(it).map(v=>esc(PNAME[v])+(it.plans[v]?' '+esc(it.plans[v]):' · no slot time')).join(' · ')),'Nothing is scheduled.')
+    +col('Published','Latest uploads.',by('published','seq'),it=>card(it,it.platforms.map(v=>`<span class="chip">${esc(PNAME[v])}</span>`).join(''),'live since '+esc(it.publishedAt)),'Nothing published yet.')+'</div>'; }
+function animSteps(){ const all=[...YTS.items.values()], f=all.slice().sort((a,b)=>b.upd-a.upd)[0];
+  const tok=l=>'<div class="tok">'+l.map(it=>`<span class="tk" style="background:${chColor(it.channel)}" title="${esc(it.title)}">${esc(it.channel||short(it.title,18))}</span>`).join('')+'</div>';
+  const steps=[['Rendered','Animora finished the video file.',all.filter(x=>x.state==='ready'),'ready'],['Scheduled','An upload is planned on a platform and waits for its slot.',all.filter(x=>x.state==='scheduled'),'scheduled'],
+    ['Published','The video is live on a platform.',all.filter(x=>x.state==='published').sort((x,y)=>y.seq-x.seq).slice(0,3),'published']];
+  let verb='';
+  if(f){ const last=o=>{ const k=Object.keys(o); return PNAME[k[k.length-1]]||'a platform'; };
+    verb=f.failed&&f.state!=='published'?`did not go out on ${PNAME[f.failed]||'a platform'}.`:f.state==='published'?`is live on ${PNAME[f.platforms[f.platforms.length-1]]||'a platform'}.`
+      :f.state==='scheduled'?`is scheduled on ${last(f.plans)}${Object.values(f.plans).pop()?' for '+esc(Object.values(f.plans).pop()):''}.`:'was rendered.'; }
+  return `<p class="lede">Animora reports a video when it is rendered, scheduled and published. The steps in between run inside Animora.</p>
+  <ol class="steps">${steps.map((s2,i)=>`<li class="${f&&f.state===s2[3]?'here':''}"><span class="n">Step ${i+1} of 3</span><b>${s2[0]}</b><p>${s2[1]}</p>${tok(s2[2])}</li>`).join('')}</ol>
+  <div class="follow"><h4>Follow one video</h4>${f?`<p>${f.channel?'<b>'+esc(f.channel)+'</b>: ':''}“${esc(f.title)}” ${verb}</p>`:'<p>No video has arrived yet. The newest one is followed here once Animora reports it.</p>'}</div>`; }
+function ytQueues(){ if(VID.live) return animQueues(); const all=[...YTS.items.values()], sch=all.filter(x=>x.state==='scheduled');
   const first=sch.filter((x,i)=>sch.findIndex(y=>y.channel===x.channel)===i);
   const nextIds=new Set(first.map(x=>x.id));
   const lane2=src=>{ const l=sch.filter(x=>x.source===src); return l.length?l.map(it=>vCard(it,nextIds.has(it.id)?'<span class="chip next">next for this channel</span>':'')+`<div class="m">queued ${it.at}</div></article>`).join(''):none('Nothing waiting.'); };
@@ -2062,7 +2155,7 @@ function ytQueues(){ const all=[...YTS.items.values()], sch=all.filter(x=>x.stat
     <div class="col"><h4>Ready to publish <i>${ready.length}</i></h4><p class="hint">Finished files waiting for their slot.</p>${ready.length?ready.map(it=>vCard(it)+`<div class="m">publishes at ${esc(it.publishAt)}</div></article>`).join(''):none('No finished video is waiting.')}</div>
     <div class="col"><h4>Published <i>${st.videos}</i></h4><p class="hint">Latest uploads, newest first.</p>${pub.length?pub.map(it=>vCard(it,(it.platforms||[]).map(p=>`<span class="chip">${p}</span>`).join(''))+`<div class="m">live on YouTube ${it.publishedAt}</div></article>`).join(''):none('Nothing published yet today.')}</div>
   </div>`; }
-function ytSteps(){ const all=[...YTS.items.values()], b=all.filter(x=>x.state==='building');
+function ytSteps(){ if(VID.live) return animSteps(); const all=[...YTS.items.values()], b=all.filter(x=>x.state==='building');
   const tok=l=>'<div class="tok">'+l.map(it=>`<span class="tk" style="background:${chColor(it.channel)}" title="${esc(it.title)}">${esc(it.channel)}</span>`).join('')+'</div>';
   const f=b.slice().sort((x,y)=>y.seq-x.seq)[0];
   const steps=[['Queue','An article or a planned topic is scheduled and waits for its channel.',all.filter(x=>x.state==='scheduled').slice(0,6),null],
@@ -2304,7 +2397,7 @@ function drawYtScene(c,dt,LW,LH){ const all=[...YTS.items.values()], sch=all.fil
     else if(it.state==='published') { o.tag='▶ live'; o.tagFill='#d9523c'; o.tagInk='#fff'; }
     if(it.collab&&it.state==='building'&&it.stage!=='script'&&it.stage!=='voice') person(c,a.x-20,a.y-3,'#aab2ba',{k:1.6,moving:a.moving,ph:a.ph+1});
     person(c,a.x,a.y,chColor(it.channel),{moving:a.moving,ph:a.ph,...o});
-    hoverCheck(a,`${it.channel}: ${it.title}${it.collab?' (reel with '+it.collab+')':''}`); } }
+    hoverCheck(a,`${it.channel?it.channel+': ':''}${it.title}${it.collab?' (reel with '+it.collab+')':''}`); } }
 
 function wrapText(c,text,x,y,maxW,lh,maxLines){ let line='',n=0; for(const w of String(text).split(' ')){ const t=line?line+' '+w:w; if(c.measureText(t).width>maxW&&line){ n++; if(n===maxLines){ c.fillText(line+'…',x,y); return; } c.fillText(line,x,y); y+=lh; line=w; } else line=t; } c.fillText(line,x,y); }
 function drawLiScene(c,dt,LW,LH){ const all=[...LIS.items.values()], G=400, mono='500 10.5px "IBM Plex Mono"', t=now_();
@@ -2429,7 +2522,16 @@ function drawSiteScene(c,dt,LW,LH){ const all=[...SITE.vis.values()], t=now_(), 
     person(c,a.x,a.y,(PERSONA[v.persona]||PERSONA.walker).color,{k:1.7,moving:a.moving,ph:a.ph,...o}); hoverCheck(a,`${(PERSONA[v.persona]||PERSONA.walker).label} from ${COUNTRY[v.country]||v.country}, ${VIA[v.via]||''}: ${v.state==='left'?'leaving after '+v.pages+' pages':v.title||({home:'home page',chat:'chatting',office:'office page',blog:'reading the blog'}[v.state])}`); } }
 
 const PSTG=[['check','Format check'],['caption','Caption + tags'],['slot','Slot'],['upload','Upload']], PX={check:330,caption:500,slot:660,upload:810};
-function platBoard(pf){ const all=[...PLS.items.values()].filter(x=>x.platform===pf), card=(it,meta)=>`<article class="kc" style="border-left-color:${chColor(it.channel)}"><div class="top"><span class="chip">${esc(it.channel)}</span>${it.kind==='reel'?'<span class="chip reel">reel</span>':''}</div><div class="t">${esc(it.title)}</div><div class="m">${meta}</div></article>`;
+function platBoardLive(pf){ const all=[...PLS.items.values()].filter(x=>x.platform===pf), nc=CHAN[pf].size, N=PNAME[pf];
+  const lede=`<p class="lede">What ${N} shows of the videos Animora sends. ${nc} channel${nc===1?'':'s'} connected.</p>`+(pf!=='youtube'?`<p class="hint">Animora does not upload to ${N} yet. Connected channels, schedules and failed attempts show here.</p>`:'');
+  if(!all.length) return lede+emptyBox('plat-board-empty','Nothing from Animora yet.',`Scheduled and published videos for ${N} appear here.`);
+  const card=(it,meta)=>`<article class="kc" data-testid="plat-card" data-platform="${pf}" data-state="${it.state}" style="border-left-color:${chColor(it.channel)}"><div class="top">${it.channel?`<span class="chip">${esc(it.channel)}</span>`:''}${it.kind==='reel'?'<span class="chip reel">reel</span>':''}</div><div class="t">${esc(it.title)}</div><div class="m">${meta}</div></article>`;
+  const col=(stt,name,hint,meta,emptyT,cnt)=>{ const l=all.filter(x=>x.state===stt).sort((a,b)=>stt==='slot'?a.seq-b.seq:b.seq-a.seq); return `<div class="col"><h4>${name} <i>${cnt==null?l.length:cnt}</i></h4><p class="hint">${hint}</p>${l.length?l.map(it=>card(it,meta(it))).join(''):none(emptyT)}</div>`; };
+  return lede+`<div class="board" style="grid-template-columns:repeat(3,minmax(170px,1fr))">`
+    +col('slot','Scheduled','Waiting for the planned slot.',it=>it.publishAt?'slot '+esc(it.publishAt):'no slot time','Nothing is scheduled.')
+    +col('failed','Not published','The upload did not go out.',it=>'attempt '+esc(it.attempt||1),'Nothing failed.')
+    +col('live','Live','Latest, newest first.',it=>'live since '+esc(it.liveAt),'Nothing live yet.',plat[pf])+'</div>'; }
+function platBoard(pf){ if(VID.live) return platBoardLive(pf); const all=[...PLS.items.values()].filter(x=>x.platform===pf), card=(it,meta)=>`<article class="kc" style="border-left-color:${chColor(it.channel)}"><div class="top"><span class="chip">${esc(it.channel)}</span>${it.kind==='reel'?'<span class="chip reel">reel</span>':''}</div><div class="t">${esc(it.title)}</div><div class="m">${meta}</div></article>`;
   const col=(stt,name,hint,meta,emptyT)=>{ const l=all.filter(x=>x.state===stt).sort((a,b)=>stt==='live'?b.seq-a.seq:a.seq-b.seq); return `<div class="col"><h4>${name} <i>${stt==='live'?plat[pf]:l.length}</i></h4><p class="hint">${hint}</p>${l.length?l.map(it=>card(it,meta(it))).join(''):none(emptyT)}</div>`; };
   return `<p class="lede">What ${PNAME[pf]} does with each video the Video Generator sends. The input is a finished file; the output is a live reel.</p><div class="board" style="grid-template-columns:repeat(6,minmax(170px,1fr))">`
     +col('arriving','On the way','In a box car from the generator.',it=>'left '+it.at,'No box car on the road.')
@@ -2470,15 +2572,16 @@ function drawPlatScene(c,dt,LW,LH){ const pf=detail.id, col=PCOL[pf], cult=PCULT
   { const live=at('live').reverse(), cur=live[0], px=908, py=G-240, pw=124, ph=212; c.lineWidth=2; c.fillStyle='#1f2b3a'; c.beginPath(); c.roundRect?c.roundRect(px,py,pw,ph,14):c.rect(px,py,pw,ph); c.fill(); c.stroke(); c.fillStyle=cur?mix(chColor(cur.channel),WHITE,.55):'#dfe3e8'; c.fillRect(px+7,py+16,pw-14,ph-32); c.lineWidth=1.2;
     if(cur){ const age=(performance.now()-cur.liveReal)/1000, views=Math.floor(12+age*age*.9+age*9), likes=Math.floor(views*.11); c.fillStyle='rgba(31,43,58,.22)'; for(let i=0;i<4;i++){ const bw=14+((i*37+Math.floor(t*2))%30); c.fillRect(px+16+i*24,py+110-bw,16,bw); }
       c.beginPath(); c.moveTo(px+54,py+56); c.lineTo(px+54,py+84); c.lineTo(px+78,py+70); c.closePath(); c.fillStyle='#fff'; c.fill(); c.stroke();
-      c.fillStyle='rgba(31,43,58,.78)'; c.fillRect(px+7,py+ph-92,pw-14,76); c.fillStyle='#fff'; c.font='600 10.5px "IBM Plex Sans"'; c.textAlign='left'; wrapText(c,cur.title,px+13,py+ph-78,pw-28,12.5,3); txt(c,cur.channel,px+13,py+ph-38,'500 9px "IBM Plex Mono"','left','#dfe3e8'); txt(c,`▶ ${views.toLocaleString('en-US')}   ♥ ${likes.toLocaleString('en-US')}`,px+13,py+ph-23,'500 9.5px "IBM Plex Mono"','left','#fff'); }
+      c.fillStyle='rgba(31,43,58,.78)'; c.fillRect(px+7,py+ph-92,pw-14,76); c.fillStyle='#fff'; c.font='600 10.5px "IBM Plex Sans"'; c.textAlign='left'; wrapText(c,cur.title,px+13,py+ph-78,pw-28,12.5,3); txt(c,cur.channel,px+13,py+ph-38,'500 9px "IBM Plex Mono"','left','#dfe3e8'); txt(c,VID.live?'live since '+cur.liveAt:`▶ ${views.toLocaleString('en-US')}   ♥ ${likes.toLocaleString('en-US')}`,px+13,py+ph-23,'500 9.5px "IBM Plex Mono"','left','#fff'); }
     else txt(c,'no reel yet',px+pw/2,py+ph/2,mono,'center','#647282');
-    c.fillStyle='#1f2b3a'; c.fillRect(px+pw/2-16,py+5,32,5); plaque(c,plat[pf]+' live today',px+pw/2,py-10,mono,col,'#fff'); }
+    c.fillStyle='#1f2b3a'; c.fillRect(px+pw/2-16,py+5,32,5); plaque(c,VID.live?plat[pf]+' live':plat[pf]+' live today',px+pw/2,py-10,mono,col,'#fff'); }
   // people
-  for(const it of all){ if(it.state==='arriving') continue; let tx,terminal=false,o={carry:'reel'};
+  if(VID.live){ const nf=all.filter(x=>x.state==='failed').length; if(nf) plaque(c,nf+' not published',PX.slot+67,G+22,mono,'#fff','#8a929b'); }
+  for(const it of all){ if(it.state==='arriving'||it.state==='failed') continue; let tx,terminal=false,o={carry:'reel'};
     if(it.state==='live'){ tx=892; terminal=true; } else { const q=at(it.state); tx=PX[it.state]-q.indexOf(it)*64; }
     const a=actor('p'+it.key,it,tx,G,[196,G],dt,terminal); if(!a||a.gone) continue;
     if(!a.moving) o.tag={check:'9:16 check',caption:'# caption',slot:it.publishAt||'next slot',upload:'↑ upload'}[it.state]; else if(it.state==='live'){ o.tag='▶ live'; o.tagFill=col; o.tagInk='#fff'; }
-    person(c,a.x,a.y,chColor(it.channel),{moving:a.moving,ph:a.ph,...o}); hoverCheck(a,`${it.channel}: ${it.title} (${it.kind||'video'})`); } }
+    person(c,a.x,a.y,chColor(it.channel),{moving:a.moving,ph:a.ph,...o}); hoverCheck(a,`${it.channel?it.channel+': ':''}${it.title} (${it.kind||'video'})`); } }
 
 function drawScene(dt){ const cv2=$('scene'); if(!cv2||!detail) return; const LW=1060, LH=KIND[detail.kind].LH, cw=cv2.clientWidth; if(!cw) return;
   const d=Math.min(window.devicePixelRatio||1,2), w=Math.round(cw*d), h=Math.round(cw*LH/LW*d); if(cv2.width!==w||cv2.height!==h){ cv2.width=w; cv2.height=h; }
