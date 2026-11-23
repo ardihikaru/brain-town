@@ -186,7 +186,7 @@ func (a *API) session(w http.ResponseWriter, r *http.Request) {
 
 // ---- integrations ----
 
-var kinds = map[string]bool{"github": true, "qa": true, "gaos": true, "site": true}
+var kinds = map[string]bool{"github": true, "qa": true, "gaos": true, "site": true, "animora": true}
 
 // repoRow is one repository of a GitHub integration in the admin list.
 type repoRow struct {
@@ -271,7 +271,7 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !kinds[in.Kind] || strings.TrimSpace(in.Name) == "" || utf8.RuneCountInString(strings.TrimSpace(in.Name)) > 80 {
-		fail(w, 422, "kind must be github, qa, gaos or site, and name is required")
+		fail(w, 422, "kind must be github, qa, gaos, site or animora, and name is required")
 		return
 	}
 	if in.Kind == "qa" && a.nameTaken("qa", in.Name, "") {

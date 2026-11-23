@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ardihikaru/brain-town/backend/internal/animora"
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
 )
@@ -68,10 +69,10 @@ func (p *Puller) Run(interval time.Duration, stop <-chan struct{}) {
 	}
 }
 
-// PullAll pulls every site integration that has a feed URL; the others are skipped.
+// PullAll pulls every site or animora integration that has a feed URL; the others are skipped.
 func (p *Puller) PullAll() {
 	for _, i := range p.St.Integrations() {
-		if i.Kind != "site" || i.FeedURL == "" {
+		if (i.Kind != "site" && i.Kind != "animora") || i.FeedURL == "" {
 			continue
 		}
 		n, err := p.Pull(i)
@@ -95,7 +96,11 @@ type item struct {
 	URL           string `json:"url"`
 	Title         string `json:"title"`
 	DatePublished string `json:"date_published"`
-	at            time.Time
+	Animora       struct {
+		Vendor  string `json:"vendor"`
+		Channel string `json:"channel"`
+	} `json:"_animora"`
+	at time.Time
 }
 
 // Fetch downloads and parses a feed. Only https is accepted. It returns the newest 20 usable items.
@@ -162,6 +167,12 @@ func (p *Puller) Pull(i store.Integration) (int, error) {
 	n := 0
 	for k := len(items) - 1; k >= 0; k-- { // oldest first so seq follows publish order
 		it := items[k]
+		if i.Kind == "animora" {
+			if p.addAnimora(i, it) {
+				n++
+			}
+			continue
+		}
 		raw := map[string]any{"id": it.ID, "type": "article.published", "at": it.at.Format(time.RFC3339),
 			"data": map[string]any{"title": it.Title, "url": it.URL, "to": "blog"}}
 		ev, fresh := p.St.AddAccepted(store.Accept{Integration: i.ID, Kind: "site", Key: it.ID, ID: it.ID,
@@ -172,4 +183,21 @@ func (p *Puller) Pull(i store.Integration) (int, error) {
 		}
 	}
 	return n, nil
+}
+
+// addAnimora records one Animora feed item as video.published, built exactly like the push path. Items without
+// a valid _animora.vendor, or that the ingest contract would reject, are skipped.
+func (p *Puller) addAnimora(i store.Integration, it item) bool {
+	data, err := animora.Clean("video.published", map[string]any{"vendor": it.Animora.Vendor,
+		"channel": it.Animora.Channel, "title": it.Title, "url": it.URL, "publishedAt": it.DatePublished})
+	if err != nil {
+		return false
+	}
+	ev, fresh := p.St.AddAccepted(store.Accept{Integration: i.ID, Kind: "animora", Key: it.ID, ID: it.ID,
+		Type: "video.published", At: it.at, Product: animora.Product, ProductName: animora.Name, Vis: store.Public,
+		Org: i.Org, Raw: animora.Build(it.ID, "video.published", it.at, i.Org, data)})
+	if fresh {
+		p.Hub.Publish(ev)
+	}
+	return fresh
 }

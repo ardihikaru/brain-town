@@ -5,6 +5,7 @@ package visibility
 
 import (
 	"encoding/json"
+	"slices"
 	"sort"
 	"time"
 
@@ -18,7 +19,7 @@ type Resolver interface {
 }
 
 // sensitive data fields removed when the event is about a hidden org or product.
-var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check"}
+var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check", "channel", "account", "prompt", "script", "failure"}
 
 // Aliases reports whether the event is hidden and, if so, the public names to show.
 func Aliases(r Resolver, ev store.Event) (hidden bool, orgAlias, productAlias string) {
@@ -194,6 +195,9 @@ func Town(r Resolver, orgs []store.Org, products []store.Product, integrations [
 	byOrg := map[string]map[string]*acc{}
 	unowned := map[string]*acc{}
 	for _, p := range products {
+		if slices.Contains(p.Sources, "Animora") && !slices.Contains(p.Sources, "GitHub") {
+			continue // Animora is a video studio, not a GitHub Valley gate or hall
+		}
 		if _, ok := orgByKey[p.Org]; p.Org == "" || !ok {
 			add(unowned, p, "")
 			continue

@@ -28,7 +28,7 @@ const (
 
 type Integration struct {
 	ID             string               `json:"id"`
-	Kind           string               `json:"kind"` // github | qa | gaos | site
+	Kind           string               `json:"kind"` // github | qa | gaos | site | animora
 	Name           string               `json:"name"`
 	Org            string               `json:"org,omitempty"`
 	FeedURL        string               `json:"feedUrl,omitempty"` // site only: JSON Feed 1.1 URL pulled by internal/feed (https)
@@ -681,7 +681,7 @@ func (st *Store) touch(org, product, name, reportedVis, kind string) {
 	if p.Name == "" && name != "" {
 		p.Name, changed = name, true
 	}
-	if label := map[string]string{"github": "GitHub", "qa": "QA", "gaos": "GAOS", "site": "Site"}[kind]; label != "" && !slices.Contains(p.Sources, label) {
+	if label := map[string]string{"github": "GitHub", "qa": "QA", "gaos": "GAOS", "site": "Site", "animora": "Animora"}[kind]; label != "" && !slices.Contains(p.Sources, label) {
 		p.Sources, changed = append(p.Sources, label), true
 	}
 	if changed {
@@ -703,6 +703,9 @@ func (st *Store) qProduct(p *Product) {
 func defaultHall(kind string) string {
 	if kind == "gaos" {
 		return "Article Bureau"
+	}
+	if kind == "animora" {
+		return "Video Studio hall"
 	}
 	return "GitHub Valley hall"
 }

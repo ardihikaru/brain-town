@@ -1,4 +1,4 @@
-// Package ingest implements POST /ingest/{gaos,qa,site}/{integration-id}.
+// Package ingest implements POST /ingest/{gaos,qa,site,animora}/{integration-id}.
 package ingest
 
 import (
@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ardihikaru/brain-town/backend/internal/animora"
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
 	"github.com/ardihikaru/brain-town/backend/internal/ratelimit"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
@@ -32,7 +33,7 @@ func (e verr) Error() string { return e.Field + ": " + e.Msg }
 
 func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	kind, id := r.PathValue("kind"), r.PathValue("id")
-	if kind != "gaos" && kind != "qa" && kind != "site" {
+	if kind != "gaos" && kind != "qa" && kind != "site" && kind != "animora" {
 		reply(w, 404, "unknown source", "")
 		return
 	}
@@ -136,7 +137,7 @@ func validate(kind, integOrg string, raw map[string]any) (store.Accept, error) {
 		return a, verr{"at", "at must be an RFC 3339 timestamp"}
 	}
 	a.At = at.UTC()
-	allowed := map[string]map[string]bool{"gaos": gaosTypes, "qa": qaTypes, "site": siteTypes}[kind]
+	allowed := map[string]map[string]bool{"gaos": gaosTypes, "qa": qaTypes, "site": siteTypes, "animora": animora.Types}[kind]
 	if !allowed[a.Type] {
 		return a, verr{"type", "unknown type for this integration"}
 	}
@@ -167,6 +168,15 @@ func validate(kind, integOrg string, raw map[string]any) (store.Accept, error) {
 			a.Org = integOrg
 			raw["org"] = integOrg
 		}
+	case "animora":
+		clean, err := animora.Clean(a.Type, data)
+		if err != nil {
+			var ae animora.Err
+			errors.As(err, &ae)
+			return a, verr{ae.Field, ae.Msg}
+		}
+		a.Product, a.ProductName, a.Vis, a.Org = animora.Product, animora.Name, store.Public, integOrg
+		a.Raw = animora.Build(a.ID, a.Type, a.At, integOrg, clean)
 	case "site":
 		if a.Type == "site.visit" {
 			// Privacy: keep only the page, the country and an optional blog title.
