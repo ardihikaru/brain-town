@@ -95,6 +95,7 @@ main{overflow-x:clip}
 #chart{display:block;width:100%;height:170px}
 .health{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
 .hcard{padding:11px 13px;display:flex;flex-direction:column;gap:6px;position:relative}
+.hcard h3{min-width:0;overflow-wrap:anywhere;padding-right:16px}
 .hcard .dot{position:absolute;top:12px;right:12px;width:9px;height:9px;border-radius:50%;background:var(--good)}
 .hcard .dot.ping{animation:ping .7s ease-out}
 @keyframes ping{0%{box-shadow:0 0 0 0 rgba(47,143,107,.6)}100%{box-shadow:0 0 0 12px rgba(47,143,107,0)}}
@@ -432,7 +433,7 @@ form.rename input{width:100%;font-family:var(--font-display);font-size:17px}
 
     <!-- SETUP -->
     <section class="page" data-page="setup">
-      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / setup</div><div class="row title-row" id="su-title-row"><h1 id="su-title" data-testid="setup-title" dir="auto"></h1><button type="button" class="quiet" id="su-rename" data-rename-page="su" data-testid="su-rename">Rename</button></div><p id="su-lede"></p></div><span class="pill" id="su-pill"></span></div>
+      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / setup</div><div class="row title-row" id="su-title-row"><h1 id="su-title" data-testid="setup-title" dir="auto"></h1><button type="button" class="quiet" id="su-rename" aria-label="Rename this integration" data-rename-page="su" data-testid="su-rename">Rename</button></div><p id="su-lede"></p></div><span class="pill" id="su-pill"></span></div>
       <div class="setup">
         <div class="panel pad" style="display:flex;flex-direction:column;gap:14px">
           <h2>Set it up</h2>
@@ -457,7 +458,7 @@ form.rename input{width:100%;font-family:var(--font-display);font-size:17px}
 
     <!-- GITHUB OWNER -->
     <section class="page" data-page="owner" data-testid="owner-page">
-      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / GitHub owner</div><div class="row title-row" id="own-title-row"><h1 id="own-title" data-testid="owner-title" dir="auto"></h1><button type="button" class="quiet" id="own-rename" data-rename-page="own" data-testid="own-rename">Rename</button></div><p class="small muted mono" id="own-login" data-testid="owner-login" dir="auto" hidden></p><p id="own-lede"></p></div><span class="pill" id="own-type" data-testid="owner-type"></span><span class="pill" id="own-pill" data-testid="owner-health"></span></div>
+      <div class="head"><div class="grow"><div class="eyebrow"><a href="#integrations">Integrations</a> / GitHub owner</div><div class="row title-row" id="own-title-row"><h1 id="own-title" data-testid="owner-title" dir="auto"></h1><button type="button" class="quiet" id="own-rename" aria-label="Rename this integration" data-rename-page="own" data-testid="own-rename">Rename</button></div><p class="small muted mono" id="own-login" data-testid="owner-login" dir="auto" hidden></p><p id="own-lede"></p></div><span class="pill" id="own-type" data-testid="owner-type"></span><span class="pill" id="own-pill" data-testid="owner-health"></span></div>
       <div class="panel pad" id="own-hook" style="order:1"><h2>Shared webhook</h2><p class="small muted" id="own-hook-note"></p>
         <div class="two" style="margin-top:6px"><div id="own-url-wrap"></div><div id="own-sec-wrap"></div></div></div>
       <div class="panel scroll" style="order:3"><table class="stack" id="own-table"><thead><tr><th>Repo</th><th>Visibility</th><th>Public name in town</th><th>Last event</th><th>Today</th><th>Rejected</th><th>Events</th></tr></thead><tbody id="own-body" data-testid="owner-repos" data-empty=""></tbody></table></div>
@@ -655,7 +656,7 @@ function ownerState(i){ if(i.state==='paused') return ['off','paused']; if(!owne
   const n=(i.repos||[]).filter(r=>ghMissing(r.events).length).length; if(n) return ['warn',n===1?'1 repo missing events':n+' repos missing events']; return ['ok','receiving']; }
 const lastOf=i=>i.kind==='github'?ownerLast(i):i.last;
 const num=n=>(n||0).toLocaleString('en-US');
-function paintHealth(){ $('health').innerHTML=INTS.map(i=>{ const gh=i.kind==='github', [cl,tx]=gh?ownerState(i):stateOf(i); return `<a class="panel hcard ${cl==='off'?'off':''}" href="#${gh?'integration':'setup'}-${i.id}" style="text-decoration:none"><span class="dot" id="dot-${i.id}"></span><div class="row"><span class="kind k-${i.kind}"></span><h3>${esc(i.name)}</h3></div><span class="pill ${cl}"><i></i>${tx}</span><span class="small muted">last event <span data-ago="${i.id}">${ago(lastOf(i))}</span> · ${i.today} today</span></a>`; }).join(''); }
+function paintHealth(){ $('health').innerHTML=INTS.map(i=>{ const gh=i.kind==='github', [cl,tx]=gh?ownerState(i):stateOf(i); return `<a class="panel hcard ${cl==='off'?'off':''}" href="#${gh?'integration':'setup'}-${i.id}" style="text-decoration:none"><span class="dot" id="dot-${i.id}"></span><div class="row"><span class="kind k-${i.kind}"></span><h3 dir="auto">${esc(i.name)}</h3></div><span class="pill ${cl}"><i></i>${tx}</span><span class="small muted">last event <span data-ago="${i.id}">${ago(lastOf(i))}</span> · ${i.today} today</span></a>`; }).join(''); }
 function tailRow(ev,isNew){ const li=document.createElement('li'); if(isNew) li.className='new'; li.innerHTML=`<time>${hhmmss(ev.at)}</time><span><span class="kind k-${ev.kind}" style="margin-right:6px"></span><b style="font-weight:500">${esc(ev.type)}</b> ${esc(ev.sum)}</span>`; return li; }
 
 /* ============================ integrations ============================ */
@@ -669,7 +670,7 @@ function ownerCard(i){ const [cl,tx]=ownerState(i), k=ownerKind(i), id=esc(i.id)
     <p class="small muted">${ghCustom(i)?`<span data-testid="owner-login-${id}" dir="auto">@${esc(i.org)}</span> · `:''}${OWN_SUB[k]} · <span data-testid="owner-repos-${id}">${repoCount(n)}</span></p>
     <dl><div><dt>Last event</dt><dd data-ago="${id}">${ago(ownerLast(i))}</dd></div><div><dt>Today</dt><dd>${num(i.today)}</dd></div><div><dt>Rejected</dt><dd>${num(i.err)}</dd></div></dl>
     <div class="row"><a href="#integration-${id}"><button class="primary" tabindex="-1">Repos</button></a><a href="#setup-${id}"><button tabindex="-1">Setup guide</button></a><button data-pause="${id}">${i.state==='paused'?'Resume':'Pause'}</button>${renameBtn(i)}<button class="quiet" data-rotate="${id}">Rotate secret</button></div></div>`; }
-function plainCard(i){ const [cl,tx]=stateOf(i), id=esc(i.id), qa=i.kind==='qa'; return `<div class="panel icard" style="border-top-color:${KCOL[i.kind]}"${qa?` data-testid="qa-card-${id}"`:''}><div class="row"><h2 class="grow" style="overflow-wrap:anywhere" dir="auto" data-testid="int-name-${id}">${esc(i.name)}</h2><span class="pill ${cl}"><i></i>${tx}</span></div>
+function plainCard(i){ const [cl,tx]=stateOf(i), id=esc(i.id), qa=i.kind==='qa'; return `<div class="panel icard" style="border-top-color:${KCOL[i.kind]}"${qa?` data-testid="qa-card-${id}"`:''}><div class="row"><h2 class="grow" style="overflow-wrap:anywhere" dir="auto" data-testid="int-name-${id}">${esc(i.name)}</h2><span class="pill ${cl}" style="margin-left:auto"><i></i>${tx}</span></div>
     ${qa?`<p class="small muted" data-testid="qa-card-org-${id}">${i.org?`org <b style="font-weight:500" dir="auto">${esc(i.org)}</b>`:'No org set'}</p>`:''}<dl><div><dt>Last event</dt><dd data-ago="${i.id}">${ago(i.last)}</dd></div><div><dt>Today</dt><dd>${i.today}</dd></div><div><dt>Rejected</dt><dd>${i.err}</dd></div></dl>
     <div class="row"><a href="#setup-${i.id}"><button class="primary" tabindex="-1">Setup guide</button></a><button data-pause="${i.id}">${i.state==='paused'?'Resume':'Pause'}</button>${renameBtn(i)}<button class="quiet" data-rotate="${i.id}">Rotate secret</button></div></div>`; }
 function paintIntegrations(){ $('n-int').textContent=INTS.length; placeMark(); if(ren&&ren.surface==='card'){ intDirty=true; return; }
@@ -688,7 +689,7 @@ function renderAdd(){ const radio=(v,t,d)=>`<label class="panel pad row" style="
       <div class="row"><button class="primary" data-testid="gh-create-submit">Connect owner</button><button type="button" class="quiet" data-testid="gh-create-cancel">Cancel</button></div></form>
     <form id="qa-create" data-testid="qa-create-form" class="stackf" novalidate hidden>
       <p class="small muted">Add one integration per QA deployment, for example the company one and your personal one.</p>
-      <label>Name<input type="text" id="qa-name" data-testid="qa-name" maxlength="80" required autocomplete="off" spellcheck="false" placeholder="QA · Company" aria-describedby="qa-name-help qa-name-err"></label>
+      <label>Name<input type="text" id="qa-name" data-testid="qa-name" dir="auto" required autocomplete="off" spellcheck="false" placeholder="QA · Company" aria-describedby="qa-name-help qa-name-err"></label>
       <p class="small muted" id="qa-name-help">Public: the town shows this name above this deployment’s test runs.</p>
       <p class="small" id="qa-name-err" data-testid="qa-name-error" role="alert" style="color:var(--bad)" hidden></p>
       <label>Org <span class="muted">(optional)</span><input type="text" id="qa-org" data-testid="qa-org" maxlength="80" pattern="[A-Za-z0-9_.\-]+" autocomplete="off" spellcheck="false" autocapitalize="off" placeholder="your-org" aria-describedby="qa-org-help qa-org-err"></label>
@@ -724,7 +725,7 @@ function openQaCreate(){ const f=$('qa-create'), b=document.querySelector('[data
 function closeQaCreate(refocus){ const f=$('qa-create'), b=document.querySelector('[data-testid=qa-create-open]'); if(!f||!b) return; f.reset(); qaClearErr(); f.hidden=true; b.setAttribute('aria-expanded','false'); const s=f.querySelector('[data-testid=qa-create-submit]'); s.disabled=false; s.removeAttribute('aria-busy'); s.textContent='Add QA tool'; if(refocus) b.focus(); }
 async function qaCreateSubmit(){ const f=$('qa-create'), name=$('qa-name').value.trim(), org=$('qa-org').value.trim();
   if(!name) return qaErr('name','Enter a name for this QA deployment.');
-  if([...name].length>80) return qaErr('name','Keep the name to 80 characters or fewer.');
+  if([...name].length>80) return qaErr('name',`Use 80 characters or fewer. This name has ${[...name].length}.`);
   const dupMsg=()=>{ const x=INTS.find(x=>x.kind==='qa'&&x.name.trim().toLowerCase()===name.toLowerCase()); qaErr('name',`“${esc(name)}” is already used by another QA integration.${x?` <a href="#setup-${esc(x.id)}">Open it</a>`:''}`); };
   if(nameTaken('qa',name,'')) return dupMsg();
   if(org&&!QA_ORG_RE.test(org)) return qaErr('org','Use letters, numbers, dots, hyphens and underscores only.');
@@ -798,7 +799,7 @@ function secHTML(i){ const label=secLabel(i);
   return field(label,secretOf(i),'su-sec',true); }
 function qaEnvHTML(i,url){ const hint=i.hint?`  # ends in ${i.hint}`:'', tok='<paste BRAIN_TOWN_TOKEN>'+hint, org=i.org||'<your-org>  # required: the executor sends example-org when unset';
   const keys=PRODUCTS.filter(p=>i.org&&p.org===i.org&&/QA/.test(p.src)).map(p=>p.key), prods='<id>=<product-key>'+(keys.length?'  # keys: '+keys.join(', '):'');
-  let slug=i.name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); if(!/^[a-z]/.test(slug)) slug='qa_'+slug; slug=slug.slice(0,32).replace(/_+$/,''); const SUF=slug.toUpperCase().replace(/-/g,'_');
+  let slug=i.name.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,''); if(!slug||slug==='qa'){ const sfx=String(i.id).replace(/^[^-_]*[-_]/,'').replace(/[^a-z0-9]/gi,'').toLowerCase().slice(0,6); slug='qa'+(sfx?'_'+sfx:''); } else if(!/^[a-z]/.test(slug)) slug='qa_'+slug; slug=slug.slice(0,32).replace(/_+$/,''); const SUF=slug.toUpperCase().replace(/-/g,'_');
   const block=lines=>`<pre>${lines.map(esc).join('\n')}</pre>`;
   return `<div data-testid="su-qa-env"><span class="small muted">playwright-executor.env · default instance</span>${block(['BRAIN_TOWN_URL='+url,'BRAIN_TOWN_TOKEN='+tok,'BRAIN_TOWN_ORG='+org,'BRAIN_TOWN_PRODUCTS='+prods])}</div>`
    +`<details data-testid="su-qa-env-named"><summary>Named instance (second deployment on this executor)</summary><div><span class="small muted">playwright-executor.env · named instance</span>${block(['EXECUTOR_EXTRA_TOKENS='+slug+':<executor token, 32+ chars>','BRAIN_TOWN_URL__'+SUF+'='+url,'BRAIN_TOWN_TOKEN__'+SUF+'='+tok,'BRAIN_TOWN_ORG__'+SUF+'='+org,'BRAIN_TOWN_PRODUCTS__'+SUF+'='+prods])}</div></details>`; }

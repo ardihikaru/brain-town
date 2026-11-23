@@ -446,7 +446,7 @@ function makePublicAdapter(){
       case 'task.failed': { const {rec,base}=ensure(env,out), reason=d.reason==='canceled'?'canceled':'failed'; rec.column=reason; out.push({type:'task.failed',...base,reason}); break; }
       case 'gate.requested': { const {base}=ensure(env,out); out.push({type:'gate.requested',...base}); break; }
       case 'gate.decided': { const {base}=ensure(env,out); out.push({type:'gate.decided',...base,decision:d.decision==='rejected'?'rejected':'approved'}); break; }
-      case 'qa.run.started': case 'qa.step': case 'qa.run.finished': { const s=slotFor(env.product,env.org), xt=(typeof msg.tool==='string'?msg.tool:env.tool), id={org:s.org,repo:s.repo,run:env.run,tool:(typeof xt==='string'&&xt.trim())?xt.trim().slice(0,80):undefined};
+      case 'qa.run.started': case 'qa.step': case 'qa.run.finished': { const s=slotFor(env.product,env.org), xt=(typeof msg.tool==='string'?msg.tool:env.tool), id={org:s.org,repo:s.repo,run:env.run,tool:(typeof xt==='string'&&xt.trim())?[...xt.trim()].slice(0,80).join(''):undefined};
         if(type==='qa.run.started') out.push({type,...id,spec:d.spec||'run',steps:Array.isArray(d.steps)&&d.steps.length?d.steps.map(String):undefined});
         else if(type==='qa.step') out.push({type,...id,index:d.index|0,step:d.step,status:d.status==='failed'?'failed':'passed',duration_ms:d.duration_ms});
         else out.push({type,...id,spec:d.spec||'run',passed:d.passed|0,failed:d.failed|0,total:d.total|0,duration_ms:d.duration_ms}); break; }
@@ -1776,7 +1776,9 @@ function ghSnapshot(){ const o={orgs:{},halls:{},tea:{seated:TEA.guests.length,w
     for(const p of org.products){ if(!p.bound) continue; const g=p.gh; o.halls[org.id+'/'+p.repo]={repo:g.name||p.repo,visual:p.visual?p.visual.number:null,lanterns:g.lan.filter(x=>!x.die).length,banners:g.ban.filter(x=>!x.die).length,carts:g.carts.map(c=>({run:c.run,status:c.st})),stamp:g.stamp?(g.stamp.ok?'approved':'changes'):null}; } }
   for(const [n,ow] of OWN) o.valley.owners[n]={type:ow.hidden?'':ow.type,hidden:ow.hidden,placed:ow.plot!=null&&orgBy[n]===PLOTS[ow.plot],gate:ow.plot!=null&&orgBy[n]===PLOTS[ow.plot]?ow.plot:null,halls:[...ow.halls],over:Math.max(0,ow.repos.size-ow.halls.length)};
   return o; }
-window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>deliver({live:true,...ev}), config:CONFIG, fromPublic, snapshot:ghSnapshot };
+window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>deliver({live:true,...ev}), config:CONFIG, fromPublic, snapshot:ghSnapshot,
+  /* test hook: open a building detail (e.g. 'qa') and optionally a view tab (e.g. 'board') */
+  openDetail(id,view){ const kd=KIND[id]; if(!kd) return false; openDetail(id,undefined,kd.views.some(v=>v[0]===view)?view:undefined); return true; } };
 
 /* ============================================================
    UI: feed log, stats, controls
@@ -2150,13 +2152,13 @@ function liBoard(){ const all=[...LIS.items.values()], col=(stt,meta,emptyT)=>{ 
   </div>`; }
 function qaBoard(){ const cls={passed:'done',doing:'doing',failed:'fail'}, rows=[...QAS.repos.values()], grouped=rows.some(r=>r.tool);
   const card=r=>{ const run=r.run, stt=run?(run.state==='running'?'running':run.failed?'failed':'passed'):'';
-    return `<div class="col"><h4>${esc(r.repo)} <i>${esc(r.org||'no owner')}</i></h4><p class="hint">${r.runs} runs · ${r.pass} passed · ${r.fail} failed</p>`+(run?`<article class="kc" data-testid="qa-card" data-key="${esc(r.key)}" style="border-left-color:${orgColor(r.org)}"><div class="top">${r.tool?`<span class="chip tool" data-testid="qa-tool-chip" title="${esc(r.tool)}">${esc(r.tool)}</span>`:''}<span class="chip">${esc(run.spec)}</span><span class="chip ${stt}">${stt}</span></div><ul class="tasks" style="border-top:0;margin-top:2px;padding-top:0">${run.steps.map(x=>`<li class="${cls[x.s]||'todo'}">${esc(x.t)}</li>`).join('')}</ul>${run.state==='done'?`<div class="m">finished ${run.at}${run.failed?' · bug opened':''}</div>`:''}</article>`:none('No run yet.'))+'</div>'; };
+    return `<div class="col"><h4>${esc(r.repo)} <i>${esc(r.org||'no owner')}</i></h4><p class="hint">${r.runs} runs · ${r.pass} passed · ${r.fail} failed</p>`+(run?`<article class="kc" data-testid="qa-card" data-key="${esc(r.key)}" style="border-left-color:${orgColor(r.org)}"><div class="top">${r.tool?`<span class="chip tool" dir="auto" data-testid="qa-tool-chip" title="${esc(r.tool)}">${esc(r.tool)}</span>`:''}<span class="chip">${esc(run.spec)}</span><span class="chip ${stt}">${stt}</span></div><ul class="tasks" style="border-top:0;margin-top:2px;padding-top:0">${run.steps.map(x=>`<li class="${cls[x.s]||'todo'}">${esc(x.t)}</li>`).join('')}</ul>${run.state==='done'?`<div class="m">finished ${run.at}${run.failed?' · bug opened':''}</div>`:''}</article>`:none('No run yet.'))+'</div>'; };
   const grid='<div class="board" style="grid-template-columns:repeat(3,minmax(215px,1fr))">';
   if(!grouped) return `<p class="lede">One automated Playwright script per product. Each card shows the current or latest run, step by step.</p>${grid}`+rows.map(card).join('')+'</div>';
-  const groups=new Map(); for(const r of rows){ const l=r.tool||'QA tool'; if(!groups.has(l)) groups.set(l,[]); groups.get(l).push(r); }
-  const named=[...groups.keys()].filter(l=>l!=='QA tool'||rows.some(r=>r.tool==='QA tool')).sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true})), names=named.concat(groups.has('QA tool')&&!named.includes('QA tool')?['QA tool']:[]);
+  const groups=new Map(); for(const r of rows){ const l=r.tool||''; if(!groups.has(l)) groups.set(l,[]); groups.get(l).push(r); }
+  const names=[...groups.keys()].filter(l=>l!=='').sort((a,b)=>a.localeCompare(b,undefined,{sensitivity:'base',numeric:true})).concat(groups.has('')?['']:[]);
   return `<p class="lede">Automated Playwright runs, grouped by the QA deployment that sent them. Each card shows the current or latest run of one product, step by step.</p>`+names.map(l=>{ const g=groups.get(l), n=g.length, runs=g.reduce((t,r)=>t+r.runs,0);
-    return `<section class="qgrp" data-testid="qa-group" data-tool="${esc(l)}"><h3 class="bhead">${esc(l)} <i>${n} ${n===1?'product':'products'} · ${runs} runs</i></h3>${grid}${g.map(card).join('')}</div></section>`; }).join(''); }
+    return `<section class="qgrp" data-testid="qa-group" data-tool="${esc(l)}"><h3 class="bhead"><bdi>${esc(l||'QA tool')}</bdi> <i>${n} ${n===1?'product':'products'} · ${runs} ${runs===1?'run':'runs'}</i></h3>${grid}${g.map(card).join('')}</div></section>`; }).join(''); }
 
 /* ---------- People mode: the same stores, drawn as walking figures ---------- */
 const LABELC={bug:'#eba595',feature:'#a9c6de',chore:'#d2d6d9',issue:'#a9c6de',pr:'#c7b3e0'};
