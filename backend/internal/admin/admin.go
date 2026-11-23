@@ -505,8 +505,15 @@ func (a *API) stream(admin bool) http.HandlerFunc {
 		ch, cancel := a.Hub.Subscribe() // subscribe first so nothing is lost during replay
 		defer cancel()
 		last, _ := strconv.ParseInt(r.Header.Get("Last-Event-ID"), 10, 64)
+		// ?kind=github keeps one source; ?replay=N (1..500) starts a new subscriber with the newest N events, oldest first.
+		kind := r.URL.Query().Get("kind")
+		replay, _ := strconv.Atoi(r.URL.Query().Get("replay"))
 		send := func(e store.Event) {
 			if !admin && e.Delivery != store.OK {
+				return
+			}
+			if kind != "" && e.Kind != kind {
+				last = e.Seq
 				return
 			}
 			var data any = visibility.View(a.St, e)
@@ -521,6 +528,15 @@ func (a *API) stream(admin bool) http.HandlerFunc {
 		if last > 0 {
 			for _, e := range a.St.Events(store.Query{AfterSeq: last, Limit: 500}) {
 				send(e)
+			}
+		} else if replay > 0 {
+			q := store.Query{Newest: true, Limit: min(replay, 500), Kind: kind}
+			if !admin {
+				q.Delivery = store.OK
+			}
+			evs := a.St.Events(q)
+			for i := len(evs) - 1; i >= 0; i-- {
+				send(evs[i])
 			}
 		}
 		fl.Flush()
