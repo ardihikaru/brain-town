@@ -54,10 +54,10 @@ Idempotency-Key: <event id>
 
 | Moment | `type` | `id` | `data` (`*` = required) |
 | --- | --- | --- | --- |
-| A video finishes rendering | `video.rendered` | `video-<code>` | `title`*, `channel`, `language`, `duration` (number, seconds), `format` (`video` or `reel`) |
-| A publish is scheduled on a vendor | `video.scheduled` | `plan-<video>-<channel>-<vendor>-sched` | `vendor`*, `channel`, `title`*, `dueAt`* (RFC 3339) |
-| A video is live on a vendor | `video.published` | `video-<code>-<vendor>-<external_id>` | `vendor`*, `channel`, `title`*, `url`* (https), `publishedAt` (RFC 3339) |
-| A publish attempt failed | `video.publish_failed` | `plan-<video>-<channel>-<vendor>-fail<N>` | `vendor`*, `channel`, `title`* |
+| A video finishes rendering | `video.rendered` | `video-<code>` | `title`*, `channel`, `language`, `duration` (number, seconds), `format` (`video` or `reel`), `code` |
+| A publish is scheduled on a vendor | `video.scheduled` | `plan-<video>-<channel>-<vendor>-sched` | `vendor`*, `channel`, `title`*, `dueAt`* (RFC 3339), `code` |
+| A video is live on a vendor | `video.published` | `video-<code>-<vendor>-<external_id>` | `vendor`*, `channel`, `title`*, `url`* (https), `publishedAt` (RFC 3339), `code` |
+| A publish attempt failed | `video.publish_failed` | `plan-<video>-<channel>-<vendor>-fail<N>` | `vendor`*, `channel`, `title`*, `code` |
 | A kanal connects a vendor account | `channel.connected` | `chan-<channel>-<vendor>-<connected_at unix>` | `vendor`*, `channel`*, `account` |
 
 ```json
@@ -76,6 +76,7 @@ Idempotency-Key: <event id>
 - A missing required field is `422` with `field` `data.<name>` (for example `data.title`); a bad timestamp names its field (`data.dueAt`, `data.publishedAt`).
 - Strings are trimmed and capped: `title` 200, `channel` and `account` 120, `url` 512, `language` 16 characters.
 - `url` must be https, otherwise `422` `data.url`.
+- `code` (the four `video.*` types only, never `channel.connected`) is the opaque Animora video code, the same in the render, schedule and publish of one video: 1 to 32 characters of `A-Z a-z 0-9 _ -`. It is optional, and an invalid one is silently dropped (never `422`). The town uses it to follow one video across its events; without it, it falls back to the title.
 - `format` outside `video`/`reel` is dropped. An `account` that contains `@` is dropped (no emails).
 - `channel` is the kanal's **public** display name; `account` is the connected platform account's **public** display name.
 - Only the fields in the table are kept; anything else in `data` is dropped by Brain Town. Never send the prompt, the script (naskah) or failure text.
@@ -122,9 +123,9 @@ Needs no secret and catches anything a push lost.
 ```
 
 - Item `id` is the same `video-<code>-<vendor>-<external_id>` as the `video.published` push, so the two paths dedupe each other.
-- `_animora.vendor` is required (one of the four vendors); `channel` is the public kanal name; `code` is the video code.
+- `_animora.vendor` is required (one of the four vendors); `channel` is the public kanal name; `code` is the video code (same rules as `data.code`).
 
-On the Brain Town side, set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the https URL of that feed. The puller checks it every 5 minutes (`FEED_PULL_INTERVAL_SECONDS`) and records each new item as `video.published` with `id` = item id and `data` `{vendor, channel, title, url, publishedAt = date_published}`. Items without a valid `_animora.vendor` are skipped.
+On the Brain Town side, set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the https URL of that feed. The puller checks it every 5 minutes (`FEED_PULL_INTERVAL_SECONDS`) and records each new item as `video.published` with `id` = item id and `data` `{vendor, channel, title, url, publishedAt = date_published, code = _animora.code}`. Items without a valid `_animora.vendor` are skipped.
 
 ## In the town
 
@@ -143,7 +144,7 @@ Animora has no Facebook, Instagram or TikTok uploader yet, so those companies on
 - Brain Town stores a rebuilt event, never the raw body: `{"id","type","at","product":"animora","org":<the integration's org, if set>,"data":<allowlisted data>}`.
 - Accepted events register the product `animora` (name "Animora", public, Sources label "Animora", default hall "Video Studio hall").
 - On `/events` the frame is `{"seq","id","type","source":"animora","at","payload":{...}}`.
-- If the product `animora` or its org is set to hidden in the back-office, the product and org are replaced by their aliases and `title`, `url`, `channel` and `account` (and `prompt`, `script`, `failure` if they ever appear) are removed from `data`. `vendor`, `dueAt`, `publishedAt`, `language`, `duration` and `format` stay.
+- If the product `animora` or its org is set to hidden in the back-office, the product and org are replaced by their aliases and `title`, `url`, `channel` and `account` (and `prompt`, `script`, `failure` if they ever appear) are removed from `data`. `vendor`, `dueAt`, `publishedAt`, `language`, `duration`, `format` and `code` stay (`code` is an opaque id, needed to follow one video across events).
 
 ## Done when
 

@@ -41,7 +41,7 @@ Rejected deliveries (401 for a known integration, 422) are logged and show in th
 
 Animora events (`/ingest/animora/<id>`): `video.rendered`, `video.scheduled`, `video.published`, `video.publish_failed`
 and `channel.connected`. Only the documented `data` fields are kept (anything else is dropped); `vendor` must be
-`youtube`, `facebook`, `instagram` or `tiktok` and `url` https, else `422` with `field` `data.<name>`. The stored event is
+`youtube`, `facebook`, `instagram` or `tiktok` and `url` https, else `422` with `field` `data.<name>`. The four `video.*` types may carry an optional `data.code` (opaque video code, `[A-Za-z0-9_-]`, max 32; anything else is silently dropped, not `422`). The stored event is
 rebuilt as `{"id","type","at","product":"animora","org","data"}` (`org` from the integration, when set). Contract:
 [`integrations/animora.md`](integrations/animora.md).
 
@@ -109,7 +109,7 @@ One function, `visibility.View`, builds every public event output, and `visibili
 resolve names through `visibility.Aliases`, so hidden names are masked in one place. If the event's product or org is
 hidden, the product and org are replaced by their aliases ("Product A", "Org A") and task
 titles, URLs, step names, specs and failure reasons are removed (for `animora`: `title`, `url`, `channel` and `account`;
-`vendor`, `dueAt`, `publishedAt`, `language`, `duration` and `format` stay). Masking is applied when an
+`vendor`, `dueAt`, `publishedAt`, `language`, `duration`, `format` and `code` stay). Masking is applied when an
 event is read, so changing visibility also applies to events already stored. `/api/town` is computed on each
 request and never contains a hidden org key, hidden product key or product name.
 
