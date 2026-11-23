@@ -140,6 +140,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .kc .t{font-weight:500;overflow-wrap:anywhere}
 .kc .m{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:4px}
 .chip{font-family:var(--font-mono);font-size:10px;border:1px solid var(--rule);border-radius:20px;padding:0 7px;white-space:nowrap}
+.kc .chip{max-width:100%;overflow:hidden;text-overflow:ellipsis}
 .chip.bug{border-color:#c8472f;color:#c8472f}.chip.feature{border-color:#2f6f8f;color:#2f6f8f}.chip.chore,.chip.review{border-color:var(--ink-soft);color:var(--ink-soft)}.chip.implement{border-color:#2f6f8f;color:#2f6f8f}.chip.design{border-color:#b0568a;color:#b0568a}
 .chip.next{background:var(--ink);color:var(--ground);border-color:var(--ink)}
 .chip.reel{border-color:#d9523c;color:#d9523c}
@@ -2117,7 +2118,7 @@ function openDetail(kind,id,tab){ detail={kind,id,tab:tab||'people',v:-1}; scene
 function closeDetail(){ detail=null; $('detail').classList.remove('on'); }
 $('d-close').onclick=closeDetail; window.addEventListener('keydown',e=>{ if(e.key==='Escape'&&detail) closeDetail(); });
 const none=t=>`<div class="empty">${t}</div>`;
-function vCard(it,extra=''){ return `<article class="kc" data-testid="video-card" data-state="${esc(it.state)}" style="border-left-color:${chColor(it.channel)}"><div class="top">${it.channel?`<span class="chip">${esc(it.channel)}</span>`:''}${it.kind==='reel'?'<span class="chip reel">reel</span>':''}${extra}</div><div class="t">${esc(it.title)}</div>`; }
+function vCard(it,extra=''){ return `<article class="kc" data-testid="video-card" data-state="${esc(it.state)}" style="border-left-color:${chColor(it.channel)}"><div class="top">${it.channel?`<span class="chip" dir="auto" title="${esc(it.channel)}">${esc(it.channel)}</span>`:''}${it.kind==='reel'?'<span class="chip reel">reel</span>':''}${extra}</div><div class="t" dir="auto">${esc(it.title)}</div>`; }
 function trackHtml(it){ const k=STAGES.findIndex(s=>s[0]===it.stage); return '<div class="track">'+STAGES.map((s,i)=>`<span class="${i<k?'done':i===k?'now':''}">${s[1]}</span>`).join('')+'</div>'; }
 const emptyBox=(id,strong,line)=>`<div class="empty" data-testid="${id}" style="text-align:center;padding:20px 12px"><strong style="display:block;font-size:13px;color:var(--ink)">${strong}</strong>${line}</div>`;
 function animQueues(){ const all=[...YTS.items.values()], lede='<p class="lede">Videos from Animora: rendered, scheduled and published.</p>';
@@ -2382,13 +2383,13 @@ function drawYtScene(c,dt,LW,LH){ const all=[...YTS.items.values()], sch=all.fil
     for(const k in SX){ const on=all.some(x=>x.state==='building'&&x.channel===ch&&x.stage===k); station(c,k,SX[k]+27,y-6,on,t); }
     const rd=all.filter(x=>x.state==='ready'&&x.channel===ch).length; c.lineWidth=1.2; c.strokeStyle=INK; c.beginPath(); c.moveTo(922,y-6); c.lineTo(922,y-40); c.lineTo(948,y-40); c.lineTo(948,y-6); c.moveTo(922,y-22); c.lineTo(948,y-22); c.stroke(); for(let i=0;i<Math.min(rd,2);i++){ c.beginPath(); c.arc(929+i*12,y-28,5,0,7); c.fillStyle='#fff'; c.fill(); c.stroke(); } });
   // waiting rooms
-  const pens={article:[104,'Articles waiting'],topic:[326,'Topics waiting']};
+  const pens=VID.live?{anim:[104,'Scheduled uploads']}:{article:[104,'Articles waiting'],topic:[326,'Topics waiting']};
   for(const src in pens){ const [py,label]=pens[src], l=sch.filter(x=>x.source===src); c.fillStyle='#e9e6dc'; c.fillRect(16,py,244,200); c.lineWidth=1.4; c.strokeStyle=INK; c.strokeRect(16,py,244,200);
     c.fillStyle='#fff'; c.fillRect(16,py,244,26); c.strokeRect(16,py,244,26); txt(c,label+' · '+l.length,26,py+17,'600 12px "IBM Plex Sans"'); txt(c,'STEP 1 · front on the right →',252,py+17,'500 9px "IBM Plex Mono"','right','#647282');
     for(let r=0;r<3;r++){ const by=py+86+r*56; c.fillStyle='#caa77d'; c.lineWidth=1; c.fillRect(30,by-13,214,4); c.strokeRect(30,by-13,214,4); c.beginPath(); c.moveTo(36,by-9); c.lineTo(36,by); c.moveTo(238,by-9); c.lineTo(238,by); c.stroke(); }
     potPlant(c,34,py+196); }
   for(const it of all){ const y=rowY(it.channel); let tx,ty=y,terminal=false,o={};
-    if(it.state==='scheduled'){ const l=sch.filter(x=>x.source===it.source), i=l.indexOf(it), py=pens[it.source]?pens[it.source][0]:104; tx=228-(i%5)*44; ty=py+86+Math.floor(i/5)*56; o.carry=it.source==='article'?'paper':'note'; }
+    if(it.state==='scheduled'){ const l=sch.filter(x=>x.source===it.source), i=l.indexOf(it), py=pens[it.source]?pens[it.source][0]:104; tx=228-(i%5)*44; ty=py+86+Math.floor(i/5)*56; o.carry=it.source==='anim'?'reel':it.source==='article'?'paper':'note'; }
     else if(it.state==='building'){ tx=SX[it.stage]||SX.script; const late=it.stage==='render'||it.stage==='review'; o.carry=late?'reel':(it.source==='article'?'paper':'note'); }
     else if(it.state==='ready'){ const same=all.filter(x=>x.state==='ready'&&x.channel===it.channel); tx=878+same.indexOf(it)*30; o.carry='reel'; }
     else { tx=LW+40; terminal=true; o.carry='reel'; }
@@ -2525,7 +2526,7 @@ const PSTG=[['check','Format check'],['caption','Caption + tags'],['slot','Slot'
 function platBoardLive(pf){ const all=[...PLS.items.values()].filter(x=>x.platform===pf), nc=CHAN[pf].size, N=PNAME[pf];
   const lede=`<p class="lede">What ${N} shows of the videos Animora sends. ${nc} channel${nc===1?'':'s'} connected.</p>`+(pf!=='youtube'?`<p class="hint">Animora does not upload to ${N} yet. Connected channels, schedules and failed attempts show here.</p>`:'');
   if(!all.length) return lede+emptyBox('plat-board-empty','Nothing from Animora yet.',`Scheduled and published videos for ${N} appear here.`);
-  const card=(it,meta)=>`<article class="kc" data-testid="plat-card" data-platform="${pf}" data-state="${it.state}" style="border-left-color:${chColor(it.channel)}"><div class="top">${it.channel?`<span class="chip">${esc(it.channel)}</span>`:''}${it.kind==='reel'?'<span class="chip reel">reel</span>':''}</div><div class="t">${esc(it.title)}</div><div class="m">${meta}</div></article>`;
+  const card=(it,meta)=>`<article class="kc" data-testid="plat-card" data-platform="${pf}" data-state="${it.state}" style="border-left-color:${chColor(it.channel)}"><div class="top">${it.channel?`<span class="chip" dir="auto" title="${esc(it.channel)}">${esc(it.channel)}</span>`:''}${it.kind==='reel'?'<span class="chip reel">reel</span>':''}</div><div class="t" dir="auto">${esc(it.title)}</div><div class="m">${meta}</div></article>`;
   const col=(stt,name,hint,meta,emptyT,cnt)=>{ const l=all.filter(x=>x.state===stt).sort((a,b)=>stt==='slot'?a.seq-b.seq:b.seq-a.seq); return `<div class="col"><h4>${name} <i>${cnt==null?l.length:cnt}</i></h4><p class="hint">${hint}</p>${l.length?l.map(it=>card(it,meta(it))).join(''):none(emptyT)}</div>`; };
   return lede+`<div class="board" style="grid-template-columns:repeat(3,minmax(170px,1fr))">`
     +col('slot','Scheduled','Waiting for the planned slot.',it=>it.publishAt?'slot '+esc(it.publishAt):'no slot time','Nothing is scheduled.')
@@ -2572,7 +2573,7 @@ function drawPlatScene(c,dt,LW,LH){ const pf=detail.id, col=PCOL[pf], cult=PCULT
   { const live=at('live').reverse(), cur=live[0], px=908, py=G-240, pw=124, ph=212; c.lineWidth=2; c.fillStyle='#1f2b3a'; c.beginPath(); c.roundRect?c.roundRect(px,py,pw,ph,14):c.rect(px,py,pw,ph); c.fill(); c.stroke(); c.fillStyle=cur?mix(chColor(cur.channel),WHITE,.55):'#dfe3e8'; c.fillRect(px+7,py+16,pw-14,ph-32); c.lineWidth=1.2;
     if(cur){ const age=(performance.now()-cur.liveReal)/1000, views=Math.floor(12+age*age*.9+age*9), likes=Math.floor(views*.11); c.fillStyle='rgba(31,43,58,.22)'; for(let i=0;i<4;i++){ const bw=14+((i*37+Math.floor(t*2))%30); c.fillRect(px+16+i*24,py+110-bw,16,bw); }
       c.beginPath(); c.moveTo(px+54,py+56); c.lineTo(px+54,py+84); c.lineTo(px+78,py+70); c.closePath(); c.fillStyle='#fff'; c.fill(); c.stroke();
-      c.fillStyle='rgba(31,43,58,.78)'; c.fillRect(px+7,py+ph-92,pw-14,76); c.fillStyle='#fff'; c.font='600 10.5px "IBM Plex Sans"'; c.textAlign='left'; wrapText(c,cur.title,px+13,py+ph-78,pw-28,12.5,3); txt(c,cur.channel,px+13,py+ph-38,'500 9px "IBM Plex Mono"','left','#dfe3e8'); txt(c,VID.live?'live since '+cur.liveAt:`▶ ${views.toLocaleString('en-US')}   ♥ ${likes.toLocaleString('en-US')}`,px+13,py+ph-23,'500 9.5px "IBM Plex Mono"','left','#fff'); }
+      c.fillStyle='rgba(31,43,58,.78)'; c.fillRect(px+7,py+ph-92,pw-14,76); c.fillStyle='#fff'; c.font='600 10.5px "IBM Plex Sans"'; c.textAlign='left'; wrapText(c,cur.title,px+13,py+ph-78,pw-28,12.5,3); txt(c,short(cur.channel,18),px+13,py+ph-38,'500 9px "IBM Plex Mono"','left','#dfe3e8'); txt(c,VID.live?'live since '+cur.liveAt:`▶ ${views.toLocaleString('en-US')}   ♥ ${likes.toLocaleString('en-US')}`,px+13,py+ph-23,'500 9.5px "IBM Plex Mono"','left','#fff'); }
     else txt(c,'no reel yet',px+pw/2,py+ph/2,mono,'center','#647282');
     c.fillStyle='#1f2b3a'; c.fillRect(px+pw/2-16,py+5,32,5); plaque(c,VID.live?plat[pf]+' live':plat[pf]+' live today',px+pw/2,py-10,mono,col,'#fff'); }
   // people
