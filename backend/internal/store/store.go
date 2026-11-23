@@ -731,6 +731,22 @@ func (st *Store) Products() []Product {
 	return out
 }
 
+// LastEventByProduct returns the newest accepted event time per product key, in one pass under the read lock.
+func (st *Store) LastEventByProduct() map[string]time.Time {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	out := map[string]time.Time{}
+	for _, e := range st.s.Events {
+		if e.Delivery != OK || e.Product == "" {
+			continue
+		}
+		if e.At.After(out[e.Product]) {
+			out[e.Product] = e.At
+		}
+	}
+	return out
+}
+
 func (st *Store) GetOrg(k string) (Org, bool) {
 	st.mu.RLock()
 	defer st.mu.RUnlock()
