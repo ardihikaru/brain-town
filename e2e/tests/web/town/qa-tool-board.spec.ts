@@ -36,8 +36,10 @@ test.describe('town · QA Lab board', () => {
         [personal, personalRun],
       ] as const) {
         const group = town.home.qaGroup(target.integration.name);
-        await expect(group.getByRole('heading')).toContainText(target.integration.name);
-        await expect(group.getByRole('heading')).toContainText('1 product');
+        const heading = group.locator('h3.bhead');
+        await expect(heading.locator('bdi')).toHaveText(target.integration.name);
+        await expect(heading).toContainText('1 product · 1 run');
+        await expect(heading).not.toContainText('1 runs');
         const card = town.home.qaCard(group, run.spec);
         await expect(card).toHaveCount(1);
         await expect(card.getByTestId('qa-tool-chip')).toHaveText(target.integration.name);

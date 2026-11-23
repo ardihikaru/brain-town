@@ -34,14 +34,15 @@ export class TownPage extends BasePage {
   }
 
   /**
-   * Opens the QA Lab "Board" view the way a visitor does: select the QA Lab building (its card), press its
-   * "Open the test runs" action, then the Board tab. The canvas has no accessible building list, so the building
-   * is selected through the page's own showCard(); the rest is real clicks.
+   * Opens the QA Lab "Board" view through the town's own hook. The canvas has no accessible building list, so the
+   * detail is opened with window.brainTown.openDetail(id, view).
    */
   async openQaBoard(): Promise<void> {
-    await this.page.evaluate('showCard(QA)');
-    await this.page.getByRole('button', { name: 'Open the test runs' }).click();
-    await this.page.getByRole('button', { name: 'Board', exact: true }).click();
+    const opened = await this.page.evaluate(() => {
+      const town = (window as unknown as { brainTown: { openDetail(id: string, view: string): boolean } }).brainTown;
+      return town.openDetail('qa', 'board');
+    });
+    expect(opened).toBe(true);
   }
 
   /** One QA tool group of the board, found by the tool name it was given. */
