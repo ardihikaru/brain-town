@@ -300,6 +300,62 @@ func TestSSEReplayFromLastEventID(t *testing.T) {
 	}
 }
 
+func TestSSEReplayNewestAndKind(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	id, tok := e.integration("gaos", "GAOS")
+	for _, n := range []string{"a1", "a2", "a3"} {
+		e.do("POST", "/ingest/gaos/"+id, tok, strings.Replace(gaosEv, `"e1"`, `"`+n+`"`, 1))
+	}
+	read := func(query string, want int) []string {
+		resp, err := http.Get(e.srv.URL + "/events" + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		ids := make(chan string, 8)
+		go func() {
+			sc := bufio.NewScanner(resp.Body)
+			for sc.Scan() {
+				if strings.HasPrefix(sc.Text(), "id: ") {
+					ids <- strings.TrimPrefix(sc.Text(), "id: ")
+				}
+			}
+			close(ids)
+		}()
+		var got []string
+		for len(got) < want {
+			select {
+			case id, ok := <-ids:
+				if !ok {
+					return got
+				}
+				got = append(got, id)
+			case <-time.After(1500 * time.Millisecond):
+				return got
+			}
+		}
+		select { // anything beyond `want` is a leak
+		case id := <-ids:
+			got = append(got, id)
+		case <-time.After(300 * time.Millisecond):
+		}
+		return got
+	}
+	if got := read("?replay=2", 2); len(got) != 2 || got[0] != "2" || got[1] != "3" {
+		t.Fatalf("replay=2 ids = %v, want [2 3]", got)
+	}
+	if got := read("?replay=50&kind=gaos", 3); len(got) != 3 || got[0] != "1" {
+		t.Fatalf("kind=gaos ids = %v, want [1 2 3]", got)
+	}
+	if got := read("?replay=50&kind=github", 0); len(got) != 0 {
+		t.Fatalf("kind=github ids = %v, want none", got)
+	}
+	if got := read("", 0); len(got) != 0 {
+		t.Fatalf("no replay without a parameter: %v", got)
+	}
+}
+
 func TestVisibilityAndSettingsValidation(t *testing.T) {
 	e := newEnv(t)
 	e.login()

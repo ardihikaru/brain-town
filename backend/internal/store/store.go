@@ -905,10 +905,10 @@ func (st *Store) append(ev Event) {
 }
 
 type Query struct {
-	Integration, Type, Delivery, Text string
-	AfterSeq                          int64
-	Limit                             int
-	Newest                            bool // newest first
+	Integration, Type, Delivery, Text, Kind string
+	AfterSeq                                int64
+	Limit                                   int
+	Newest                                  bool // newest first
 }
 
 func (st *Store) Events(q Query) []Event {
@@ -924,6 +924,9 @@ func (st *Store) Events(q Query) []Event {
 			return false
 		}
 		if q.Integration != "" && e.Integration != q.Integration {
+			return false
+		}
+		if q.Kind != "" && e.Kind != q.Kind {
 			return false
 		}
 		if q.Type != "" && !strings.HasPrefix(e.Type, q.Type) {
