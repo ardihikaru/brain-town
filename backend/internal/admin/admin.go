@@ -273,7 +273,7 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, "kind must be github, qa, gaos or site, and name is required")
 		return
 	}
-	if in.Kind == "qa" && a.qaNameTaken(in.Name, "") {
+	if in.Kind == "qa" && a.nameTaken("qa", in.Name, "") {
 		fail(w, 409, "another QA integration already uses this name")
 		return
 	}
@@ -295,11 +295,11 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, 201, map[string]any{"integration": i, "token": tok, "ingestPath": ingestPath(i)})
 }
 
-// qaNameTaken reports whether another QA integration (not except) has the same trimmed name, ignoring case.
-func (a *API) qaNameTaken(name, except string) bool {
+// nameTaken reports whether another integration of the same kind (not except) has the same trimmed name, ignoring case.
+func (a *API) nameTaken(kind, name, except string) bool {
 	name = strings.TrimSpace(name)
 	for _, o := range a.St.Integrations() {
-		if o.Kind == "qa" && o.ID != except && strings.EqualFold(strings.TrimSpace(o.Name), name) {
+		if o.Kind == kind && o.ID != except && strings.EqualFold(strings.TrimSpace(o.Name), name) {
 			return true
 		}
 	}
@@ -326,9 +326,22 @@ func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if cur, found := a.St.GetIntegration(r.PathValue("id")); found && cur.Kind == "qa" && in.Name != nil && a.qaNameTaken(*in.Name, cur.ID) {
-		fail(w, 409, "another QA integration already uses this name")
-		return
+	if in.Name != nil {
+		cur, found := a.St.GetIntegration(r.PathValue("id"))
+		if !found {
+			fail(w, 404, "no such integration")
+			return
+		}
+		n := strings.TrimSpace(*in.Name)
+		if n == "" || len(n) > 80 {
+			fail(w, 422, "name is required (max 80 characters)")
+			return
+		}
+		if a.nameTaken(cur.Kind, n, cur.ID) {
+			fail(w, 409, "another "+cur.Kind+" integration already uses this name")
+			return
+		}
+		in.Name = &n
 	}
 	i, ok := a.St.UpdateIntegration(r.PathValue("id"), in.Name, in.Org, in.FeedURL)
 	if !ok {

@@ -118,3 +118,81 @@ func TestNonQAEventHasNoTool(t *testing.T) {
 		}
 	}
 }
+
+func TestRenameEveryKind(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	long := make([]byte, 81)
+	for i := range long {
+		long[i] = 'x'
+	}
+	for _, kind := range []string{"qa", "github", "gaos", "site"} {
+		id, _ := e.integration(kind, "Orig "+kind)
+		e.integration(kind, "Other "+kind)
+		url := "/api/admin/integrations/" + id
+		c, m, _ := e.do("PATCH", url, "", `{"name":"  New `+kind+`  "}`)
+		if c != 200 || m["name"] != "New "+kind {
+			t.Fatalf("%s rename %d %v", kind, c, m)
+		}
+		for _, bad := range []string{"", "   ", string(long)} {
+			if c, _, _ := e.do("PATCH", url, "", `{"name":"`+bad+`"}`); c != 422 {
+				t.Fatalf("%s bad name len %d want 422 got %d", kind, len(bad), c)
+			}
+		}
+		if c, _, _ := e.do("PATCH", url, "", `{"name":"OTHER `+kind+`"}`); c != 409 {
+			t.Fatalf("%s dup want 409 got %d", kind, c)
+		}
+		if c, _, _ := e.do("PATCH", url, "", `{"name":"NEW `+kind+`"}`); c != 200 {
+			t.Fatalf("%s own name case want 200 got %d", kind, c)
+		}
+	}
+	// Same name on a different kind is fine.
+	a, _ := e.integration("gaos", "Shared")
+	e.integration("site", "Taken")
+	if c, _, _ := e.do("PATCH", "/api/admin/integrations/"+a, "", `{"name":"taken"}`); c != 200 {
+		t.Fatalf("cross-kind want 200 got %d", c)
+	}
+	for _, body := range []string{`{"name":""}`, `{"name":"x"}`} {
+		if c, _, _ := e.do("PATCH", "/api/admin/integrations/nope", "", body); c != 404 {
+			t.Fatalf("unknown id %s want 404 got %d", body, c)
+		}
+	}
+}
+
+func TestGithubRenameKeepsOwner(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	c, m, b := e.do("POST", "/api/admin/integrations", "", `{"kind":"github","name":"GH","org":"acme","ownerType":"organization"}`)
+	if c != 201 {
+		t.Fatalf("create %d %s", c, b)
+	}
+	id := m["integration"].(map[string]any)["id"].(string)
+	c, m, _ = e.do("PATCH", "/api/admin/integrations/"+id, "", `{"name":"Renamed"}`)
+	if c != 200 || m["name"] != "Renamed" || m["org"] != "acme" || m["ownerType"] != "organization" {
+		t.Fatalf("rename %d %v", c, m)
+	}
+}
+
+func TestRenameShowsOnNextView(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	id, tok := e.integration("qa", "Before")
+	if c, _, b := e.do("POST", "/ingest/qa/"+id, tok, `{"id":"q1","type":"qa.run.started","at":"2026-11-21T09:00:00Z","product":"web","run":"r1"}`); c != 202 {
+		t.Fatalf("ingest %d %s", c, b)
+	}
+	view := func() any {
+		for _, ev := range e.st.Events(store.Query{}) {
+			return visibility.View(e.st, ev)["tool"]
+		}
+		return nil
+	}
+	if view() != "Before" {
+		t.Fatalf("tool %v", view())
+	}
+	if c, _, _ := e.do("PATCH", "/api/admin/integrations/"+id, "", `{"name":" After "}`); c != 200 {
+		t.Fatal(c)
+	}
+	if view() != "After" {
+		t.Fatalf("tool after rename %v", view())
+	}
+}
