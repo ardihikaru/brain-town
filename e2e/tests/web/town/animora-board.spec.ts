@@ -16,7 +16,7 @@ import { Tag } from '@utils/tags';
 
 test.describe('town · Animora video boards', () => {
   test(
-    'the video and platform boards show an empty state until the first Animora event, then the video card (TC-TOWN-040)',
+    'the video and platform boards show an empty state until the first Animora event, then the video card (TC-TOWN-041)',
     { tag: [Tag.smoke] },
     async ({ town, ingestApi, integration, sse, apiContextFor, adminApi, cleanup }) => {
       const scope = buildGithubScope();
@@ -49,7 +49,7 @@ test.describe('town · Animora video boards', () => {
   );
 
   test(
-    'a video rendered, scheduled and published on YouTube moves from a video card to a live YouTube card (TC-TOWN-041)',
+    'a video rendered, scheduled and published on YouTube moves from a video card to a live YouTube card (TC-TOWN-042)',
     { tag: [Tag.smoke] },
     async ({ town, ingestApi, integration, sse, apiContextFor, adminApi, cleanup }) => {
       const scope = buildGithubScope();

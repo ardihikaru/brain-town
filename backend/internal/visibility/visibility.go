@@ -1,12 +1,21 @@
 // Package visibility is the single place where hidden orgs and products are masked.
 // Every public output (the /events stream through View, the /api/town snapshot through Town) goes through
 // Aliases, so hidden names are masked in exactly one place.
+//
+// Org naming: a hidden org shows its alias ("Hidden org" when empty); a public org shows its alias when it is a
+// custom one that differs from the key (store.OrgAliasCustom), else its key (PublicOrgName). For a public org with
+// a custom alias, View also replaces the org key, as a whole token, inside payload.data and payload.task.title and
+// drops data "url" fields that contain it. It still reveals product/repo names that contain the key, the QA tool
+// name, and free text where the key is glued to letters, digits, "-" or "_".
 package visibility
 
 import (
 	"encoding/json"
+	"regexp"
 	"slices"
 	"sort"
+	"strings"
+	"sync"
 	"time"
 
 	"github.com/ardihikaru/brain-town/backend/internal/store"
@@ -21,6 +30,31 @@ type Resolver interface {
 // sensitive data fields removed when the event is about a hidden org or product.
 var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check", "channel", "account", "prompt", "script", "failure"}
 
+// PublicOrgName is the one place that decides how an org is named in public output.
+func PublicOrgName(o store.Org) string {
+	if o.Visibility == store.Hidden {
+		if o.Alias == "" {
+			return "Hidden org"
+		}
+		return o.Alias
+	}
+	if store.OrgAliasCustom(o) {
+		return o.Alias
+	}
+	return o.Key
+}
+
+// orgOf finds the org an event belongs to (the event's own org, else its product's org).
+func orgOf(r Resolver, ev store.Event) (store.Org, bool) {
+	orgKey := ev.Org
+	if orgKey == "" {
+		if p, ok := r.GetProduct(ev.Product); ok {
+			orgKey = p.Org
+		}
+	}
+	return r.GetOrg(orgKey)
+}
+
 // Aliases reports whether the event is hidden and, if so, the public names to show.
 func Aliases(r Resolver, ev store.Event) (hidden bool, orgAlias, productAlias string) {
 	orgKey := ev.Org
@@ -34,7 +68,7 @@ func Aliases(r Resolver, ev store.Event) (hidden bool, orgAlias, productAlias st
 		}
 	}
 	if o, ok := r.GetOrg(orgKey); ok {
-		orgAlias = o.Alias
+		orgAlias = PublicOrgName(o)
 		if o.Visibility == store.Hidden {
 			hidden = true
 			if productAlias == "" || productAlias == ev.Product {
@@ -45,11 +79,38 @@ func Aliases(r Resolver, ev store.Event) (hidden bool, orgAlias, productAlias st
 	return
 }
 
+// keyRegexps caches the compiled case-insensitive key matcher per org key (bounded by the org count).
+var keyRegexps sync.Map
+
+func keyRegexp(key string) *regexp.Regexp {
+	if re, ok := keyRegexps.Load(key); ok {
+		return re.(*regexp.Regexp)
+	}
+	re := regexp.MustCompile(`(?i)` + regexp.QuoteMeta(key))
+	keyRegexps.Store(key, re)
+	return re
+}
+
 // View returns the public form of an event. For hidden events the product and org are
 // replaced by their aliases and titles, URLs and other free text are removed.
 func View(r Resolver, ev store.Event) map[string]any {
 	payload := clone(ev.Raw)
-	if hidden, orgAlias, prodAlias := Aliases(r, ev); hidden {
+	hidden, orgAlias, prodAlias := Aliases(r, ev)
+	if o, ok := orgOf(r, ev); ok && o.Visibility == store.Public && store.OrgAliasCustom(o) {
+		if _, ok := payload["org"].(string); ok {
+			payload["org"] = o.Alias
+		}
+		re := keyRegexp(o.Key)
+		if d, ok := payload["data"]; ok {
+			payload["data"] = scrub(d, re, o.Alias)
+		}
+		if t, ok := payload["task"].(map[string]any); ok {
+			if title, ok := t["title"].(string); ok {
+				t["title"] = replaceToken(title, re, o.Alias)
+			}
+		}
+	}
+	if hidden {
 		switch p := payload["product"].(type) {
 		case map[string]any:
 			p["key"], p["name"], p["visibility"] = prodAlias, prodAlias, store.Hidden
@@ -79,6 +140,59 @@ func View(r Resolver, ev store.Event) map[string]any {
 		}
 	}
 	return out
+}
+
+func isKeyChar(b byte) bool {
+	return b >= 'a' && b <= 'z' || b >= 'A' && b <= 'Z' || b >= '0' && b <= '9' || b == '_' || b == '-'
+}
+
+// tokenSpans returns the spans of s where re matches as a whole token (not glued to [A-Za-z0-9_-]).
+func tokenSpans(s string, re *regexp.Regexp) [][]int {
+	var out [][]int
+	for _, m := range re.FindAllStringIndex(s, -1) {
+		if m[0] > 0 && isKeyChar(s[m[0]-1]) || m[1] < len(s) && isKeyChar(s[m[1]]) {
+			continue
+		}
+		out = append(out, m)
+	}
+	return out
+}
+
+func replaceToken(s string, re *regexp.Regexp, alias string) string {
+	spans := tokenSpans(s, re)
+	if len(spans) == 0 {
+		return s
+	}
+	var b strings.Builder
+	last := 0
+	for _, m := range spans {
+		b.WriteString(s[last:m[0]])
+		b.WriteString(alias)
+		last = m[1]
+	}
+	b.WriteString(s[last:])
+	return b.String()
+}
+
+// scrub walks decoded JSON: strings get the key replaced by the alias; a "url" field containing the key is deleted.
+func scrub(v any, re *regexp.Regexp, alias string) any {
+	switch x := v.(type) {
+	case string:
+		return replaceToken(x, re, alias)
+	case []any:
+		for i := range x {
+			x[i] = scrub(x[i], re, alias)
+		}
+	case map[string]any:
+		for k, e := range x {
+			if str, ok := e.(string); ok && strings.EqualFold(k, "url") && len(tokenSpans(str, re)) > 0 {
+				delete(x, k)
+				continue
+			}
+			x[k] = scrub(e, re, alias)
+		}
+	}
+	return v
 }
 
 func clone(m map[string]any) map[string]any {
@@ -214,14 +328,11 @@ func Town(r Resolver, orgs []store.Org, products []store.Product, integrations [
 		if !has && !withGH[o.Key] {
 			continue
 		}
-		name := o.Key
+		name := PublicOrgName(o)
 		hidden := o.Visibility == store.Hidden
 		typ := typeOf[o.Key]
 		if hidden {
 			typ = "" // the type of an alias would reveal a personal account
-			if name = o.Alias; name == "" {
-				name = "Hidden org"
-			}
 		}
 		rs, last := flat(repos)
 		ow := TownOwner{Name: name, Type: typ, Hidden: hidden, Repos: rs}

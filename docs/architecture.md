@@ -42,7 +42,7 @@ animation detail (who a visitor looks like, the route they take, how long they s
 
 - **Town page.** A single HTML file: canvas renderer, road-graph pathfinding (BFS on the tile
   grid), agents, a clock, and an **event bus** (`bus.emit(event)`). On load it fetches the
-  public snapshot `GET /api/town` (owners and their repos, masked like `/events`) and opens
+  public snapshot `GET /api/town` (owners and their repos, masked like `/events`; an org's public name is its alias when hidden or custom, else its key, decided only in `visibility.PublicOrgName`; see `docs/api.md` Masking) and opens
   `/events` (SSE), converting the public envelopes into bus events (`fromPublic`); a built-in
   simulator runs only as a static demo when the stream is unreachable or with `?sim=1`
   (in that mode `/api/town` is never requested).

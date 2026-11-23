@@ -11,7 +11,7 @@ const DEFAULT_NAME = /^Animora( \d+)?$/;
 
 test.describe('backoffice · Animora integrations', () => {
   test(
-    'the Animora add button creates an integration and opens its setup page with the env blocks and no token (TC-BO-060)',
+    'the Animora add button creates an integration and opens its setup page with the env blocks and no token (TC-BO-062)',
     { tag: [Tag.smoke] },
     async ({ backoffice, page, adminApi, cleanup }) => {
       await backoffice.integrations.goto();
@@ -37,7 +37,7 @@ test.describe('backoffice · Animora integrations', () => {
   );
 
   test(
-    'a second Animora integration gets a numbered default name (TC-BO-061)',
+    'a second Animora integration gets a numbered default name (TC-BO-063)',
     { tag: [Tag.regression] },
     async ({ backoffice, adminApi, cleanup }) => {
       await backoffice.integrations.goto();
@@ -64,7 +64,7 @@ test.describe('backoffice · Animora integrations', () => {
   );
 
   test(
-    'the Animora group lists a card per integration with its feed line (TC-BO-062)',
+    'the Animora group lists a card per integration with its feed line (TC-BO-064)',
     { tag: [Tag.regression] },
     async ({ backoffice, adminApi, integration }) => {
       const pushOnly = await integration('animora', { name: uniqueId('Animora Push') });
@@ -82,7 +82,7 @@ test.describe('backoffice · Animora integrations', () => {
   );
 
   test(
-    'an Animora card is renamed from the card (TC-BO-063)',
+    'an Animora card is renamed from the card (TC-BO-065)',
     { tag: [Tag.regression] },
     async ({ backoffice, adminApi, integration }) => {
       const animora = await integration('animora', { name: uniqueId('Animora Before') });
@@ -99,7 +99,7 @@ test.describe('backoffice · Animora integrations', () => {
   );
 
   test(
-    'an Animora integration is renamed from its setup page (TC-BO-064)',
+    'an Animora integration is renamed from its setup page (TC-BO-066)',
     { tag: [Tag.regression] },
     async ({ backoffice, adminApi, integration }) => {
       const animora = await integration('animora', { name: uniqueId('Animora Before') });
@@ -117,7 +117,7 @@ test.describe('backoffice · Animora integrations', () => {
   );
 
   test(
-    'an http:// feed URL shows the inline error and is not saved (TC-BO-065)',
+    'an http:// feed URL shows the inline error and is not saved (TC-BO-067)',
     { tag: [Tag.regression] },
     async ({ backoffice, adminApi, integration }) => {
       const animora = await integration('animora');
@@ -134,7 +134,7 @@ test.describe('backoffice · Animora integrations', () => {
   );
 
   test(
-    'an https:// feed URL is saved, survives a reload and shows on the card; an empty one clears it (TC-BO-066)',
+    'an https:// feed URL is saved, survives a reload and shows on the card; an empty one clears it (TC-BO-068)',
     { tag: [Tag.smoke] },
     async ({ backoffice, page, adminApi, integration }) => {
       const animora = await integration('animora');

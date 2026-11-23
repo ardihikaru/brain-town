@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -432,9 +433,19 @@ func (a *API) putOrg(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, "visibility must be public or hidden")
 		return
 	}
-	o, ok := a.St.SetOrg(r.PathValue("key"), in.Visibility, in.Alias)
-	if !ok {
+	o, err := a.St.SetOrg(r.PathValue("key"), in.Visibility, in.Alias)
+	switch {
+	case errors.Is(err, store.ErrOrgNotFound):
 		fail(w, 404, "no such org")
+		return
+	case errors.Is(err, store.ErrConflict):
+		fail(w, 409, err.Error())
+		return
+	case errors.Is(err, store.ErrInvalid):
+		fail(w, 422, err.Error())
+		return
+	case err != nil:
+		fail(w, 500, "internal error")
 		return
 	}
 	writeJSON(w, 200, o)

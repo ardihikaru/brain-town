@@ -13,14 +13,14 @@ counts as automated: it passes while the bug exists and turns red when the bug i
 
 | Epic                                                          | Cases |   + |   - | automated | planned | blocked | manual-only | wont | Automated % |
 | ------------------------------------------------------------- | ----: | --: | --: | --------: | ------: | ------: | ----------: | ---: | ----------: |
-| [Admin API (admin)](admin.md)                                 |    42 |  24 |  18 |        41 |       0 |       0 |           1 |    0 |         98% |
+| [Admin API (admin)](admin.md)                                 |    48 |  26 |  22 |        47 |       0 |       0 |           1 |    0 |         98% |
 | [Feed puller (feed)](feed.md)                                 |     5 |   2 |   3 |         3 |       0 |       1 |           0 |    1 |         60% |
 | [Ingest (ingest)](ingest.md)                                  |    38 |  21 |  17 |        38 |       0 |       0 |           0 |    0 |        100% |
 | [mfardiansyah.id integration (integrations)](integrations.md) |    59 |  29 |  30 |        56 |       0 |       0 |           3 |    0 |         95% |
-| [Event streams (stream)](stream.md)                           |    22 |  18 |   4 |        21 |       0 |       0 |           0 |    1 |         95% |
-| [Back-office (web)](web-backoffice.md)                        |    41 |  33 |   8 |        41 |       0 |       0 |           0 |    0 |        100% |
-| [Town (web)](web-town.md)                                     |    16 |  13 |   3 |        16 |       0 |       0 |           0 |    0 |        100% |
-| **Total**                                                     |   223 | 140 |  83 |       216 |       0 |       1 |           4 |    2 |         97% |
+| [Event streams (stream)](stream.md)                           |    24 |  20 |   4 |        23 |       0 |       0 |           0 |    1 |         96% |
+| [Back-office (web)](web-backoffice.md)                        |    43 |  34 |   9 |        43 |       0 |       0 |           0 |    0 |        100% |
+| [Town (web)](web-town.md)                                     |    17 |  14 |   3 |        17 |       0 |       0 |           0 |    0 |        100% |
+| **Total**                                                     |   234 | 146 |  88 |       227 |       0 |       1 |           4 |    2 |         97% |
 
 <!-- coverage:end -->
 

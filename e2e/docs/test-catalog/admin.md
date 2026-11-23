@@ -12,6 +12,7 @@
 - **US-ADM-06** — As the admin I want to see, copy and rotate a GitHub webhook secret so that I can paste it into GitHub and cut off a leaked one.
 - **US-ADM-07** — As the admin I want a GitHub owner to have a type and per-repo state, with a resettable alias for hidden repos, so that personal accounts (one webhook per repo) work like organizations.
 - **US-ADM-08** — As the admin I want each QA deployment to have its own name, and any integration to be renamed with checks, so that the town can say which tool ran a test.
+- **US-ADM-09** — As the admin I want to give an org a public alias, also for a public org, so that the town shows a friendly name instead of the key.
 
 ## Test cases
 
@@ -61,5 +62,11 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-ADM-083 | US-ADM-08 | Given two integrations of one kind, when one is renamed to the other name in another case, then 409                                | -   | API   | P1  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
 | ☑    | TC-ADM-084 | US-ADM-08 | Given an integration, when it is renamed to an empty name or to 81 characters, then 422 and the name is kept                       | -   | API   | P1  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
 | ☑    | TC-ADM-085 | US-ADM-08 | Given an unknown id, when it is renamed, then 404                                                                                  | -   | API   | P2  | automated   | `tests/api/rest/admin/qa-names.spec.ts`       |
+| ☑    | TC-ADM-090 | US-ADM-09 | Given a public org, when a custom alias is set, then products lists it as the org alias                                            | +   | API   | P0  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
+| ☑    | TC-ADM-091 | US-ADM-09 | Given an org with a custom alias, when an empty alias is sent, then it resets to the key                                           | +   | API   | P1  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
+| ☑    | TC-ADM-092 | US-ADM-09 | Given an alias used by another org, when another org takes it in any case, then 409 and its alias is kept                          | -   | API   | P1  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
+| ☑    | TC-ADM-093 | US-ADM-09 | Given another org key, when an org takes it as alias, then 409 and its own alias stays                                             | -   | API   | P1  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
+| ☑    | TC-ADM-094 | US-ADM-09 | Given an org, when its alias is 61 characters, then 422 and the alias is kept                                                      | -   | API   | P2  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
+| ☑    | TC-ADM-095 | US-ADM-09 | Given an org, when its alias has a character outside the allowed set, then 422 and the alias is kept                               | -   | API   | P2  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
 
 TC-ADM-007 is `manual-only`: the failure cap is global for the whole API, so tripping it would break every other sign-in for a minute during a parallel run.
