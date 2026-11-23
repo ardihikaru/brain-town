@@ -10,6 +10,7 @@
 - **US-TOWN-04** — As a visitor I want the GitHub Valley to show one gate per real GitHub owner, with hidden repos shown only as aliases.
 - **US-TOWN-05** — As a visitor I want the QA Lab board grouped by QA tool so that I can tell the company runs from the personal ones.
 - **US-TOWN-06** — As a visitor I want the QA Lab board to show the public name of an org, not its key.
+- **US-TOWN-07** — As a visitor I want the video factory and the YouTube room to show Animora's videos, from rendered to live.
 
 ## Test cases
 
@@ -32,3 +33,5 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-TOWN-030 | US-TOWN-05 | Given two named QA integrations with one run each, when the QA Lab board opens, then it shows a group per tool with its run card and tool chip                                                                        | +   | E2E   | P0  | automated | `tests/web/town/qa-tool-board.spec.ts` |
 | ☑    | TC-TOWN-031 | US-TOWN-05 | Given no QA run has reached the town, when the QA Lab board opens, then it shows the "No test runs yet." empty state; when the first run arrives, then the empty state is replaced by the tool group and its run card | +   | E2E   | P1  | automated | `tests/web/town/qa-tool-board.spec.ts` |
 | ☑    | TC-TOWN-040 | US-TOWN-06 | Given a QA org with an alias, when a run reaches the QA Lab board, then its label shows the alias and not the key                                                                                                     | +   | E2E   | P0  | automated | `tests/web/town/qa-org-alias.spec.ts`  |
+| ☑    | TC-TOWN-041 | US-TOWN-07 | Given no Animora event reached the town, when the video and YouTube boards open, then each shows its empty state; when a video is rendered, then the video card replaces it                                           | +   | WEB   | P0  | automated | `tests/web/town/animora-board.spec.ts` |
+| ☑    | TC-TOWN-042 | US-TOWN-07 | Given a video rendered, scheduled and published on YouTube, when the boards are read, then the video card moves ready, scheduled, published and the YouTube card moves slot to live                                   | +   | WEB   | P0  | automated | `tests/web/town/animora-board.spec.ts` |

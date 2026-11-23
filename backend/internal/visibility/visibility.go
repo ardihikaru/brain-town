@@ -12,6 +12,7 @@ package visibility
 import (
 	"encoding/json"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -27,7 +28,7 @@ type Resolver interface {
 }
 
 // sensitive data fields removed when the event is about a hidden org or product.
-var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check"}
+var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check", "channel", "account", "prompt", "script", "failure"}
 
 // PublicOrgName is the one place that decides how an org is named in public output.
 func PublicOrgName(o store.Org) string {
@@ -308,6 +309,9 @@ func Town(r Resolver, orgs []store.Org, products []store.Product, integrations [
 	byOrg := map[string]map[string]*acc{}
 	unowned := map[string]*acc{}
 	for _, p := range products {
+		if slices.Contains(p.Sources, "Animora") && !slices.Contains(p.Sources, "GitHub") {
+			continue // Animora is a video studio, not a GitHub Valley gate or hall
+		}
 		if _, ok := orgByKey[p.Org]; p.Org == "" || !ok {
 			add(unowned, p, "")
 			continue

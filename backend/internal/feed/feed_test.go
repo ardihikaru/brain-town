@@ -97,3 +97,40 @@ func TestLatest20(t *testing.T) {
 		t.Fatalf("n=%d err=%v, want 20", n, err)
 	}
 }
+
+const animoraSample = `{"version":"https://jsonfeed.org/version/1.1","items":[
+ {"id":"video-c1-youtube-y1","url":"https://youtu.be/y1","title":"One","date_published":"2026-11-20T09:00:00Z","_animora":{"vendor":"youtube","channel":"Kanal","code":"c1"}},
+ {"id":"video-c2-youtube-y2","url":"https://youtu.be/y2","title":"Two","date_published":"2026-11-21T09:00:00Z","_animora":{"vendor":"youtube","channel":"Kanal","code":"c2"}},
+ {"id":"video-c3-x-y3","url":"https://youtu.be/y3","title":"Bad vendor","date_published":"2026-11-21T09:00:00Z","_animora":{"vendor":"vimeo"}},
+ {"id":"video-c4","url":"https://youtu.be/y4","title":"No ext","date_published":"2026-11-21T09:00:00Z"}]}`
+
+func TestPullAnimora(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { fmt.Fprint(w, animoraSample) }))
+	t.Cleanup(srv.Close)
+	st, _ := store.New(nil)
+	i, _ := st.CreateIntegration("animora", "Animora", "studio")
+	f := srv.URL + "/feed.json"
+	i, _ = st.UpdateIntegration(i.ID, nil, nil, &f)
+	p := &Puller{St: st, Hub: hub.New(), Client: srv.Client()}
+	// c1 was already pushed: the pull must not duplicate it.
+	if _, ok := st.AddAccepted(store.Accept{Integration: i.ID, Kind: "animora", Key: "video-c1-youtube-y1", ID: "video-c1-youtube-y1", Type: "video.published", At: time.Now()}); !ok {
+		t.Fatal("push failed")
+	}
+	ch, _ := p.Hub.Subscribe()
+	p.PullAll()
+	ev := <-ch
+	if ev.ID != "video-c2-youtube-y2" || ev.Type != "video.published" || ev.Kind != "animora" || ev.Product != "animora" || ev.Org != "studio" {
+		t.Fatalf("unexpected event %+v", ev)
+	}
+	d := ev.Raw["data"].(map[string]any)
+	if ev.Raw["product"] != "animora" || ev.Raw["org"] != "studio" || d["vendor"] != "youtube" || d["channel"] != "Kanal" ||
+		d["title"] != "Two" || d["url"] != "https://youtu.be/y2" || d["publishedAt"] != "2026-11-21T09:00:00Z" || d["code"] != "c2" || len(d) != 6 {
+		t.Fatalf("raw %+v", ev.Raw)
+	}
+	if got := len(st.Events(store.Query{})); got != 2 { // the earlier push plus c2
+		t.Fatalf("events=%d, want 2", got)
+	}
+	if n, _ := p.Pull(i); n != 0 {
+		t.Fatalf("second pull added %d", n)
+	}
+}

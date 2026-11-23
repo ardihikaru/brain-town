@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-export const IntegrationKindSchema = z.enum(['github', 'qa', 'gaos', 'site']);
+export const IntegrationKindSchema = z.enum(['github', 'qa', 'gaos', 'site', 'animora']);
 export type IntegrationKind = z.infer<typeof IntegrationKindSchema>;
 /** Kinds that sign in with a Bearer token. GitHub uses a webhook secret instead (see the github client). */
 export type IngestKind = Exclude<IntegrationKind, 'github'>;
@@ -11,7 +11,7 @@ export const LoginSchema = z.object({ email: z.email() });
 /** An integration as the admin API returns it. The token hash never leaves the server. */
 export const IntegrationSchema = z
   .object({
-    id: z.string().regex(/^(github|qa|gaos|site)-[0-9a-f]{6}$/),
+    id: z.string().regex(/^(github|qa|gaos|site|animora)-[0-9a-f]{6}$/),
     kind: IntegrationKindSchema,
     name: z.string(),
     org: z.string().optional(),
@@ -83,7 +83,7 @@ export const PublicEventSchema = z
     seq: z.number().int().positive(),
     id: z.string(),
     type: z.string(),
-    source: z.enum(['github', 'gaos', 'qa', 'site']),
+    source: z.enum(['github', 'gaos', 'qa', 'site', 'animora']),
     at: z.iso.datetime(),
     payload: z.record(z.string(), z.unknown()),
     /** QA events only: the name of the QA integration that sent it, looked up when the event is viewed. */

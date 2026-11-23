@@ -15,6 +15,22 @@ export class IntegrationsPage extends BasePage {
     await this.page.getByRole('button', { name: KIND_LABEL[kind], exact: true }).click();
   }
 
+  /** The "Animora" button of the add card (`#setup-new-animora`): creates the integration and opens its setup page. */
+  async addAnimora(): Promise<void> {
+    await this.page.getByTestId('int-add-animora').click();
+  }
+
+  /** The Animora group of the list, one card per integration, and the card's feed line. */
+  readonly animoraGroup = this.page.getByTestId('igroup-animora');
+
+  animoraCard(id: string) {
+    return this.page.getByTestId(`animora-card-${id}`);
+  }
+
+  animoraCardFeed(id: string) {
+    return this.page.getByTestId(`animora-card-feed-${id}`);
+  }
+
   /** The owner card of a GitHub integration, and its parts. */
   ownerCard(id: string) {
     return this.page.getByTestId(`owner-card-${id}`);

@@ -4,6 +4,9 @@
 #   scripts/stack.sh up       build + start web, api, ArcadeDB (--profile db) and the feed fixture; wait for health.
 #                             Then, when the mfardiansyah.id repo is found (SITE_REPO_DIR, SITE_REF), the site services
 #                             (--profile site: real site web + api x3, https front, throwaway databases) and wait for them.
+#                             Then, when the Animora repo is found (ANIMORA_REPO_DIR, ANIMORA_REF) and has the Brain Town
+#                             emitter, the Animora pieces (--profile animora: the real Go server on a throwaway database,
+#                             https front) and one run of the real naskah-to-video sender against Brain Town.
 #   scripts/stack.sh down     docker compose down -v --remove-orphans (site profile included), then prove nothing is left
 #   scripts/stack.sh status   list the project's containers and volumes
 #
@@ -18,9 +21,12 @@ ENV_FILE_PATH="$E2E_DIR/env/.env.local"
 STACK_DIR="$E2E_DIR/.stack"
 SITE_DIR="$STACK_DIR/site"
 SITE_ENV_FILE="$SITE_DIR/site.env"
-# Compose profiles: the Brain Town stack always; "site" only after enable_site (phase 2 of `up`, and `down`).
+ANIMORA_DIR="$STACK_DIR/animora"
+# Compose profiles: the Brain Town stack always; "site" / "animora" only after enable_site / enable_animora (the later
+# phases of `up`, and `down`). "animora-run" holds the one-shot sender, started explicitly with `compose run`.
 PROFILE_ARGS=(--profile db)
 enable_site() { PROFILE_ARGS+=(--profile site); }
+enable_animora() { PROFILE_ARGS+=(--profile animora); }
 
 compose() {
   local args=(-p "$PROJECT" --project-directory "$REPO_DIR" -f "$REPO_DIR/compose.yml" -f "$E2E_DIR/compose.e2e.yml" "${PROFILE_ARGS[@]}")
@@ -50,7 +56,7 @@ make_tls() {
     -extfile "$tls/ext.cnf" -out "$tls/server.crt" 2>/dev/null
   # Second certificate for the mfardiansyah.id https front: the site only sends to https, Brain Town only pulls https.
   openssl req -newkey rsa:2048 -nodes -subj "/CN=brain-town-tls" -keyout "$tls/front.key" -out "$tls/front.csr" 2>/dev/null
-  printf 'subjectAltName=DNS:brain-town-tls,DNS:site-pull-tls\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' >"$tls/front.cnf"
+  printf 'subjectAltName=DNS:brain-town-tls,DNS:site-pull-tls,DNS:animora-brain-town-tls,DNS:animora-pull-tls\nbasicConstraints=CA:FALSE\nkeyUsage=digitalSignature,keyEncipherment\nextendedKeyUsage=serverAuth\n' >"$tls/front.cnf"
   openssl x509 -req -in "$tls/front.csr" -CA "$tls/ca.crt" -CAkey "$tls/ca.key" -CAcreateserial -days 7 \
     -extfile "$tls/front.cnf" -out "$tls/front.crt" 2>/dev/null
   rm -f "$tls/ca.key" "$tls/server.csr" "$tls/ext.cnf" "$tls/front.csr" "$tls/front.cnf" "$tls/ca.srl"
@@ -117,6 +123,69 @@ start_site() {
   wait_site_healthy
 }
 
+# Exports the parts of the Animora repo the e2e needs (the Go server, its Dockerfile, the naskah-to-video app) with
+# `git archive` into .stack/animora/src, read-only use like the site export. ANIMORA_REPO_DIR defaults to the sibling
+# "animora" of the MAIN checkout. Returns 1 (with a warning) when the repo or ref is missing or does not carry the Brain
+# Town emitter yet: the stack then starts without the Animora pieces and the animora both-sides specs skip.
+export_animora_source() {
+  local repo ref common main
+  repo="$(env_value ANIMORA_REPO_DIR "")"
+  ref="$(env_value ANIMORA_REF main)"
+  if [[ -z "$repo" ]]; then
+    common="$(git -C "$REPO_DIR" rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)"
+    if [[ -n "$common" ]]; then main="$(dirname "$common")"; else main="$REPO_DIR"; fi
+    repo="$(dirname "$main")/animora"
+  fi
+  if [[ ! -d "$repo" ]] || ! git -C "$repo" rev-parse --verify -q "$ref^{commit}" >/dev/null 2>&1; then
+    echo "⚠ Animora repo or ref not found (ANIMORA_REPO_DIR=$repo, ANIMORA_REF=$ref): starting WITHOUT the Animora services; the animora both-sides specs will skip" >&2
+    return 1
+  fi
+  if ! git -C "$repo" cat-file -e "$ref:server/internal/httpapi/feed_routes.go" 2>/dev/null ||
+    ! git -C "$repo" cat-file -e "$ref:naskah-to-video/app/braintown.py" 2>/dev/null; then
+    echo "⚠ $repo @ $ref has no Brain Town emitter (server /feed.json, app/braintown.py): starting WITHOUT the Animora services; the animora both-sides specs will skip" >&2
+    return 1
+  fi
+  rm -rf "$ANIMORA_DIR" && mkdir -p "$ANIMORA_DIR/src" "$ANIMORA_DIR/events"
+  chmod 700 "$ANIMORA_DIR"
+  git -C "$repo" archive "$ref" server deploy/Dockerfile.server naskah-to-video/app | tar -x -C "$ANIMORA_DIR/src"
+  echo "✔ animora source  $repo @ $ref ($(git -C "$repo" rev-parse --short "$ref^{commit}"))"
+}
+
+wait_animora_healthy() {
+  local deadline url
+  deadline=$((SECONDS + 300))
+  url="http://127.0.0.1:18285/readyz"
+  until curl -fs -o /dev/null --max-time 3 "$url"; do
+    if ((SECONDS > deadline)); then
+      echo "✖ animora server did not become ready in time" >&2
+      compose ps >&2 || true
+      compose logs --tail=40 animora-init animora-server >&2 || true
+      return 1
+    fi
+    sleep 1
+  done
+  echo "✔ ready    $url"
+}
+
+# The Animora pieces: stack-owned Brain Town "animora" integration (ids and env files under .stack/animora, mode 600),
+# the real server on a throwaway database seeded with a public, a private and a nonaktif published video, then ONE run of
+# the real naskah-to-video sender (python -m app.braintown send) for the public video. A failed sender is a warning here
+# and a red spec there, so the failure is visible where it is checked.
+start_animora() {
+  local base env_common
+  base="$(env_value BRAIN_TOWN_URL http://127.0.0.1:18280)"
+  env_common=(ADMIN_EMAIL="$(env_value ADMIN_EMAIL "")" ADMIN_PASSWORD="$(env_value ADMIN_PASSWORD "")" BRAIN_TOWN_URL="$base" ANIMORA_DIR="$ANIMORA_DIR")
+  env "${env_common[@]}" node "$E2E_DIR/animora-fixture/provision.mjs" pre
+  enable_animora
+  compose up -d --build --no-recreate
+  wait_animora_healthy
+  env "${env_common[@]}" node "$E2E_DIR/animora-fixture/provision.mjs" seed
+  if ! compose run --rm animora-sender >"$ANIMORA_DIR/sender.log" 2>&1; then
+    echo "⚠ the animora sender reported a failure (see .stack/animora/sender.log); the animora both-sides specs will fail" >&2
+  fi
+  echo "✔ animora sender  $(grep -c '^delivered' "$ANIMORA_DIR/sender.log" || true) delivered, $(grep -c '^failed' "$ANIMORA_DIR/sender.log" || true) failed"
+}
+
 wait_healthy() {
   local base url deadline
   base="$(env_value BRAIN_TOWN_URL http://127.0.0.1:18280)"
@@ -159,9 +228,12 @@ case "$cmd" in
     compose up -d --build --remove-orphans
     wait_healthy
     if export_site_source; then start_site; fi
+    if export_animora_source; then start_animora; fi
     ;;
   down)
     enable_site
+    enable_animora
+    PROFILE_ARGS+=(--profile animora-run)
     compose down -v --remove-orphans --timeout 10
     rm -rf "$STACK_DIR"
     verify_down

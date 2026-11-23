@@ -39,9 +39,9 @@ the right worker.
 - E2E → lead: `e2e-engineer` and `e2e-runner` report app bugs, needed app hooks (`data-testid`) and
   approval-gated e2e changes to `lead-engineer`, who routes them to the right worker or the caller.
   `e2e-engineer` never edits product code; `e2e-runner` sends test-code failures to `e2e-engineer`.
-- Platform integrations (a real sender such as mfardiansyah.id run locally against the e2e stack) →
+- Platform integrations (a real sender such as mfardiansyah.id or Animora run locally against the e2e stack) →
   **`integration-tester`** (Sonnet 5.5). It reads the platform repo read-only, follows the platform skill
-  (`.claude/skills/mfardiansyah-id-integration/`), and reports contract mismatches to `lead-engineer`,
+  (`.claude/skills/mfardiansyah-id-integration/`, `.claude/skills/animora-integration/`), and reports contract mismatches to `lead-engineer`,
   who routes the fix to the platform repo or to a Brain Town worker.
 
 ## Project rules beat skill advice

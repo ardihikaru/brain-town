@@ -14,7 +14,7 @@
 | An agent picking up work | A walker carrying that piece of work |
 | A published article or illustration | A courier walking to the press or the pendopo |
 | A test run | A QA bot stepping through the QA Lab |
-| A video pipeline | Work moving through the Video Generator and YouTube Company |
+| A video pipeline (Animora) | Work moving through the Video Generator, then to the YouTube, Facebook, Instagram or TikTok company |
 | A site visit | A traveller arriving from the visitor's country |
 
 The town **only reacts to events**. Nothing in it is polled, and nothing is invented except
@@ -23,10 +23,10 @@ animation detail (who a visitor looks like, the route they take, how long they s
 ## Components
 
 ```
-            ┌──────────────── platforms ────────────────┐
-            │ GAOS · QA Tool · mfardiansyah.id · yours  │
-            └──────┬──────────────┬─────────────┬───────┘
-     POST /ingest/gaos/<id>  /ingest/qa/<id>  /ingest/site/<id>   (Bearer bt_live_…)
+            ┌──────────────────── platforms ─────────────────────┐
+            │ GAOS · QA Tool · mfardiansyah.id · Animora · yours │
+            └──────┬──────────────┬─────────────┬──────────┬─────┘
+     POST /ingest/gaos/<id>  /ingest/qa/<id>  /ingest/site/<id>  /ingest/animora/<id>   (Bearer bt_live_…)
      POST /ingest/github/<id>                                     (X-Hub-Signature-256)
                    ▼
         ┌──────────────────────┐        ┌────────────────────────┐
@@ -63,7 +63,10 @@ animation detail (who a visitor looks like, the route they take, how long they s
   envelope (never the GitHub payload), and groups noisy events (comments, reviews, pushes, CI,
   refs, labels, stars) into one rollup per subject every 15 s. Contract:
   [`integrations/github.md`](integrations/github.md).
-- **Feed puller** (`backend/internal/feed`). Every `FEED_PULL_INTERVAL_SECONDS` (default 300) it pulls the JSON Feed 1.1 of each `site` integration that has a `feedUrl` and records new items as `article.published`, deduped against pushes by item id.
+- **Animora receiver** (`/ingest/animora/<id>`). One integration per Animora deployment, shared by its two senders.
+  It keeps only an allowlist of `data` fields per type and rebuilds the stored event with `product: "animora"`.
+  Contract: [`integrations/animora.md`](integrations/animora.md).
+- **Feed puller** (`backend/internal/feed`). Every `FEED_PULL_INTERVAL_SECONDS` (default 300) it pulls the JSON Feed 1.1 of each `site` or `animora` integration that has a `feedUrl` and records new items, deduped against pushes by item id: `article.published` for `site`, `video.published` for `animora` (items without a valid `_animora.vendor` are skipped).
 - **ArcadeDB.** A graph database (HTTP API on port 2480). Products, tasks, runs, integrations
   and events become vertices and edges, which fits "who did what to which product". A GitHub integration is one per
   owner: besides `events` it keeps `ownerType` (`user`/`organization`) and `repos` (per-repo hook events, privacy,
@@ -80,7 +83,7 @@ Every event has the same envelope:
 The types the town understands today are listed in the `EVENT BUS` comment at the top of the
 town's script. They include `article.*`, `illustration.published`, `magazine.printed`,
 `video.*`, `issue.*`, `task.*`, `pr.*`, `qa.run.*`, `qa.step`, `imago.*` and `site.visit`, plus
-the GitHub types `ci.run`, `repo.*`, `ref.*` and `discussion.*`. The
+the GitHub types `ci.run`, `repo.*`, `ref.*` and `discussion.*` and the Animora type `channel.connected`. The
 per-platform contracts are in [`integrations/`](integrations/).
 
 ## Design rules

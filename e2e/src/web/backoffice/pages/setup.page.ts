@@ -43,6 +43,29 @@ export class SetupPage extends BasePage {
   /** Kept for existing specs. */
   readonly revealToken = this.page.getByRole('button', { name: 'Show' });
 
+  /** The Animora env blocks (naskah-to-video and server) and the optional public feed field. */
+  readonly animoraEnv = this.page.getByTestId('su-animora-env');
+  readonly feed = this.page.getByTestId('su-feed');
+  readonly feedSave = this.page.getByTestId('su-feed-save');
+  readonly feedError = this.page.getByTestId('su-feed-error');
+
+  async saveFeed(url: string): Promise<void> {
+    await this.feed.fill(url);
+    await this.feedSave.click();
+  }
+
+  /** The page title and its rename editor (the same editor as on a card). */
+  readonly title = this.page.getByTestId('setup-title');
+  readonly renameButton = this.page.getByTestId('su-rename');
+  readonly renameForm = this.page.getByTestId('int-rename-form');
+  readonly renameInput = this.page.getByTestId('int-rename-input');
+
+  async rename(name: string): Promise<void> {
+    await this.renameButton.click();
+    await this.renameInput.fill(name);
+    await this.renameInput.press('Enter');
+  }
+
   /** The "What becomes what" panel and its table (kind -> town event). */
   readonly eventMap = this.page.getByRole('region', { name: 'What becomes what' });
   readonly eventMapTable = this.eventMap.getByRole('table');

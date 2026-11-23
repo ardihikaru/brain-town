@@ -75,6 +75,25 @@ The site api containers exit with code 2 on `stack down`: the site api installs 
 falls back to `exit(2)` when SIGTERM cannot kill PID 1 (`dieFromSignal`). It is not a panic and is benign; a send cut
 mid-way is retried by the site's minute scan (claimed Notification rows start `pending` with `nextAt = now`).
 
+## Animora both-sides services
+
+`scripts/stack.sh up` also starts the Animora pieces (compose profile `animora`) when the Animora repo is found:
+`ANIMORA_REPO_DIR` (default: the sibling `animora` of the main checkout) and `ANIMORA_REF` (default `main`), from the shell
+or `env/.env.local`; the ref must carry the Brain Town emitter (`server/internal/httpapi/feed_routes.go`,
+`naskah-to-video/app/braintown.py`), else `up` warns and the both-sides specs skip. Until it is merged:
+`ANIMORA_REPO_DIR=/path/to/animora ANIMORA_REF=feat/brain-town-emitter npm run test:local -- --grep animora`.
+
+| Service          | Port    | What                                                                                           |
+| ---------------- | ------- | ---------------------------------------------------------------------------------------------- |
+| `animora-server` | `18285` | the real Animora Go server on the throwaway database `animora_e2e`, public `GET /feed.json`    |
+| `animora-front`  | -       | https front (`animora-brain-town-tls`, `animora-pull-tls`) with the throwaway CA               |
+| `animora-init`   | -       | one-shot: creates the database (the server migrates it)                                        |
+| `animora-sender` | -       | one-shot (profile `animora-run`): the real `python -m app.braintown send`, each envelope twice |
+
+`animora-fixture/provision.mjs` creates the stack-owned `e2e-animora` integration (token only in `.stack/animora/*.env`,
+mode 600), seeds the server with a public, a private and a nonaktif published video and sets the integration's `feedUrl`.
+Specs: `tests/api/stream/integrations/animora/`; the local runbook is the skill `animora-integration`.
+
 `scripts/stack.sh down` runs `docker compose -p brain-town-e2e down -v --remove-orphans`, deletes `.stack/` and then
 fails loudly if any container, volume or network of the project is left. **Always run it after a manual session.**
 

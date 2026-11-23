@@ -164,5 +164,87 @@ services:
     mem_limit: 64m
     pids_limit: 64
 
+  # ── Animora both-sides services (profile "animora") ─────────────────────────────────────────────────
+  # The real Animora Go server (built from a clean `git archive` of the Animora repo that scripts/stack.sh exports to
+  # e2e/.stack/animora/src) on a throwaway database in the stack's ArcadeDB, and the real naskah-to-video sender run
+  # once as a one-shot container. Nothing here is used outside the e2e stack.
+
+  animora-init:
+    profiles: ['animora']
+    image: python:3.13-alpine
+    command: ['python', '-I', '/create-db.py']
+    environment:
+      ARCADEDB_URL: http://arcadedb:2480
+      ARCADEDB_PASSWORD: ${ARCADEDB_PASSWORD:-}
+      ANIMORA_DB: animora_e2e
+    volumes:
+      - ./e2e/animora-fixture/create-db.py:/create-db.py:ro
+    depends_on:
+      - arcadedb
+    restart: 'no'
+    mem_limit: 64m
+
+  # Seeded through its own write API by animora-fixture/provision.mjs (a random per-stack ANIMORA_API_TOKEN).
+  animora-server:
+    profiles: ['animora']
+    build:
+      context: ./e2e/.stack/animora/src/server
+      dockerfile: ../deploy/Dockerfile.server
+    env_file:
+      - path: ./e2e/.stack/animora/server.env
+        required: false
+    environment:
+      ANIMORA_ADDR: ':8787'
+      ANIMORA_ARCADE_URL: http://arcadedb:2480
+      ANIMORA_ARCADE_DB: animora_e2e
+      ANIMORA_ARCADE_USER: root
+      ANIMORA_ARCADE_PASSWORD: ${ARCADEDB_PASSWORD:-}
+      ANIMORA_BRAIN_TOWN_ENABLED: 'false'
+    ports:
+      - '127.0.0.1:18285:8787'
+    depends_on:
+      animora-init:
+        condition: service_completed_successfully
+    read_only: true
+    mem_limit: 128m
+    pids_limit: 128
+
+  # https front: animora-brain-town-tls (sender -> Brain Town ingest) and animora-pull-tls (Brain Town puller -> server).
+  animora-front:
+    profiles: ['animora']
+    image: nginx:1.30.7-alpine3.24
+    networks:
+      default:
+        aliases:
+          - animora-brain-town-tls
+          - animora-pull-tls
+    volumes:
+      - ./e2e/animora-fixture/tls-front.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./e2e/.stack/tls:/etc/nginx/tls:ro
+    mem_limit: 64m
+    pids_limit: 64
+
+  # One-shot, started by stack.sh with `compose run`: the real `python -m app.braintown send` for each envelope in
+  # .stack/animora/events. ANIMORA_NV_BRAIN_TOWN_* come from .stack/animora/sender.env (mode 600, never printed).
+  animora-sender:
+    profiles: ['animora-run']
+    image: python:3.13-alpine
+    working_dir: /nv
+    command: ['sh', '/send.sh']
+    env_file:
+      - path: ./e2e/.stack/animora/sender.env
+        required: false
+    environment:
+      SSL_CERT_FILE: /e2e-tls/ca.crt
+      PYTHONDONTWRITEBYTECODE: '1'
+    volumes:
+      - ./e2e/animora-fixture/send.sh:/send.sh:ro
+      - ./e2e/.stack/animora/src/naskah-to-video:/nv:ro
+      - ./e2e/.stack/animora/events:/events:ro
+      - ./e2e/.stack/tls/ca.crt:/e2e-tls/ca.crt:ro
+    depends_on:
+      - animora-front
+    mem_limit: 64m
+
 volumes:
   site-geo:
