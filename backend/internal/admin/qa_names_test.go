@@ -1,6 +1,7 @@
 package admin_test
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/ardihikaru/brain-town/backend/internal/store"
@@ -194,5 +195,27 @@ func TestRenameShowsOnNextView(t *testing.T) {
 	}
 	if view() != "After" {
 		t.Fatalf("tool after rename %v", view())
+	}
+}
+
+func TestIntegrationNameLengthCountsCharacters(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	ok := strings.Repeat("·", 80)
+	if c, _ := e.create("qa", ok); c != 201 {
+		t.Fatalf("80 runes create want 201 got %d", c)
+	}
+	if c, _ := e.create("qa", ok+"·"); c != 422 {
+		t.Fatalf("81 runes create want 422 got %d", c)
+	}
+	if c, _ := e.create("gaos", "  "+ok+"  "); c != 201 {
+		t.Fatalf("80 runes padded create want 201 got %d", c)
+	}
+	id, _ := e.integration("qa", "Short")
+	if c, _, _ := e.do("PATCH", "/api/admin/integrations/"+id, "", `{"name":"`+strings.Repeat("é", 80)+`"}`); c != 200 {
+		t.Fatalf("80 runes rename want 200 got %d", c)
+	}
+	if c, _, _ := e.do("PATCH", "/api/admin/integrations/"+id, "", `{"name":"`+strings.Repeat("·", 81)+`"}`); c != 422 {
+		t.Fatalf("81 runes rename want 422 got %d", c)
 	}
 }

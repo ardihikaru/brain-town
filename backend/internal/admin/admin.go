@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/ardihikaru/brain-town/backend/internal/config"
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
@@ -269,7 +270,7 @@ func (a *API) createIntegration(w http.ResponseWriter, r *http.Request) {
 		fail(w, 422, "ownerType must be user or organization")
 		return
 	}
-	if !kinds[in.Kind] || strings.TrimSpace(in.Name) == "" || len(in.Name) > 80 {
+	if !kinds[in.Kind] || strings.TrimSpace(in.Name) == "" || utf8.RuneCountInString(strings.TrimSpace(in.Name)) > 80 {
 		fail(w, 422, "kind must be github, qa, gaos or site, and name is required")
 		return
 	}
@@ -333,7 +334,7 @@ func (a *API) updateIntegration(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		n := strings.TrimSpace(*in.Name)
-		if n == "" || len(n) > 80 {
+		if n == "" || utf8.RuneCountInString(n) > 80 {
 			fail(w, 422, "name is required (max 80 characters)")
 			return
 		}
