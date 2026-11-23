@@ -89,7 +89,8 @@ Masked snapshot the town page loads once to draw GitHub owners (gates) and their
 ```
 
 - `owners`: one per org that has a product or is the org of a `github` integration, sorted by `name`. `name` is
-  the org alias when the org is hidden, else the org key. `type` is the integration's `ownerType` (`user`,
+  the org's public name: its alias when the org is hidden, or public with a custom alias (see Masking), else the
+  org key. `type` is the integration's `ownerType` (`user`,
   `organization`, or `""`); it is always `""` for hidden owners, since the type of an alias would reveal a personal account.
 - `repos` (and `unowned`, the products with no org): `name` is the public product name exactly as `/events`
   publishes it (alias when the product or its org is hidden). Repos sharing a public name inside one owner are
@@ -106,6 +107,19 @@ titles, URLs, step names, specs and failure reasons are removed. Masking is appl
 event is read, so changing visibility also applies to events already stored. `/api/town` is computed on each
 request and never contains a hidden org key, hidden product key or product name.
 
+**Public org with a custom alias.** An org alias that differs from the key (and is not a generated `Org A`) is the
+org's public name also when the org is public, in `/events` (`payload.org`) and in `/api/town` (`owners[].name`).
+To keep the key from leaking in the same event, `View` also replaces the org key, as a whole token and case-insensitively,
+inside `payload.data` (recursively) and `payload.task.title`; a token is delimited by any character outside
+`[A-Za-z0-9_-]`, so `developersismedika` and `sismedika-web` do not match key `sismedika`. Any `data` field named `url`
+that contains the key as a token is deleted (a rewritten URL would be a broken link). A public org whose alias equals
+its key is output unchanged. The same substitution runs when the product is hidden but the org is public with a custom alias.
+
+What a public org with a custom alias still reveals: product and repo names that contain the key
+(`payload.product`, `payload.repo`, `repos[].name`), the QA tool name (`tool`, an admin-chosen integration name), and
+free text where the key is glued to other letters, digits, `-` or `_`. Renaming an alias gives the org a new public name,
+so the town sees a new owner at its next `/api/town` refresh: the old gate is removed and a new one placed.
+
 ## Admin API
 
 Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
@@ -118,7 +132,8 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | `POST /api/admin/integrations/{id}/token` | Rotate the secret; the old one stops working. For a `github` integration this makes a new `whsec_` secret (returned in the same `token` field). |
 | `GET /api/admin/integrations/{id}/secret` | `github` only, `Cache-Control: no-store`: `{"secret":"whsec_…"}` so the setup page can show it again. `404` for an unknown id or another kind, `503` when it cannot be decrypted. |
 | `GET /api/admin/products` | Orgs and products. |
-| `PUT /api/admin/orgs/{key}`, `/products/{key}` | `visibility` (`public`/`hidden`), `alias`, product `hall`. An empty (after trim) `alias` on a **hidden** product resets it to a generated default (`Product A`); on a public product it is ignored. |
+| `PUT /api/admin/orgs/{key}` | Body `{"visibility"?: "public"\|"hidden", "alias"?: string}`; `200` with the org. `alias` is trimmed. `""`, or the key (any case) on a public org, resets it: key when public, a generated `Org A` when hidden. Otherwise 1-60 characters from letters, digits, space and `. , ' & ( ) _ + - : # !`, else `422`; a hidden org's alias equal to its key is `422`. Names matching the generated pattern (`Org A`, `Org 123456`) are reserved and `422`. An alias equal (case-insensitive) to another org's alias or key is `409`. Visibility is applied first: hidden to public keeps a custom alias and resets a generated one to the key; public to hidden keeps a custom alias and turns alias=key into `Org A`. An unknown key is `404`, unless an integration names it as its org, in which case the org is created public (alias = key) and the change applied. Checks run under the store lock. |
+| `PUT /api/admin/products/{key}` | `visibility` (`public`/`hidden`), `alias`, `hall`. An empty (after trim) `alias` on a **hidden** product resets it to a generated default (`Product A`); on a public product it is ignored. |
 | `GET /api/admin/events?integration=&type=&delivery=&q=&limit=` | Event log, newest first. |
 | `GET/PUT /api/admin/settings` | `retentionDays` (1 to 3650, pruned hourly), `animation`. |
 | `GET /api/admin/stats` | Counts. |

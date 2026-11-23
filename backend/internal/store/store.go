@@ -9,6 +9,7 @@ import (
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"log"
 	"regexp"
 	"slices"
@@ -16,6 +17,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 )
 
 const (
@@ -767,27 +769,110 @@ func (st *Store) GetProduct(k string) (Product, bool) {
 	return *p, true
 }
 
-// SetOrg changes visibility and/or alias. Hidden items without a custom alias get "Org A".
-func (st *Store) SetOrg(key string, vis, alias *string) (Org, bool) {
+// Errors returned by SetOrg. OrgError wraps ErrConflict (409) or ErrInvalid (422) with a message for the client.
+var (
+	ErrOrgNotFound = errors.New("no such org")
+	ErrConflict    = errors.New("conflict")
+	ErrInvalid     = errors.New("invalid")
+)
+
+type OrgError struct {
+	Kind error
+	Msg  string
+}
+
+func (e *OrgError) Error() string { return e.Msg }
+func (e *OrgError) Unwrap() error { return e.Kind }
+
+var (
+	generatedOrgAlias = regexp.MustCompile(`^Org ([A-Z]|\d{6})$`)
+	orgAliasChars     = regexp.MustCompile(`^[\p{L}\p{N} .,'&()_+\-:#!]+$`)
+)
+
+// MaxOrgAliasRunes is the longest public org alias.
+const MaxOrgAliasRunes = 60
+
+// OrgAliasCustom reports whether an org alias was typed by a person: non-empty, not the key (any case) and not
+// the generated "Org A" / "Org 150405" pattern. A custom alias of a public org is its public display name.
+func OrgAliasCustom(o Org) bool {
+	return o.Alias != "" && !strings.EqualFold(o.Alias, o.Key) && !generatedOrgAlias.MatchString(o.Alias)
+}
+
+// SetOrg changes visibility and/or alias; see docs/api.md for the rules. Visibility is applied first, then the
+// alias. Uniqueness is checked under the store lock. An org that does not exist is created (public, alias = key)
+// when an integration names it as its org; otherwise ErrOrgNotFound.
+func (st *Store) SetOrg(key string, vis, alias *string) (Org, error) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	o, ok := st.s.Orgs[key]
 	if !ok {
-		return Org{}, false
+		found := false
+		for _, in := range st.s.Integrations {
+			if in.Org == key && key != "" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return Org{}, ErrOrgNotFound
+		}
+		o = &Org{Key: key, Visibility: Public, Alias: key}
 	}
-	if vis != nil {
-		o.Visibility = *vis
+	c := *o
+	taken := func() map[string]bool { // aliases of the other orgs
+		m := st.orgAliases()
+		delete(m, o.Alias)
+		return m
+	}
+	if vis != nil && *vis != c.Visibility {
+		c.Visibility = *vis
 		if *vis == Public {
-			o.Alias = o.Key
-		} else if o.Alias == o.Key {
-			o.Alias = nextAlias("Org", st.orgAliases())
+			if !OrgAliasCustom(c) {
+				c.Alias = c.Key
+			}
+		} else if c.Alias == "" || strings.EqualFold(c.Alias, c.Key) {
+			c.Alias = nextAlias("Org", taken())
 		}
 	}
-	if alias != nil && strings.TrimSpace(*alias) != "" {
-		o.Alias = strings.TrimSpace(*alias)
+	if alias != nil {
+		a := strings.TrimSpace(*alias)
+		switch {
+		case a == "" || (c.Visibility == Public && strings.EqualFold(a, c.Key)):
+			if c.Visibility == Public {
+				c.Alias = c.Key
+			} else {
+				c.Alias = nextAlias("Org", taken())
+			}
+		case c.Visibility == Hidden && strings.EqualFold(a, c.Key):
+			return Org{}, &OrgError{ErrInvalid, "a hidden org's alias cannot be its key"}
+		case utf8.RuneCountInString(a) > MaxOrgAliasRunes:
+			return Org{}, &OrgError{ErrInvalid, "alias must be 1-60 characters"}
+		case !orgAliasChars.MatchString(a):
+			return Org{}, &OrgError{ErrInvalid, "alias may contain only letters, digits, spaces and . , ' & ( ) _ + - : # !"}
+		case generatedOrgAlias.MatchString(a):
+			return Org{}, &OrgError{ErrInvalid, `"Org A"-style names are reserved; choose another alias`}
+		default:
+			for _, other := range st.s.Orgs {
+				if other.Key == key {
+					continue
+				}
+				if strings.EqualFold(other.Alias, a) || strings.EqualFold(other.Key, a) {
+					return Org{}, &OrgError{ErrConflict, "alias is already used by another org"}
+				}
+			}
+			for _, in := range st.s.Integrations {
+				// an org that exists only through an integration still owns its key
+				if in.Org != "" && in.Org != key && strings.EqualFold(in.Org, a) {
+					return Org{}, &OrgError{ErrConflict, "alias is already used by another org"}
+				}
+			}
+			c.Alias = a
+		}
 	}
+	*o = c
+	st.s.Orgs[key] = o
 	st.qOrg(o)
-	return *o, true
+	return *o, nil
 }
 
 func (st *Store) SetProduct(key string, vis, alias, hall *string) (Product, bool) {

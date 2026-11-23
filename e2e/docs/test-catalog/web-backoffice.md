@@ -11,6 +11,7 @@
 - **US-BO-05** — As the admin I want a GitHub setup page that shows the secret on demand and which events are ticked so that I can wire the org webhook without guessing.
 - **US-BO-06** — As the admin I want owner cards and an owner page for GitHub, with per-repo visibility, alias and events, and an add-a-repo script, so that I can run a personal account or an organization.
 - **US-BO-07** — As the admin I want to create named QA integrations and rename any integration in the page so that each deployment is recognisable.
+- **US-BO-08** — As the admin I want to set the public alias of an org in the page so that the town shows a friendly name.
 
 ## Test cases
 
@@ -52,5 +53,7 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-BO-052 | US-BO-07 | Given a QA card, when it is renamed with Enter, then its name updates and the API has it                                                                                                                             | +   | E2E   | P0  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
 | ☑    | TC-BO-053 | US-BO-07 | Given a GitHub owner card, when it is renamed, then its name updates and the @login stays visible                                                                                                                    | +   | E2E   | P1  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
 | ☑    | TC-BO-054 | US-BO-07 | Given two QA cards, when one is renamed to the other name, then the rename shows an error and the name is kept                                                                                                       | -   | E2E   | P1  | automated | `tests/web/backoffice/qa-names.spec.ts`     |
+| ☑    | TC-BO-060 | US-BO-08 | Given a GitHub owner page, when an org alias is typed and Enter pressed, then the note says "Shown in town as" the alias and the API has it                                                                          | +   | E2E   | P0  | automated | `tests/web/backoffice/org-alias.spec.ts`    |
+| ☑    | TC-BO-061 | US-BO-08 | Given an alias used by another org, when it is typed on the owner page, then the 409 error shows inline and the old alias stays                                                                                      | -   | E2E   | P1  | automated | `tests/web/backoffice/org-alias.spec.ts`    |
 
 **Fixed bug (TC-BO-003).** `paintProducts()` in `src/backoffice.src.html` read `o.vis` for the product's org, and `o` was undefined for a product without an org (every GAOS product), so the live back-office failed to load. It is guarded now and TC-BO-001/010/020/021 run without `test.fail()`.

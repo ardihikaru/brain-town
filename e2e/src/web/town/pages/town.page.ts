@@ -55,6 +55,14 @@ export class TownPage extends BasePage {
     return group.getByTestId('qa-card').filter({ hasText: spec });
   }
 
+  /**
+   * The org label of the run columns inside a group, filtered by its text. Needs `data-testid="qa-card-org"` on the
+   * `<i>` org label in `qaBoard()` (web/town/index.html); the label is a sibling of the card, so it is scoped to the group.
+   */
+  qaOrgLabel(group: Locator, text: string) {
+    return group.getByTestId('qa-card-org').filter({ hasText: text });
+  }
+
   /** The "no runs yet" empty state of the QA Lab board. */
   readonly qaBoardEmpty = this.page.getByTestId('qa-board-empty');
 
