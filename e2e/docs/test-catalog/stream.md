@@ -10,6 +10,7 @@
 - **US-STR-04** — As a town visitor I want missed events replayed after a reconnect so that a network blip loses nothing.
 - **US-STR-05** — As a town visitor I want GitHub activity pushed live, grouped and masked for private repos, so that the town moves with the org without leaking private work.
 - **US-STR-06** — As a town visitor I want a public masked snapshot of owners and repos so that the town draws one gate per GitHub owner without leaking hidden names.
+- **US-STR-07** — As a town visitor I want QA events to carry the name of the QA tool that ran them so that the town groups runs per deployment.
 
 ## Test cases
 
@@ -37,5 +38,7 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-STR-051 | US-STR-06 | Given an organization owner, when GET /api/town, then its type is organization                                                                                              | +   | API   | P1  | automated | `tests/api/rest/town/town-snapshot.spec.ts`            |
 | ☑    | TC-STR-052 | US-STR-06 | Given a private repo, when GET /api/town, then it is only an alias (hidden, Product n) and the repo name is nowhere in the response                                         | -   | API   | P0  | automated | `tests/api/rest/town/town-snapshot.spec.ts`            |
 | ☑    | TC-STR-053 | US-STR-06 | Given an owner hidden in the back-office, when GET /api/town, then it shows under its alias with no type and neither its key nor its repo names appear                      | -   | API   | P0  | automated | `tests/api/rest/town/town-snapshot.spec.ts`            |
+| ☑    | TC-STR-060 | US-STR-07 | Given two named QA integrations with one run each, when the runs are sent, then every public event carries the tool of its own integration                                  | +   | API   | P0  | automated | `tests/api/stream/events/qa-tool.spec.ts`              |
+| ☑    | TC-STR-061 | US-STR-07 | Given a QA integration, when it is renamed, then the next public qa event carries the new tool name                                                                         | +   | API   | P0  | automated | `tests/api/stream/events/qa-tool.spec.ts`              |
 
 TC-STR-031 is `wont`: it needs a 15 s idle wait per run for little value (the heartbeat is a fixed ticker).
