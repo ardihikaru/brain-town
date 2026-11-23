@@ -88,20 +88,27 @@ async function pre() {
       id: `video-${pub.code}`,
       type: 'video.rendered',
       at,
-      data: { title: pub.title, channel: channel.title, language: 'id', duration: 42, format: 'video' },
+      data: { title: pub.title, channel: channel.title, language: 'id', duration: 42, format: 'video', code: pub.code },
     },
     '2-scheduled': {
       id: `plan-${pub.code}-${channel.code}-youtube-sched`,
       type: 'video.scheduled',
       at,
-      data: { vendor: 'youtube', channel: channel.title, title: pub.title, dueAt: at },
+      data: { vendor: 'youtube', channel: channel.title, title: pub.title, dueAt: at, code: pub.code },
     },
     // Same id as the item the server's /feed.json carries for this video: push and pull dedupe each other.
     '3-published': {
       id: pub.feedId,
       type: 'video.published',
       at,
-      data: { vendor: 'youtube', channel: channel.title, title: pub.title, url: pub.url, publishedAt: at },
+      data: {
+        vendor: 'youtube',
+        channel: channel.title,
+        title: pub.title,
+        url: pub.url,
+        publishedAt: at,
+        code: pub.code,
+      },
     },
   };
   for (const [name, envelope] of Object.entries(envelopes))

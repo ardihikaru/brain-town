@@ -47,7 +47,11 @@ test.describe('animora · both sides (real server and real sender)', () => {
         expect(matches, sent.id).toHaveLength(1);
         expect(matches[0]).toMatchObject({ type: sent.type, kind: 'animora', public: { source: 'animora' } });
         const raw = AnimoraRawSchema.parse(matches[0]?.raw);
-        expect(raw.data).toMatchObject({ title: seed.videos.public.title, channel: seed.channel.title });
+        expect(raw.data).toMatchObject({
+          title: seed.videos.public.title,
+          channel: seed.channel.title,
+          code: seed.videos.public.code,
+        });
       }
     },
   );

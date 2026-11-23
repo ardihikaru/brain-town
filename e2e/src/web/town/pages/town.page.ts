@@ -19,6 +19,20 @@ const ValleySchema = z.object({
 });
 export type Valley = z.infer<typeof ValleySchema>;
 
+const PlatformSchema = z.object({
+  scheduled: z.number().int().nonnegative(),
+  failed: z.number().int().nonnegative(),
+  live: z.number().int().nonnegative(),
+  published: z.number().int().nonnegative(),
+  channels: z.number().int().nonnegative(),
+});
+const VideoSchema = z.object({
+  source: z.enum(['sample', 'live']),
+  rendered: z.number().int().nonnegative(),
+  platforms: z.record(z.string(), PlatformSchema),
+});
+export type Video = z.infer<typeof VideoSchema>;
+
 /** The town (/). It reads /events (SSE) live; `?sim=1` forces the built-in simulator. */
 export class TownPage extends BasePage {
   protected readonly path = './';
@@ -80,6 +94,51 @@ export class TownPage extends BasePage {
         pending = `id: ${f.id}\nevent: ${f.event}\ndata: ${f.data}\n\n`;
       },
     };
+  }
+
+  /** The Video Generator "Board" (rendered, scheduled, published) through the town's own hook. */
+  async openVideoBoard(): Promise<void> {
+    await this.openDetail('yt', 'queues');
+  }
+
+  /** The upload-room "Board" of one platform company. */
+  async openPlatformBoard(platform: 'youtube' | 'facebook' | 'instagram' | 'tiktok'): Promise<void> {
+    await this.openDetail('plat', 'board', platform);
+  }
+
+  private async openDetail(id: string, view: string, sub?: string): Promise<void> {
+    const opened = await this.page.evaluate(
+      ([i, v, s]) => {
+        const town = (
+          window as unknown as { brainTown: { openDetail(id: string, view: string, sub?: string): boolean } }
+        ).brainTown;
+        return town.openDetail(i as string, v as string, s ?? undefined);
+      },
+      [id, view, sub ?? null],
+    );
+    expect(opened).toBe(true);
+  }
+
+  readonly videoBoardEmpty = this.page.getByTestId('video-board-empty');
+  readonly platBoardEmpty = this.page.getByTestId('plat-board-empty');
+
+  /** Video cards of the Video Generator board, found by the title they carry. */
+  videoCards(title: string) {
+    return this.page.getByTestId('video-card').filter({ hasText: title });
+  }
+
+  /** Platform cards (upload room board), found by the title they carry. */
+  platCards(title: string) {
+    return this.page.getByTestId('plat-card').filter({ hasText: title });
+  }
+
+  /** The Animora part of the hook snapshot: counts only, no titles. */
+  async video(): Promise<Video> {
+    const raw = await this.page.evaluate(() => {
+      const hook = (window as unknown as { brainTown: { snapshot: () => { video: unknown } } }).brainTown;
+      return hook.snapshot().video;
+    });
+    return VideoSchema.parse(raw);
   }
 
   async gotoSimulated(): Promise<void> {
