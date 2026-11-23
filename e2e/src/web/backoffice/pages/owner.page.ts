@@ -59,4 +59,25 @@ export class OwnerPage extends BasePage {
   async scriptText(): Promise<string> {
     return this.addRepoScript.evaluate((el) => ('value' in el ? String(el.value) : (el.textContent ?? '')));
   }
+
+  /**
+   * The org alias editor of this owner (scope `owner`): public name of the org in the town. Other scopes exist on
+   * the QA cards (`qa-<id>`), the QA setup page (`qasetup`) and the Products page (`org-<key>`).
+   */
+  orgAlias(scope = 'owner') {
+    return {
+      input: this.page.getByTestId(`org-alias-input-${scope}`),
+      save: this.page.getByTestId(`org-alias-save-${scope}`),
+      cancel: this.page.getByTestId(`org-alias-cancel-${scope}`),
+      error: this.page.getByTestId(`org-alias-error-${scope}`),
+      note: this.page.getByTestId(`org-alias-note-${scope}`),
+    };
+  }
+
+  /** Types an org alias and presses Enter, which saves. */
+  async setOrgAlias(alias: string, scope = 'owner'): Promise<void> {
+    const { input } = this.orgAlias(scope);
+    await input.fill(alias);
+    await input.press('Enter');
+  }
 }
