@@ -238,3 +238,85 @@ func TestAnimoraCode(t *testing.T) {
 		}
 	}
 }
+
+func TestAnimoraInProgress(t *testing.T) {
+	e := newEnv(t)
+	e.login()
+	id, tok := e.integration("animora", "A")
+	path := "/ingest/animora/" + id
+	stored := func(evID string) map[string]any {
+		for _, ev := range e.st.Events(store.Query{Delivery: "ok"}) {
+			if ev.ID == evID {
+				return ev.Raw["data"].(map[string]any)
+			}
+		}
+		t.Fatalf("%s not stored", evID)
+		return nil
+	}
+	if c, _, b := e.do("POST", path, tok, animoraBody("run-r1-naskah", "video.started", `{"run":"r1","stage":"naskah","code":"c1","channel":"Kanal","format":"reel","script":"x"}`)); c != 202 {
+		t.Fatalf("started %d %s", c, b)
+	}
+	if d := stored("run-r1-naskah"); d["run"] != "r1" || d["stage"] != "naskah" || d["code"] != "c1" || d["script"] != nil || d["title"] != nil || d["vendor"] != nil {
+		t.Fatalf("started data: %v", d)
+	}
+	if c, _, b := e.do("POST", path, tok, animoraBody("run-r1-failed", "video.render_failed", `{"run":"r1","stage":"render","title":"T","error":"boom","message":"m"}`)); c != 202 {
+		t.Fatalf("failed %d %s", c, b)
+	}
+	if d := stored("run-r1-failed"); d["run"] != "r1" || d["stage"] != "render" || len(d) != 2 {
+		t.Fatalf("failed data: %v", d)
+	}
+	if c, _, b := e.do("POST", path, tok, animoraBody("video-c1", "video.rendered", `{"title":"T","run":"r1"}`)); c != 202 {
+		t.Fatalf("rendered %d %s", c, b)
+	}
+	if d := stored("video-c1"); d["run"] != "r1" {
+		t.Fatalf("rendered run: %v", d)
+	}
+	if c, _, b := e.do("POST", path, tok, animoraBody("video-c2", "video.rendered", `{"title":"T","run":"bad run"}`)); c != 202 {
+		t.Fatalf("rendered bad run %d %s", c, b)
+	}
+	if d := stored("video-c2"); d["run"] != nil {
+		t.Fatalf("bad run kept: %v", d)
+	}
+	for i, c := range []struct{ typ, data, field string }{
+		{"video.started", `{"stage":"naskah"}`, "data.run"},
+		{"video.started", `{"run":"a b","stage":"naskah"}`, "data.run"},
+		{"video.started", `{"run":"r2"}`, "data.stage"},
+		{"video.started", `{"run":"r2","stage":"publish"}`, "data.stage"},
+		{"video.render_failed", `{"stage":"render"}`, "data.run"},
+		{"video.render_failed", `{"run":"r2","stage":"x"}`, "data.stage"},
+	} {
+		code, m, b := e.do("POST", path, tok, animoraBody("bad"+string(rune('a'+i)), c.typ, c.data))
+		if code != 422 || m["field"] != c.field {
+			t.Errorf("%s %s: %d %s, want 422 %s", c.typ, c.data, code, b, c.field)
+		}
+	}
+}
+
+func TestAnimoraInProgressMasking(t *testing.T) {
+	for _, hideWhat := range []string{"product", "org"} {
+		e := newEnv(t)
+		e.login()
+		_, m, _ := e.do("POST", "/api/admin/integrations", "", `{"kind":"animora","name":"A","org":"studio"}`)
+		id, tok := m["integration"].(map[string]any)["id"].(string), m["token"].(string)
+		if c, _, b := e.do("POST", "/ingest/animora/"+id, tok, animoraBody("run-m1-render", "video.started", `{"run":"m1","stage":"render","code":"c9","format":"video","channel":"Kanal","title":"Secret title"}`)); c != 202 {
+			t.Fatalf("%d %s", c, b)
+		}
+		h := store.Hidden
+		if hideWhat == "product" {
+			e.st.SetProduct("animora", &h, nil, nil)
+		} else {
+			e.st.SetOrg("studio", &h, nil)
+		}
+		v := visibility.View(e.st, e.st.Events(store.Query{Delivery: "ok"})[0])
+		out, _ := json.Marshal(v)
+		for _, leak := range []string{"Secret title", "Kanal", `"title"`, `"channel"`} {
+			if strings.Contains(string(out), leak) {
+				t.Fatalf("hidden %s leaks %q: %s", hideWhat, leak, out)
+			}
+		}
+		d := v["payload"].(map[string]any)["data"].(map[string]any)
+		if d["run"] != "m1" || d["stage"] != "render" || d["code"] != "c9" || d["format"] != "video" {
+			t.Fatalf("hidden %s: run/stage/code/format lost: %v", hideWhat, d)
+		}
+	}
+}
