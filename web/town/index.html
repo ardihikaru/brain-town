@@ -1842,13 +1842,16 @@ function connectLive(url,onFail){ let opened=false, es;
 function applyQuiet(ev){ animStore(ev,ago(ev.atMs));
   if(ev.type==='video.ready') genState.rendered++;
   if(ev.type==='video.published'){ const pf=ev.platform||'youtube'; plat[pf]=(plat[pf]||0)+1; if(pf==='youtube'){ st.videos++; if(ev.kind==='reel') st.reels++; } } }
-function hydrateVideo(url){ let es, qt, ht, over=false;
-  const done=()=>{ if(over) return; over=true; clearTimeout(qt); clearTimeout(ht); if(es) es.close(); VID.hydrated=true; YTS.v++; PLS.v++; };
+function hydrateVideo(url){ let es, qt, ht, over=false; const buf=[];
+  /* replay messages are buffered and applied after done() plus a grace, so a brand-new live event that reached this stream first is already seen by the main stream (LIVE_FIRST_SEQ set) */
+  const flush=()=>{ for(const {seq,data} of buf){ if(LIVE_FIRST_SEQ&&seq>=LIVE_FIRST_SEQ) continue;
+      let m; try{ m=JSON.parse(data); }catch(_){ continue; }
+      for(const ev of fromPublic(m)) applyQuiet({...ev,live:true,replay:true}); }
+    buf.length=0; VID.hydrated=true; YTS.v++; PLS.v++; };
+  const done=()=>{ if(over) return; over=true; clearTimeout(qt); clearTimeout(ht); if(es) es.close(); setTimeout(flush,300); };
   const arm=()=>{ clearTimeout(qt); qt=setTimeout(done,1500); };
   try{ es=new EventSource(url+(url.includes('?')?'&':'?')+'replay='+VID_REPLAY+'&kind=animora'); }catch(_){ VID.hydrated=true; return; }
-  const onMsg=e=>{ arm(); const seq=+e.lastEventId||0; if(LIVE_FIRST_SEQ&&seq>=LIVE_FIRST_SEQ) return;
-    let m; try{ m=JSON.parse(e.data); }catch(_){ return; }
-    for(const ev of fromPublic(m)) applyQuiet({...ev,live:true,replay:true}); };
+  const onMsg=e=>{ if(over) return; arm(); buf.push({seq:+e.lastEventId||0,data:e.data}); };
   for(const t of ANIM_TYPES) es.addEventListener(t,onMsg);
   es.onopen=arm; es.onerror=done; ht=setTimeout(done,10000); }
 /* read-only view for tests: plain data only, halls keyed by org/<real repo or alias>, never titles */
@@ -2083,13 +2086,13 @@ function animStore(ev,now){ const t=ev.type, pf=ev.platform, key=pf+'|'+ev.id;
     if(ev.run) vidDone('r:'+ev.run); if(ev.code) vidDone('c:'+ev.code);
     if(b) YTS.items.delete(b.id);
     const y=yget(true); if(b){ y.akey=b.akey; if(!y.channel) y.channel=b.channel; }
-    up(y,'ready'); y.kind=ev.kind||y.kind; ycap('ready',8); genCount(); YTS.v++; }
+    up(y,'ready'); y.rendMs=ev.replay?ev.atMs:0; y.kind=ev.kind||y.kind; ycap('ready',8); genCount(); YTS.v++; }
   else if(t==='upload.planned'){ const p=pget('slot'); if(p.state!=='live') p.state='slot'; p.publishAt=ev.publishAt; pcap('slot'); PLS.v++;
     const y=yget(true); y.plans[pf]=ev.publishAt||''; y.failed=null; up(y,'scheduled'); ycap('scheduled',8); YTS.v++; }
   else if(t==='upload.failed'){ const p=pget('failed'); if(p.state!=='live') p.state='failed'; p.attempt=ev.attempt; p.seq=++PLS.seq; pcap('failed'); PLS.v++;
     const y=yget(false); if(y&&y.state!=='published') y.failed=pf; YTS.v++; }
   else if(t==='video.published'){ const p=pget('slot'); p.state='live'; p.liveReal=performance.now(); p.liveAt=now; p.seq=++PLS.seq; pcap('live'); PLS.v++;
-    const y=yget(true); up(y,'published'); if(!y.platforms.includes(pf)) y.platforms.push(pf); y.publishedAt=now; y.seq=++YTS.seq; y.failed=null; ycap('published',6); YTS.v++; }
+    const y=yget(true); up(y,'published'); if(!y.platforms.includes(pf)) y.platforms.push(pf); y.publishedAt=now; y.pubMs=ev.replay?ev.atMs:0; y.seq=++YTS.seq; y.failed=null; ycap('published',6); YTS.v++; }
   else if(t==='channel.connected'){ CHAN[pf].add(ev.channel||ev.id||'id:'+PLS.seq); PLS.v++; } }
 let pruneAt=0;
 function pruneVideo(){ if(!VID.live) return; const n=Date.now(); let ch=false;
@@ -2186,9 +2189,9 @@ function animQueues(){ const all=[...YTS.items.values()].filter(x=>x.state!=='st
     col=(name,hint,l,f,emptyT,tid)=>`<div class="col" data-testid="${tid}"><h4>${name} <i>${l.length}</i></h4><p class="hint">${hint}</p>${l.length?l.map(f).join(''):none(emptyT)}</div>`, plans=it=>Object.keys(it.plans);
   return lede+`<div class="board" style="grid-template-columns:repeat(4,minmax(170px,1fr))">`
     +col('In production','Animora is writing or rendering these now.',by('building','upd'),it=>card(it,'<span class="chip">'+(it.stage==='render'?'rendering':'writing script')+'</span>','started '+esc(ago(it.startMs))),'Nothing in production right now.','video-col-building')
-    +col('Rendered','Finished files from Animora.',by('ready','upd'),it=>card(it,'','rendered '+esc(it.at)),'No finished video is waiting.','video-col-ready')
+    +col('Rendered','Finished files from Animora.',by('ready','upd'),it=>card(it,'','rendered '+esc(it.rendMs?ago(it.rendMs):it.at)),'No finished video is waiting.','video-col-ready')
     +col('Scheduled','Planned uploads, by platform.',by('scheduled','upd'),it=>card(it,plans(it).map(v=>`<span class="chip">${esc(PNAME[v])}</span>`).join(''),plans(it).map(v=>esc(PNAME[v])+(it.plans[v]?' '+esc(it.plans[v]):' · no slot time')).join(' · ')),'Nothing is scheduled.','video-col-scheduled')
-    +col('Published','Latest uploads.',by('published','seq'),it=>card(it,it.platforms.map(v=>`<span class="chip">${esc(PNAME[v])}</span>`).join(''),(/ago$|^just now$/.test(String(it.publishedAt))?'live ':'live since ')+esc(it.publishedAt)),'Nothing published yet.','video-col-published')+'</div>'; }
+    +col('Published','Latest uploads.',by('published','seq'),it=>card(it,it.platforms.map(v=>`<span class="chip">${esc(PNAME[v])}</span>`).join(''),(()=>{ const pa=it.pubMs?ago(it.pubMs):it.publishedAt; return (/ago$|^just now$/.test(String(pa))?'live ':'live since ')+esc(pa); })()),'Nothing published yet.','video-col-published')+'</div>'; }
 function animSteps(){ const all=[...YTS.items.values()].filter(x=>x.state!=='stopped'), bl=all.filter(x=>x.state==='building').sort((a,b)=>b.upd-a.upd), f=bl[0]||all.slice().sort((a,b)=>b.upd-a.upd)[0];
   const tok=l=>'<div class="tok">'+l.map(it=>`<span class="tk" style="background:${chColor(it.channel)}" title="${esc(it.title)}">${esc(it.channel||short(it.title,18))}</span>`).join('')+'</div>';
   const steps=[['In production','Animora writes the script, then renders the video. A render takes a few minutes.',all.filter(x=>x.state==='building'),'building'],['Rendered','Animora finished the video file.',all.filter(x=>x.state==='ready'),'ready'],['Scheduled','An upload is planned on a platform and waits for its slot.',all.filter(x=>x.state==='scheduled'),'scheduled'],
@@ -2424,7 +2427,7 @@ function station(c,k,x,y,on,t){ c.strokeStyle=INK; c.lineWidth=1.2;
   else { c.beginPath(); c.moveTo(x-6,y); c.lineTo(x+6,y); c.moveTo(x,y); c.lineTo(x,y-16); c.stroke(); c.fillStyle='#26323f'; c.fillRect(x-12,y-34,24,18); c.strokeRect(x-12,y-34,24,18); if(on){ c.strokeStyle='#7fd6a3'; c.lineWidth=1.6; const ph=(t*1.2)%1; c.beginPath(); c.moveTo(x-7,y-25); c.lineTo(x-7+14*ph,y-25); c.stroke(); c.beginPath(); c.moveTo(x-7,y-29); c.lineTo(x-7+10*Math.min(1,ph*1.5),y-29); c.stroke(); c.strokeStyle=INK; c.lineWidth=1.2; } } }
 /* lanes: sample = the four example channels; live = up to three real channels on the floor (by first appearance), free lanes, and one "Other channels" lane */
 function ytLanes(all){ if(!VID.live) return CONFIG.channels.map(ch=>({ch,label:ch}));
-  const names=[]; for(const x of all.filter(x=>x.state!=='published'&&x.state!=='stopped').sort((a,b)=>(a.first||0)-(b.first||0))) if(x.channel&&!names.includes(x.channel)) names.push(x.channel);
+  const names=[]; for(const x of all.filter(x=>x.state!=='published').sort((a,b)=>(a.first||0)-(b.first||0))) if(x.channel&&!names.includes(x.channel)) names.push(x.channel);
   const l=names.slice(0,3).map(ch=>({ch,label:ch})); while(l.length<3) l.push({ch:null,label:'free lane'}); l.push({ch:'*',label:'Other channels'}); return l; }
 function drawYtScene(c,dt,LW,LH){ const all=[...YTS.items.values()], sch=all.filter(x=>x.state==='scheduled'), lanes=ytLanes(all), rowY=i=>170+i*95, t=now_(),
     laneOf=it=>{ const i=lanes.findIndex(l=>l.ch&&l.ch!=='*'&&l.ch===it.channel); return i<0?(VID.live?3:0):i; };
@@ -2448,7 +2451,7 @@ function drawYtScene(c,dt,LW,LH){ const all=[...YTS.items.values()], sch=all.fil
   lanes.forEach((ln,li)=>{ const ch=ln.ch, y=rowY(li), col=ch==='*'?'#8a929b':ch?chColor(ch):'#c9ced4'; c.globalAlpha=.13; c.fillStyle=col; c.fillRect(296,y-5,660,14); c.globalAlpha=1; c.strokeStyle='rgba(31,43,58,.35)'; c.lineWidth=1; c.strokeRect(296,y-5,660,14);
     c.strokeStyle=col; c.lineWidth=1.6; c.globalAlpha=.7; for(let x=304+((t*14)%40);x<948;x+=40){ c.beginPath(); c.moveTo(x-4,y-2); c.lineTo(x,y+2); c.lineTo(x-4,y+6); c.stroke(); } c.globalAlpha=1; c.strokeStyle=INK;
     c.fillStyle=col; c.fillRect(280,y+15,8,8); c.lineWidth=1; c.strokeRect(280,y+15,8,8); c.font='500 10.5px "IBM Plex Mono"'; txt(c,fitText(c,ln.label,300),293,y+23,'500 10.5px "IBM Plex Mono"','left','#647282');
-    for(const k in SX){ const on=all.some(x=>x.state==='building'&&laneOf(x)===li&&x.stage===k); station(c,k,SX[k]+27,y-6,on,RMQ.matches?0:t); }
+    for(const k in SX){ const on=all.some(x=>x.state==='building'&&laneOf(x)===li&&x.stage===k); station(c,k,SX[k]+27,y-6,on,RMQ.matches?.6:t); }
     const rd=all.filter(x=>x.state==='ready'&&laneOf(x)===li).length; c.lineWidth=1.2; c.strokeStyle=INK; c.beginPath(); c.moveTo(922,y-6); c.lineTo(922,y-40); c.lineTo(948,y-40); c.lineTo(948,y-6); c.moveTo(922,y-22); c.lineTo(948,y-22); c.stroke(); for(let i=0;i<Math.min(rd,2);i++){ c.beginPath(); c.arc(929+i*12,y-28,5,0,7); c.fillStyle='#fff'; c.fill(); c.stroke(); } });
   // waiting rooms
   const pens=VID.live?{anim:[104,'Scheduled uploads']}:{article:[104,'Articles waiting'],topic:[326,'Topics waiting']};
