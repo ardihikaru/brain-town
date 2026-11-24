@@ -11,7 +11,7 @@ import {
   type AnimoraEnvelope,
 } from '@data/factories/animora.factory';
 import { skipUnlessDestructiveAllowed } from '@utils/guards';
-import { lockAnimoraProduct } from '@utils/shared-lock';
+import { lockAnimoraVideoProduct } from '@utils/shared-lock';
 import { Tag } from '@utils/tags';
 import { uniqueId } from '@utils/unique';
 
@@ -46,8 +46,8 @@ test.describe('town · platform channels view', () => {
     'a channel card shows its concepts by status and its waiting list in slot order (TC-TOWN-060)',
     { tag: [Tag.smoke] },
     async ({ town, ingestApi, integration, sse, apiContextFor, adminApi, cleanup }) => {
-      // A parallel masking spec hides the shared product "animora"; that would turn this channel private.
-      cleanup.add(await lockAnimoraProduct());
+      // A parallel masking spec hides the shared product "@animora-video"; that would turn this channel private.
+      cleanup.add(await lockAnimoraVideoProduct());
       await ownGithubOwner({ apiContextFor, adminApi, cleanup });
       // Its own org: another spec may hide the default one.
       const animora = await integration('animora', { org: uniqueId('org') });

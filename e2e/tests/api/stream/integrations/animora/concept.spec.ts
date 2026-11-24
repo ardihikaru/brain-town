@@ -19,7 +19,7 @@ import { Tag } from '@utils/tags';
 import { uniqueId } from '@utils/unique';
 
 // `data.concept` is the optional public series name on every video.* type (docs/integrations/animora.md). It is read
-// from the stored `raw` on the admin stream, which masking never touches: the public product `animora` is flipped by
+// from the stored `raw` on the admin stream, which masking never touches: the public product `@animora-video` is flipped by
 // the masking spec meanwhile, so a public frame is only checked where the org of this test is hidden.
 
 const PULL_WAIT_MS = 20_000;

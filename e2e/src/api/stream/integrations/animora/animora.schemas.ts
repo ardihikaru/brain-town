@@ -33,7 +33,7 @@ export const AnimoraRawSchema = z.strictObject({
   id: z.string().min(1),
   type: z.string().min(1),
   at: z.iso.datetime(),
-  product: z.literal('animora'),
+  product: z.literal('@animora-video'),
   org: z.string().optional(),
   data: z.record(z.string(), z.unknown()),
 });
