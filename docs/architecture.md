@@ -46,6 +46,9 @@ animation detail (who a visitor looks like, the route they take, how long they s
   `/events` (SSE), converting the public envelopes into bus events (`fromPublic`); a built-in
   simulator runs only as a static demo when the stream is unreachable or with `?sim=1`
   (in that mode `/api/town` is never requested).
+  The header shows a real-time clock in the configured timezone (`timezone` in `/api/town`, setting of the same name);
+  all scene, board and log times use it. The YouTube and platform rooms show a channel lineup: each kanal as an
+  influencer with its waiting list grouped by Animora `concept`.
 - **GitHub Valley layout.** The district has three owner gates (a gate holds up to three halls, one per
   repo, plus a `+n repos` board), a Pagoda Yard for products with no owner (GAOS), the Backlog Pagoda, the Tea
   House and a gate register that lists every owner. The sample layout (three sample compounds) is drawn by the

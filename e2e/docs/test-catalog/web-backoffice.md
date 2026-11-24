@@ -12,6 +12,7 @@
 - **US-BO-06** — As the admin I want owner cards and an owner page for GitHub, with per-repo visibility, alias and events, and an add-a-repo script, so that I can run a personal account or an organization.
 - **US-BO-07** — As the admin I want to create named QA integrations and rename any integration in the page so that each deployment is recognisable.
 - **US-BO-08** — As the admin I want to set the public alias of an org in the page so that the town shows a friendly name.
+- **US-BO-09** — As the admin I want to set the town's timezone in Settings, with a live preview, so that the town shows local wall-clock times.
 
 ## Test cases
 
@@ -64,3 +65,5 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-BO-068 | US-BO-07 | Given an Animora setup page, when an https:// feed URL is saved then cleared, then it survives a reload and the card reads "Feed pulled every 5 min", then "Push only"                                               | +   | WEB   | P0  | automated | `tests/web/backoffice/animora.spec.ts`      |
 
 **Fixed bug (TC-BO-003).** `paintProducts()` in `src/backoffice.src.html` read `o.vis` for the product's org, and `o` was undefined for a product without an org (every GAOS product), so the live back-office failed to load. It is guarded now and TC-BO-001/010/020/021 run without `test.fail()`.
+| ☑ | TC-BO-070 | US-BO-09 | Given a stored timezone, when Settings opens, then the select has that zone and the preview reads "Now: HH:MM <label>" for it | + | E2E | P0 | automated | `tests/web/backoffice/timezone.spec.ts` |
+| ☑ | TC-BO-071 | US-BO-09 | Given Settings, when another zone is chosen and saved, then the preview updates and reads "(not saved)" until Save, the API has the zone and it survives a reload without the hint | + | E2E | P0 | automated | `tests/web/backoffice/timezone.spec.ts` |

@@ -115,6 +115,7 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 			out["run"] = r
 		}
 		put("channel", text(in, "channel", 120))
+		put("concept", text(in, "concept", 120))
 		put("language", text(in, "language", 16))
 		if f := text(in, "format", 8); f == "video" || f == "reel" {
 			out["format"] = f
@@ -124,6 +125,7 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 		}
 	case "video.scheduled":
 		put("channel", text(in, "channel", 120))
+		put("concept", text(in, "concept", 120))
 		due, err := stamp(in, "dueAt", true)
 		if err != nil {
 			return nil, err
@@ -131,6 +133,7 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 		out["dueAt"] = due
 	case "video.published":
 		put("channel", text(in, "channel", 120))
+		put("concept", text(in, "concept", 120))
 		u := strings.TrimSpace(strInput(in, "url"))
 		pu, perr := url.Parse(u)
 		if u == "" || len(u) > 512 || perr != nil || pu.Scheme != "https" || pu.Host == "" {
@@ -144,6 +147,7 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 		put("publishedAt", pub)
 	case "video.publish_failed":
 		put("channel", text(in, "channel", 120))
+		put("concept", text(in, "concept", 120))
 	case "channel.connected":
 		ch, err := required(in, "channel", 120)
 		if err != nil {
@@ -176,6 +180,9 @@ func cleanProgress(typ string, in map[string]any) (map[string]any, error) {
 	}
 	if ch := text(in, "channel", 120); ch != "" {
 		out["channel"] = ch
+	}
+	if c := text(in, "concept", 120); c != "" {
+		out["concept"] = c
 	}
 	if typ == "video.started" {
 		if t := text(in, "title", 200); t != "" {

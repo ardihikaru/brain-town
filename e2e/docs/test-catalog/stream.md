@@ -12,6 +12,7 @@
 - **US-STR-06** — As a town visitor I want a public masked snapshot of owners and repos so that the town draws one gate per GitHub owner without leaking hidden names.
 - **US-STR-07** — As a town visitor I want QA events to carry the name of the QA tool that ran them so that the town groups runs per deployment.
 - **US-STR-08** — As a town visitor I want a public org with an alias to show the alias on the stream and the town snapshot, never its key.
+- **US-STR-09** — As a town visitor I want the town to know its configured time zone so that the clock and day boundaries are right.
 
 ## Test cases
 
@@ -43,5 +44,6 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-STR-061 | US-STR-07 | Given a QA integration, when it is renamed, then the next public qa event carries the new tool name                                                                         | +   | API   | P0  | automated | `tests/api/stream/events/qa-tool.spec.ts`              |
 | ☑    | TC-STR-070 | US-STR-08 | Given a public org with an alias, when its QA events are pushed, then org, key mentions in data and urls show the alias or are removed and product is untouched             | +   | API   | P0  | automated | `tests/api/stream/events/org-alias.spec.ts`            |
 | ☑    | TC-STR-071 | US-STR-08 | Given a public owner with an alias, when GET /api/town, then the owner name is the alias with its type and the key is nowhere in the entry                                  | +   | API   | P0  | automated | `tests/api/rest/town/org-alias.spec.ts`                |
+| ☑    | TC-STR-054 | US-STR-09 | Given a configured timezone, when GET /api/town without auth, then the top-level timezone equals the setting                                                                | +   | API   | P0  | automated | `tests/api/rest/admin/timezone.spec.ts`                |
 
 TC-STR-031 is `wont`: it needs a 15 s idle wait per run for little value (the heartbeat is a fixed ticker).

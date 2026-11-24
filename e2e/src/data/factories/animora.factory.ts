@@ -98,6 +98,12 @@ export function buildVideoScheduled(parts: Parts = buildVideoParts(), overrides:
   );
 }
 
+/** A `video.scheduled` for a given slot and, optionally, a concept (the town groups the waiting list by it). */
+export function buildVideoScheduledAt(parts: Parts, dueAt: string, concept?: string): AnimoraEnvelope {
+  const base = buildVideoScheduled(parts);
+  return { ...base, data: { ...base.data, dueAt, ...(concept === undefined ? {} : { concept }) } };
+}
+
 export function buildVideoPublished(parts: Parts = buildVideoParts(), overrides: Override = {}): AnimoraEnvelope {
   const external = uniqueId('ext');
   return envelope(
@@ -126,6 +132,25 @@ export function buildVideoPublishFailed(parts: Parts = buildVideoParts(), overri
       at: now(),
       data: { vendor: parts.vendor, channel: parts.channel, title: parts.title, code: parts.code },
     },
+    overrides,
+  );
+}
+
+/** An autodaily run id (1 to 64 of A-Za-z0-9_-). */
+export function buildRunId(): string {
+  return uniqueId('run');
+}
+
+export function buildVideoStarted(run: string = buildRunId(), overrides: Override = {}): AnimoraEnvelope {
+  return envelope(
+    { id: `run-${run}-naskah`, type: 'video.started', at: now(), data: { run, stage: 'naskah' } },
+    overrides,
+  );
+}
+
+export function buildVideoRenderFailed(run: string = buildRunId(), overrides: Override = {}): AnimoraEnvelope {
+  return envelope(
+    { id: `run-${run}-failed`, type: 'video.render_failed', at: now(), data: { run, stage: 'render' } },
     overrides,
   );
 }
@@ -164,7 +189,7 @@ export interface AnimoraFeedItem {
   url: string;
   title: string;
   date_published: string;
-  _animora: { vendor: string; channel: string; code: string };
+  _animora: { vendor: string; channel: string; concept?: string; code: string };
 }
 
 export function buildAnimoraFeedItem(

@@ -103,7 +103,8 @@ export class AdminClient extends BaseApiClient {
     return this.get('/api/admin/settings');
   }
 
-  putSettings(input: { retentionDays: number; animation: boolean }): Promise<APIResponse> {
+  /** `timezone` is optional: leaving it out keeps the current one. */
+  putSettings(input: { retentionDays: number; animation: boolean; timezone?: string }): Promise<APIResponse> {
     return this.put('/api/admin/settings', { data: input });
   }
 

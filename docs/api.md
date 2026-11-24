@@ -81,7 +81,8 @@ Both send `id: <seq>`, `event: <type>`, `data: <json>` and a heartbeat comment e
 ### `GET /api/town` (public, no auth)
 
 Masked snapshot the town page loads once to draw GitHub owners (gates) and their repos (halls). Sent with
-`Cache-Control: no-store`; other methods get `405`.
+`Cache-Control: no-store`; other methods get `405`. The body also carries `timezone`, the configured IANA zone
+(setting `timezone`, default `Asia/Jakarta`) that the town uses for its clock and every time it shows.
 
 ```json
 {
@@ -142,7 +143,7 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | `PUT /api/admin/orgs/{key}` | Body `{"visibility"?: "public"\|"hidden", "alias"?: string}`; `200` with the org. `alias` is trimmed. `""`, or the key (any case) on a public org, resets it: key when public, a generated `Org A` when hidden. Otherwise 1-60 characters from letters, digits, space and `. , ' & ( ) _ + - : # !`, else `422`; a hidden org's alias equal to its key is `422`. Names matching the generated pattern (`Org A`, `Org 123456`) are reserved and `422`. An alias equal (case-insensitive) to another org's alias or key is `409`. Visibility is applied first: hidden to public keeps a custom alias and resets a generated one to the key; public to hidden keeps a custom alias and turns alias=key into `Org A`. An unknown key is `404`, unless an integration names it as its org, in which case the org is created public (alias = key) and the change applied. Checks run under the store lock. |
 | `PUT /api/admin/products/{key}` | `visibility` (`public`/`hidden`), `alias`, `hall`. An empty (after trim) `alias` on a **hidden** product resets it to a generated default (`Product A`); on a public product it is ignored. |
 | `GET /api/admin/events?integration=&type=&delivery=&q=&limit=` | Event log, newest first. |
-| `GET/PUT /api/admin/settings` | `retentionDays` (1 to 3650, pruned hourly), `animation`. |
+| `GET/PUT /api/admin/settings` | `retentionDays` (1 to 3650, pruned hourly), `animation`, `timezone` (IANA name, default `Asia/Jakarta`; omitted or empty keeps the current value; an unknown zone or `Local` is `422` `{"error":"timezone must be an IANA time zone name ..."}`). |
 | `GET /api/admin/stats` | Counts. |
 
 Integration objects carry `events` (the events subscribed on a GitHub webhook, from its last `ping`; `[]` until

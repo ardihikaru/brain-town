@@ -53,6 +53,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 #head p{margin:5px 0 10px;color:var(--ink-soft);font-size:13px;line-height:1.4}
 .row{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
 #clock{font-family:var(--font-mono);font-size:12px;font-variant-numeric:tabular-nums;margin-right:4px}
+.tzc{font-family:var(--font-mono);font-size:12px;line-height:17px;font-variant-numeric:tabular-nums;border:1px solid var(--ink);border-radius:3px;padding:4px 8px;background:var(--ground);white-space:nowrap}
+.tzc-z{text-decoration:none;color:var(--ink-soft);margin-left:2px}
 .stats{display:grid;grid-template-columns:repeat(3,auto);gap:4px 14px;margin-top:10px;padding-top:9px;border-top:1px solid var(--rule)}
 .stat b{display:block;font-family:var(--font-mono);font-weight:500;font-size:15px;font-variant-numeric:tabular-nums}
 .stat span{font-size:11px;color:var(--ink-soft)}
@@ -186,6 +188,24 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .own-row .own-c,.own-row .own-t,.own-row .own-g{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);white-space:nowrap}
 .own-row .own-g{color:var(--ink)}
 @media (max-width:560px){.own-row{grid-template-columns:minmax(0,1fr) auto}.own-row .own-n{grid-column:1/-1}}
+/* platform room: Channels view (no motion) */
+.chans{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;align-items:start}
+.chn-h{display:flex;gap:9px;align-items:center;margin-bottom:6px}
+.chn-n{flex:1;min-width:0}
+.chn h4{font-family:var(--font-display);font-size:14px;margin:0;overflow-wrap:anywhere}
+.chn-live{text-align:right}
+.chn-live b{display:block;font:500 15px var(--font-mono);font-variant-numeric:tabular-nums}
+.chn-live span{font-size:10.5px;color:var(--ink-soft)}
+.chn h5{font:500 10.5px var(--font-mono);text-transform:uppercase;letter-spacing:.06em;color:var(--ink-soft);margin:8px 0 4px}
+.chn h5 i{font-style:normal}
+.cpt,.q{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:3px}
+.cpt li,.q li{display:flex;gap:6px;align-items:center;font-size:12px;min-width:0}
+.cpt li>i,.q li>i{flex:none;width:9px;height:9px;border:1px solid var(--ink);border-radius:2px}
+.cpt li>span[dir]{flex:1;min-width:0;overflow-wrap:anywhere}
+.q time{font:500 11px var(--font-mono);font-variant-numeric:tabular-nums;flex:none;min-width:5.5ch}
+.q .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpt .chip{flex:none}
+.cpt li.more,.q li.more{color:var(--ink-soft);font-size:11px}
 @keyframes pulse{50%{opacity:.45}}
 @media (prefers-reduced-motion:reduce){.tasks li.doing::before,.ck.running,.track span.now{animation:none}}
 
@@ -202,7 +222,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   #zoom{display:none}
   #jump{bottom:12px;flex-wrap:nowrap;overflow-x:auto;width:auto}
   #jump button{white-space:nowrap}
-  #card{bottom:auto;top:150px}
+  #card{bottom:auto;top:196px}
+  #clock{display:none}
 }
 </style>
 </head>
@@ -234,7 +255,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   </svg>Brain Town</h1>
   <p>A town inside my head. Every walker is one of my agents carrying a piece of work.</p>
   <div class="row">
-    <span id="clock">Day 1 · 07:00</span>
+    <span class="tzc" id="town-clock" data-testid="town-clock" data-tz="Asia/Jakarta" role="timer" aria-live="off"><span class="tzc-t">--:--:--</span> <abbr class="tzc-z" title="Western Indonesia Time (Asia/Jakarta)">WIB</abbr></span>
+    <span id="clock" title="Town time: one town day takes four minutes at 1×">Day 1 · morning</span>
     <button id="play" aria-pressed="false">Pause</button>
     <button class="spd" data-s="1" aria-pressed="true">1×</button>
     <button class="spd" data-s="2" aria-pressed="false">2×</button>
@@ -296,6 +318,9 @@ const CONFIG = {
   channels: ["Tech Notes","Dev Shorts","R&D Diary","Health IT"],
   creators: ["Reel Forge","Motion Dojo"],
   dayLength: 240,          // real seconds per town day at 1×
+  concepts: {"Tech Notes":["Explained in 60s","Tool of the Day","Myth vs Fact"],"Dev Shorts":["One-Line Fix","Code Golf"],"R&D Diary":["Lab Log","Paper in 5","Failed Experiments"],"Health IT":["Clinic Tech","Privacy Minute"]},
+  queueTarget: 4,          // simulator: a channel takes a new video only while fewer than this many wait on YouTube
+  slotGapMin: 6,           // simulator: minutes (wall clock) between two slots of one channel
 };
 
 /* ============================================================
@@ -358,6 +383,13 @@ const CONFIG = {
                            one person per run stands at that station. Title is "New video" when none was sent, "Private video" at render without a title.
      video.unfinished      {id:"r:<run>",run,stage,code?,channel,atMs,anim}   from video.render_failed: the run stopped. Calm "did not finish", never a reason.
      video.ready           also carries run?,code?: it clears the building person of the same run, else of the same code.
+   Concept, slots and the clock (channels are influencers; each posts one video per concept a day):
+     concept?              on video.scheduled, video.started, video.stage, video.ready, upload.planned, video.published and upload.failed.
+                           A short text (at most 120 characters). Masked when the product is hidden: the adapter sends '' and the town treats it as absent.
+     publishAtMs           on upload.planned (epoch ms of the slot, null when unknown) and on the simulator's video.ready (every target shares that slot).
+                           publishAt stays as the same slot written in the town zone, for older senders. The town formats from publishAtMs when it renders.
+     Clock: every time a person reads (header chip, feed log, boards, scenes) is wall-clock time in ONE zone. It comes from GET /api/town "timezone" (IANA name),
+     ?tz=<IANA> overrides it, the default is Asia/Jakarta. The sky and "Day n · phase" are town time and show no hours.
    In production: building items are dropped 90 min after their last stage event (event at; live events also count from arrival).
    Hydration: after /events first opens, the town reads /events?replay=100&kind=animora once and applies it silently (no pops, log lines, highlights or box cars).
    Live mode: the simulator's video data is cleared when the stream opens, then recent Animora history is replayed silently; GEN/YT/FB/IG/TT then show only Animora events.
@@ -370,6 +402,32 @@ const CONFIG = {
 const bus = { fns:[], live:false, on(f){this.fns.push(f)}, emit(ev){ if(this.live&&!ev.live&&!ev.local) return; for(const f of this.fns) f(ev); } };
 const RMQ=window.matchMedia('(prefers-reduced-motion: reduce)');   // checked live, when an object is created
 const calm=()=>paused||RMQ.matches;
+
+/* ---------- the town's wall clock: one zone for every time a person reads (see EVENT BUS) ----------
+   TZ comes from ?tz=, else GET /api/town "timezone", else Asia/Jakarta. Formatters are built once per zone (hourCycle h23, never hour12:false). */
+function validTz(z){ try{ new Intl.DateTimeFormat('en-GB',{timeZone:z}); return true; }catch(_){ return false; } }
+const TZQ=(()=>{ try{ const z=new URLSearchParams(location.search).get('tz'); return z&&validTz(z)?z:''; }catch(_){ return ''; } })();
+let TZ=TZQ||'Asia/Jakarta'; const TZF={};
+const TZNAMES={'Asia/Jakarta':'WIB','Asia/Pontianak':'WIB','Asia/Makassar':'WITA','Asia/Jayapura':'WIT','UTC':'UTC','Etc/UTC':'UTC'};
+function tzPart(z,style){ try{ const p=new Intl.DateTimeFormat('en-US',{timeZone:z,timeZoneName:style}).formatToParts(Date.now()).find(x=>x.type==='timeZoneName'); return p?p.value:''; }catch(_){ return ''; } }
+function tzLabel(z){ return TZNAMES[z]||tzPart(z,'shortOffset')||tzPart(z,'short')||z; }
+const tzcEl=document.getElementById('town-clock'), tzcT=tzcEl.querySelector('.tzc-t'), tzcZ=tzcEl.querySelector('.tzc-z');
+function paintTzChip(){ tzcEl.dataset.tz=TZ; tzcZ.title=`${TZF.long} (${TZ})`; tzcZ.textContent=TZF.label; const s=TZF.hms.format(Date.now()); tzcT.textContent=s; clockTick.s=s; }
+function buildTz(z){ TZ=z; const o={timeZone:z,hourCycle:'h23'};
+  TZF.hms=new Intl.DateTimeFormat('en-GB',{...o,hour:'2-digit',minute:'2-digit',second:'2-digit'}); TZF.hm=new Intl.DateTimeFormat('en-GB',{...o,hour:'2-digit',minute:'2-digit'});
+  TZF.wd=new Intl.DateTimeFormat('en-GB',{timeZone:z,weekday:'short'}); TZF.day=new Intl.DateTimeFormat('en-CA',{timeZone:z,year:'numeric',month:'2-digit',day:'2-digit'});
+  TZF.label=tzLabel(z); TZF.long=tzPart(z,'long')||z; paintTzChip(); }
+buildTz(TZ);
+/* switch the zone after boot (from /api/town): rebuild, repaint the chip, and make every board re-render */
+function setTz(z){ buildTz(z); PLS.v++; YTS.v++; LIS.v++; QAS.v++; SITE.v++; GH.v++; if(detail&&detail.kind==='plat') renderDetail(true); }
+const tzHM=ms=>TZF.hm.format(ms), tzHMS=ms=>TZF.hms.format(ms), tzDay=ms=>TZF.day.format(ms);
+function fmtSlot(ms){ return tzDay(ms)===tzDay(Date.now())?tzHM(ms):TZF.wd.format(ms)+' '+tzHM(ms); }
+const slotTxt=ms=>fmtSlot(ms)+' '+TZF.label;
+/* clock hands from the zone's real hours and minutes: [hour hand angle, minute hand angle] */
+function tzAngles(){ const hm=TZF.hms.format(Date.now()).split(':').map(Number); return [((hm[0]%12)+hm[1]/60)/12*Math.PI*2-Math.PI/2,(hm[1]+hm[2]/60)/60*Math.PI*2-Math.PI/2]; }
+/* the header chip ticks once a second (on the second), and releases the simulator's due slots; no other DOM writes */
+function clockTick(){ const n=Date.now(), s=TZF.hms.format(n); if(s!==clockTick.s){ clockTick.s=s; tzcT.textContent=s; } if(Sim.run&&!paused) Sim.due(n); clockTick.h=setTimeout(clockTick,1000-n%1000+5); }
+document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible'){ clearTimeout(clockTick.h); clockTick(); } });
 
 /* ---------- public envelope -> town events (pure, no DOM; see docs/integrations/*.md) ----------
    /events sends SSE messages  id: <seq>  event: <type>  data: {seq,id,type,source,at,payload}
@@ -451,26 +509,24 @@ function makePublicAdapter(){
   /* ---- Animora: a video is rendered, scheduled, published or fails to publish; see docs/integrations/animora.md ----
      Pure and DOM-free. Hidden events arrive without title/channel; the town never builds a title from the envelope id. */
   const VEND=new Set(['youtube','facebook','instagram','tiktok']);
-  function fmtDue(v){ const t=new Date(v), n=new Date(); if(!v||isNaN(t)) return undefined;
-    if(t.toDateString()===n.toDateString()) return String(t.getHours()).padStart(2,'0')+':'+String(t.getMinutes()).padStart(2,'0');
-    return t.toLocaleString('en-GB',{weekday:'short',hour:'2-digit',minute:'2-digit',hour12:false}).replace(',',''); }
+  function fmtDue(v){ const ms=Date.parse(v); if(!v||isNaN(ms)) return undefined; return fmtSlot(ms); }   // a text in the town zone; boards format from publishAtMs
   function fromAnimora(env,type,d,out){ d=(d&&typeof d==='object')?d:{};
     const RUN=/^[A-Za-z0-9_-]{1,64}$/, run=RUN.test(String(d.run||''))?String(d.run):'', atMs=(x=>isNaN(x)||x>Date.now()+6e4?Date.now():x)(Date.parse(env.at));
     const vendor=String(d.vendor||'').toLowerCase(),
       hidden=type==='channel.connected'?!d.channel:type==='video.started'?(d.stage==='render'&&!d.title):type==='video.render_failed'?!d.channel:!d.title;
     if(type!=='video.rendered'&&type!=='video.started'&&type!=='video.render_failed'&&!VEND.has(vendor)) return out;
-    const title=type==='video.started'?(d.title?String(d.title):(hidden?'Private video':'New video')):hidden?'Private video':String(d.title), channel=hidden?'':String(d.channel||''),
+    const title=type==='video.started'?(d.title?String(d.title):(hidden?'Private video':'New video')):hidden?'Private video':String(d.title), channel=hidden?'':String(d.channel||''), concept=hidden?'':String(d.concept||'').trim().slice(0,120),
       code=/^[A-Za-z0-9_-]{1,32}$/.test(String(d.code||''))?String(d.code):'',
       vkey=code?'c:'+code:(hidden?'id:'+env.id:'t:'+title.toLowerCase()), anim=true;
     switch(type){
-      case 'video.rendered': out.push({type:'video.ready',id:vkey,run,code,title,channel,kind:d.format==='reel'?'reel':'video',targets:[],publishAt:null,atMs,anim,hidden}); break;
+      case 'video.rendered': out.push({type:'video.ready',id:vkey,run,code,title,channel,concept,kind:d.format==='reel'?'reel':'video',targets:[],publishAt:null,atMs,anim,hidden}); break;
       case 'video.started': if(!run||(d.stage!=='naskah'&&d.stage!=='render')) break;
-        out.push({type:'video.started',id:'r:'+run,run,code,stage:d.stage==='render'?'render':'script',title,untitled:!d.title,channel,kind:d.format==='reel'?'reel':'video',atMs,anim,hidden}); break;
+        out.push({type:'video.started',id:'r:'+run,run,code,stage:d.stage==='render'?'render':'script',title,untitled:!d.title,channel,concept,kind:d.format==='reel'?'reel':'video',atMs,anim,hidden}); break;
       case 'video.render_failed': if(!run) break;
         out.push({type:'video.unfinished',id:'r:'+run,run,code,stage:d.stage==='render'?'render':'script',channel,atMs,anim,hidden}); break;
-      case 'video.scheduled': out.push({type:'upload.planned',id:vkey,platform:vendor,title,channel,publishAt:fmtDue(d.dueAt),atMs,anim,hidden}); break;
-      case 'video.published': out.push({type:'video.published',id:vkey,platform:vendor,title,channel,kind:'video',atMs,anim,hidden}); break;
-      case 'video.publish_failed': out.push({type:'upload.failed',id:vkey,platform:vendor,title,channel,attempt:+(/-fail(\d+)$/.exec(String(env.id))||[])[1]||1,atMs,anim,hidden}); break;
+      case 'video.scheduled': out.push({type:'upload.planned',id:vkey,platform:vendor,title,channel,concept,publishAt:fmtDue(d.dueAt),publishAtMs:Date.parse(d.dueAt)||null,atMs,anim,hidden}); break;
+      case 'video.published': out.push({type:'video.published',id:vkey,platform:vendor,title,channel,concept,kind:'video',atMs,anim,hidden}); break;
+      case 'video.publish_failed': out.push({type:'upload.failed',id:vkey,platform:vendor,title,channel,concept,attempt:+(/-fail(\d+)$/.exec(String(env.id))||[])[1]||1,atMs,anim,hidden}); break;
       case 'channel.connected': out.push({type:'channel.connected',id:'c:'+env.id,platform:vendor,channel,atMs,anim,hidden}); break;
       default: break; }
     return out; }
@@ -825,6 +881,91 @@ function drawFx(it){ let a=1, rise=false; for(const f of it.fx){ a*=fxVal(f); if
   ctx.save(); ctx.globalAlpha=a; if(rise) ctx.translate(0,(1-a)*6/cam.z);   // entrances settle down 6px; exits only change opacity
   it.draw(); ctx.restore(); }
 const fxAlpha=l=>{ let a=1; if(l) for(const f of l) a*=fxVal(f); return a; };
+
+/* ---------- channel offices: every YouTube channel is an influencer who stands at one of the four offices ----------
+   CHX keeps what the events said about each channel (key = channel name, or CHXPRIV for every hidden one):
+   {key,name,private,last,concepts:Map<concept,{live:{pf:{day,ms}},madeDay,madeMs}>,lt:Map<pf,{day,n}>,plat:Set<pf>}.
+   Placed offices never move during the session; a new channel fills the first free office, in index order. */
+const CHX=new Map(), CHXPRIV='\u0000private', CHXNONE='\u0000none', chanKey=n=>n?String(n):CHXNONE, itemKey=it=>it.hidden?CHXPRIV:chanKey(it.channel);
+const CHXT=new Set(['video.started','video.ready','upload.planned','video.published','upload.failed','channel.connected']);
+const chxLT=(c,pf)=>{ const l=c&&c.lt.get(pf); return l&&l.day===tzDay(Date.now())?l.n:0; };
+const CONCEPTC=['#f2c14e','#7cc6de','#f29fb5','#a8d47a','#f6a96b','#b9a7e8'];
+/* concept -> pastel, stable by name; inside one channel two concepts never share a colour (the second moves to the next free one); '' is grey "No concept" */
+function conceptColors(names){ const used=new Set(), out=new Map();
+  for(const n of [...new Set(names)].sort((a,b)=>String(a).localeCompare(String(b)))){ if(!n){ out.set(n,'#d2d6d9'); continue; }
+    let h=2166136261; for(const ch of String(n).trim().toLowerCase()){ h^=ch.codePointAt(0); h=Math.imul(h,16777619)>>>0; }
+    let i=h%CONCEPTC.length; for(let k=0;k<CONCEPTC.length&&used.has(i);k++) i=(i+1)%CONCEPTC.length; used.add(i); out.set(n,CONCEPTC[i]); }
+  return out; }
+const conceptColor=(name,names)=>conceptColors(names&&names.length?names:[name]).get(name)||'#d2d6d9';
+const QS_SIM=['arriving','check','caption','slot','upload'];
+/* items waiting for a slot on a platform for one channel (live: scheduled uploads; simulator: everything between the render and the upload) */
+function chanQ(key,pf='youtube'){ const st=VID.live?['slot']:QS_SIM; let n=0; for(const it of PLS.items.values()) if(it.platform===pf&&st.includes(it.state)&&itemKey(it)===key) n++; return n; }
+function chxNote(ev){ const t=ev.type; if(!CHXT.has(t)) return;
+  const key=ev.hidden?CHXPRIV:chanKey(ev.channel), at=ev.atMs||Date.now(), pf=ev.platform||'', day=tzDay(at); let c=CHX.get(key);
+  if(!c){ c={key,name:key===CHXPRIV?'Private channel':key===CHXNONE?'No channel':key,private:key===CHXPRIV,last:0,concepts:new Map(),lt:new Map(),plat:new Set()}; CHX.set(key,c);
+    if(CHX.size>60){ let old=null; const bound=new Set(studios.map(o=>o.chan)); for(const x of CHX.values()){ if(x===c||bound.has(x.key)) continue; if(!old||x.last<old.last) old=x; } if(!old) for(const x of CHX.values()) if(x!==c&&(!old||x.last<old.last)) old=x; if(old) CHX.delete(old.key); } }
+  c.last=Math.max(c.last,at); if(pf) c.plat.add(pf);
+  const cn=(!c.private&&!ev.hidden&&ev.concept)?String(ev.concept):''; let cx=null;
+  if(cn){ cx=c.concepts.get(cn); if(!cx){ if(c.concepts.size>=40) c.concepts.delete(c.concepts.keys().next().value); cx={live:{},madeDay:'',madeMs:0}; c.concepts.set(cn,cx); } }
+  if(t==='video.published'){ const p=pf||'youtube'; c.plat.add(p); let l=c.lt.get(p); if(!l||day>l.day){ l={day,n:0}; c.lt.set(p,l); } if(day===l.day) l.n++;
+    if(cx){ const o=cx.live[p]; if(!o||at>=o.ms) cx.live[p]={day,ms:at}; } }
+  else if(t==='video.ready'&&cx&&at>=cx.madeMs){ cx.madeDay=day; cx.madeMs=at; }
+  if(VID.live&&VID.hydrated&&!ev.replay) officeEnsure(key); }
+bus.on(chxNote);                         // registered before the town's own reducers, so the offices are bound when they react
+const studioOf=ev=>{ const k=ev.hidden?CHXPRIV:chanKey(ev.channel); return studios.find(o=>o.chan===k); };
+function officeConcepts(o){ if(!o.chan) return []; if(!VID.live) return CONFIG.concepts[o.chan]||[]; const c=CHX.get(o.chan); return c&&!c.private?[...c.concepts.keys()]:[]; }
+function officeLive(o){ const c=CHX.get(o.chan), q=chanQ(o.chan), k=VID.live?(c?c.concepts.size:0):(CONFIG.concepts[o.chan]||[]).length, lt=chxLT(c,'youtube');
+  return `${q} waiting on YouTube · ${k} concept${k===1?'':'s'} · ${lt} live today`; }
+function officeFree(o){ o.chan=null; o.name=o.full='Free studio'; o.live=null; o.detail=null; o.desc='A free channel office. The next Animora channel moves in here.'; if(sel===o) closeCard(); }
+function bindOffice(o,key,delay=0){ const c=CHX.get(key), disp=key===CHXPRIV?'Private channel':key===CHXNONE?'No channel':(c?c.name:String(key)), wasFree=!o.chan;
+  o.chan=key; o.name=cut(disp,20); o.full=disp; o.label=true;
+  o.desc=`Channel office of ${disp}. Its influencer posts one video per concept a day; the tickets are its waiting list.`;
+  o.live=()=>officeLive(o); o.detail={label:'Open the channel lineup',open:()=>openDetail('plat','youtube','channels')};
+  if(wasFree) fxGo(o.fx,1,calm()?0:280,delay); }
+const officeBound=()=>studios.filter(o=>o.chan).length;
+function officeEnsure(key){ if(!VID.live||studios.some(o=>o.chan===key)) return; const o=studios.find(s=>!s.chan); if(o) bindOffice(o,key); }
+/* after the first replay: free offices take the channels that are not placed yet, newest activity first, 60 ms apart */
+function officesFill(){ if(!VID.live) return; const placed=new Set(studios.map(o=>o.chan)), rest=[...CHX.values()].filter(c=>!placed.has(c.key)).sort((a,b)=>b.last-a.last);
+  studios.filter(o=>!o.chan).forEach((o,i)=>{ if(rest[i]) bindOffice(o,rest[i].key,i*60); }); }
+/* the stream opened: every office empties (the influencer fades out in 160 ms) and fills again from the replay */
+function officesUnbind(){ for(const o of studios){ if(o.chan) fxGo(o.fx,0,calm()?0:160); officeFree(o); } }
+const easeInOutCubic=t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+/* a camera flash at (x,y): a white disc that grows and fades in 250 ms, with four short rays; age in ms */
+function flashAt(c,x,y,age,k=1){ if(age<0||age>=250) return; const e=easeOutQuint(age/250), r=(3+11*e)*k, ga=c.globalAlpha; c.globalAlpha=ga*.9*(1-e);
+  c.beginPath(); c.arc(x,y,r,0,7); c.fillStyle='#fff'; c.fill(); c.lineWidth=.8*k; c.strokeStyle='rgba(31,43,58,.45)'; c.stroke();
+  for(const col of ['rgba(31,43,58,.55)','#fff']){ c.strokeStyle=col; c.lineWidth=col==='#fff'?1.1*k:2.2*k; for(let n=0;n<4;n++){ const an=Math.PI/4+n*Math.PI/2; c.beginPath(); c.moveTo(x+Math.cos(an)*(r+1.5*k),y+Math.sin(an)*(r+1.5*k)); c.lineTo(x+Math.cos(an)*(r+1.5*k+4*k),y+Math.sin(an)*(r+1.5*k+4*k)); c.stroke(); } }
+  c.globalAlpha=ga; c.strokeStyle=INK; }
+/* the influencer (about 18 world px tall): sunglasses, a jacket in the office colour, a selfie stick (even office) or a ring light (odd office). The jacket colour is the office colour, grey for a private channel. */
+function drawInfluencer(o,i){ const key=o.chan, cm=calm(), now=performance.now(), c=CHX.get(key), priv=key===CHXPRIV||!!(c&&c.private), col=(priv||key===CHXNONE)?'#8a929b':chColors[i];
+  const names=priv?[]:officeConcepts(o);
+  if(names.length){ if(o._ck!==names.join('\u0001')){ o._ck=names.join('\u0001'); o._cm=conceptColors(names); } const b=P(o.x+o.w+.15,o.y+o.d+.1,0); ctx.lineWidth=LIGHT;
+    for(let k=0;k<Math.min(3,names.length);k++){ const py=b[1]-11+k*4.2; ctx.beginPath(); ctx.moveTo(b[0],py); ctx.lineTo(b[0]+5,py+1.75); ctx.lineTo(b[0],py+3.5); ctx.closePath(); ctx.fillStyle=o._cm.get(names[k]); ctx.fill(); ctx.stroke(); } }
+  const s=P(o.x+o.w/2+.5,o.y+o.d+.3,0), age=(!cm&&o.flashT)?now-o.flashT:1e9, pose=age<1200, lift=pose?3:0, dx=cm?0:Math.sin((now/2400+i*.25)*Math.PI*2)*.8, even=i%2===0;
+  ctx.save(); ctx.translate(s[0],s[1]); ctx.scale(1.35,1.35); ctx.lineWidth=LIGHT/1.35; ctx.strokeStyle=INK;
+  ctx.fillStyle='rgba(31,43,58,.13)'; ctx.beginPath(); ctx.ellipse(0,0,4.5,2,0,0,7); ctx.fill();
+  // prop behind the body
+  if(!even){ ctx.beginPath(); ctx.moveTo(-6+dx,0); ctx.lineTo(-6+dx,-14); ctx.stroke(); ctx.beginPath(); ctx.arc(-6+dx,-17-lift,3.2,0,7); if(night>.35){ ctx.fillStyle='rgba(255,240,200,.55)'; ctx.fill(); }
+    ctx.strokeStyle='#fff'; ctx.lineWidth=1.6/1.35; ctx.stroke(); ctx.strokeStyle=INK; ctx.lineWidth=LIGHT/1.35; ctx.beginPath(); ctx.arc(-6+dx,-17-lift,3.2+.85/1.35,0,7); ctx.stroke(); }
+  // jacket, shoulder stripe, collar
+  ctx.beginPath(); ctx.moveTo(-2.8,-.5); ctx.lineTo(2.8,-.5); ctx.lineTo(1.9,-8); ctx.lineTo(-1.9,-8); ctx.closePath(); ctx.fillStyle=col; ctx.fill(); ctx.stroke();
+  ctx.fillStyle=mix(col,WHITE,.45); ctx.fillRect(-2.2,-7.4,4.4,1.1);
+  ctx.strokeStyle='#fff'; ctx.beginPath(); ctx.moveTo(-1,-8); ctx.lineTo(0,-5.8); ctx.moveTo(1,-8); ctx.lineTo(0,-5.8); ctx.stroke(); ctx.strokeStyle=INK;
+  // arms: hanging, or both raised for a second after a publish
+  ctx.beginPath(); if(pose){ ctx.moveTo(-2.2,-7.4); ctx.lineTo(-3.6+dx,-13.5); ctx.moveTo(2.2,-7.4); ctx.lineTo(3.6+dx,-13.5); }
+  else { ctx.moveTo(-2.2,-7.4); ctx.lineTo(-3.3,-4.6); ctx.moveTo(2.2,-7.4); ctx.lineTo(even?2.6+dx:3.3,even?-6:-4.6); } ctx.stroke();
+  // head, hair, sunglasses
+  ctx.beginPath(); ctx.arc(dx,-10.6,2.5,0,7); ctx.fillStyle='#fff'; ctx.fill(); ctx.stroke();
+  ctx.beginPath(); ctx.arc(dx,-11.2,2.6,Math.PI,0); ctx.fillStyle='#262e3a'; ctx.fill();
+  ctx.fillStyle='#1f2b3a'; ctx.fillRect(dx-2.4,-11.2,4.8,1.4); ctx.fillStyle='#fff'; ctx.fillRect(dx+1,-11,.8,.6);
+  let fx=0,fy=0;
+  if(even){ ctx.beginPath(); ctx.moveTo(2.6+dx,-6-lift); ctx.lineTo(7+dx,-17-lift); ctx.lineWidth=LIGHT*1.2/1.35; ctx.stroke(); ctx.lineWidth=LIGHT/1.35; ctx.fillStyle='#262e3a'; ctx.fillRect(6+dx,-19.6-lift,2.4,3.6); fx=7.2+dx; fy=-17.8-lift; }
+  else { fx=-6+dx; fy=-17-lift; }
+  if(age<250) flashAt(ctx,fx,fy,age,1);
+  ctx.restore(); }
+studios.forEach((o,i)=>{ o.fx=mkFx(1); o.i=i; o.chan=CONFIG.channels[i]; o.live=()=>officeLive(o); o.major=false;
+  o.dyn=()=>{ if(!o.chan) return 'Free studio'; const q=chanQ(o.chan); return o.name+(q>0?' · ▤ '+q:''); };
+  FXS=[o.fx]; S(o.x+o.w/2+.5+o.y+o.d+.3,()=>drawInfluencer(o,i)); FXS=null; });
+YT.dyn=()=>{ const over=VID.live?Math.max(0,CHX.size-officeBound()):0; return over?`YouTube Company · +${over} more channel${over===1?'':'s'}`:'YouTube Company'; };
 const newGh=()=>({lan:[],ban:[],carts:[],stamp:null,painter:null,couriers:0});
 const cut=(s,n=20)=>{ const a=Array.from(String(s??'')); return a.length>n?a.slice(0,n).join('')+'…':a.join(''); };
 const PLOTC=['#e6b655','#a9c6de','#c7b3e0'], HASHC=['#9ccfb5','#eba595','#8fb9e0','#e6c860','#b9c0c1'];
@@ -1288,7 +1429,9 @@ const React={
   'video.published'(ev){ const t=ev.platform||'youtube', b=PLAT[t]||YT; plat[t]=(plat[t]||0)+1; if(t==='youtube'){ st.videos++; if(ev.kind==='reel') st.reels++; }
     if(ev.anim){ if(t==='youtube'||Math.random()<.2) highlight('good',ev.hidden?`A private video went live on ${PNAME[t]}.`:`New ${ev.kind==='reel'?'reel':'video'} live on ${PNAME[t]}: ${short(ev.title,30)}`,b.cx,b.cy); }
     else if(Math.random()<.2) highlight('good',`New reel live on ${t[0].toUpperCase()+t.slice(1)}: ${short(ev.title,30)}`,b.cx,b.cy);
-    pop(b.cx,b.cy,(b.h||3)+.8,'▶ '+short(ev.title,22),PCOL[t]); if(!(ev.anim&&calm())) sendViewers(b.door,()=>b.entry,true,1+Math.floor(Math.random()*3)); },
+    const ofc=studioOf(ev); if(ofc&&!calm()) ofc.flashT=performance.now();
+    if(t==='youtube'&&ofc) pop(ofc.cx,ofc.cy,2.6,'▶ '+short(ev.title,18),PCOL[t]); else pop(b.cx,b.cy,(b.h||3)+.8,'▶ '+short(ev.title,22),PCOL[t]);
+    if(!(ev.anim&&calm())) sendViewers(b.door,()=>b.entry,true,1+Math.floor(Math.random()*3)); },
   'qa.run.started'(ev){ const org=orgBy[ev.org], p=hallOf(ev); if(!p) return; const key=ev.org+'/'+ev.repo;
     const a=spawn(QA.entry[0],QA.entry[1],{color:'#9ccfb5',carry:'paper',mark:'#2f8f6b',speed:2.5,tag:'QA',orgRef:org}); qaAgents.set(key,a);
     const rt=p.multi?org.route(p):[[p.doorPt[0]+.45,p.doorPt[1]+.3]];
@@ -1607,8 +1750,8 @@ const QSTEPS=['Launch browser','Open page','Sign in','Run scenario','Check resul
 const Sim={ vis:0, active:0,
   visit(page,title){ const bag=['ID','ID','ID','ID','ID','ID','ID','ID','MY','MY','SG','SG','IN','IN','US','US','JP','DE','NL','GB','AU','SA','EG','BR','KR','FR','TR']; bus.emit({type:'site.visit',id:'v'+(++this.vis),page,country:pick(bag),...(title?{title}:{})}); },
   ciRun:0, dn:0, bots:0, stars:{}, disc:[],
-  n:0, artId:0, vid:0, pr:100, liNext:0, liQ:0, qaRun:0, imgId:0, list:[], vq:[], run:false,
-  schedule(){ const source=Math.random()<.5?'article':'topic'; const it={id:++this.vid,source,title:pick(source==='article'?TITLES.art:TITLES.vid),channel:pick(CONFIG.channels)}; this.vq.push(it); bus.emit({type:'video.scheduled',...it}); },
+  n:0, artId:0, vid:0, pr:100, liNext:0, liQ:0, qaRun:0, imgId:0, list:[], vq:[], run:false, ci:{}, last:{}, dueQ:[],
+  schedule(){ const source=Math.random()<.5?'article':'topic'; const it={id:++this.vid,source,title:pick(source==='article'?TITLES.art:TITLES.vid),channel:pick(CONFIG.channels)}; const cs=CONFIG.concepts[it.channel]||[]; const ci=this.ci[it.channel]||0; this.ci[it.channel]=ci+1; it.concept=cs.length?cs[ci%cs.length]:''; this.vq.push(it); bus.emit({type:'video.scheduled',...it}); },
   /* GitHub-shaped town events (productName = repo) */
   gh(type,cfg,repo,x){ bus.emit({type,org:cfg.id,repo,productName:repo,gh:true,...x}); },
   afterOpen(is){ const cfg=CONFIG.orgs.find(o=>o.id===is.org), gx={number:is.number};
@@ -1653,7 +1796,7 @@ const Sim={ vis:0, active:0,
     bus.on(ev=>{ if(!this.run||ev.type!=='article.published') return; for(let k=0;k<3+Math.floor(Math.random()*3);k++) after(k*rnd(.6,1.6),()=>this.visit('blog',ev.title)); });
     const artLoop=()=>after(rnd(10,18),()=>{ if(!this.run) return; const id=++this.artId, title=pick(TITLES.art), to=(Math.random()<.75&&this.liQ<5)?'linkedin':'blog'; if(to==='linkedin') this.liQ++; bus.emit({type:'article.drafted',id,title,to});
       after(rnd(7,11),()=>{ if(to==='blog') return bus.emit({type:'article.published',id,title,to});
-        const now=absH(), slot=Math.max(this.liNext+3,Math.ceil((now+.3)/3)*3); this.liNext=slot; bus.emit({type:'article.scheduled',id,title,to,publishAt:hh(slot)});
+        const now=absH(), slot=Math.max(this.liNext+3,Math.ceil((now+.3)/3)*3); this.liNext=slot; bus.emit({type:'article.scheduled',id,title,to,publishAt:tzHM(Date.now()+(slot-now)*CONFIG.dayLength/24*1000)});
         after((slot-now)*CONFIG.dayLength/24,()=>{ this.liQ--; bus.emit({type:'article.published',id,title,to}); }); }); artLoop(); }); artLoop();
     const illLoop=()=>after(rnd(24,42),()=>{ if(!this.run) return; bus.emit({type:'illustration.published',id:++this.artId,title:pick(TITLES.ill)}); illLoop(); }); illLoop();
     for(const cfg of CONFIG.orgs) for(const repo of cfg.repos){ const qa=()=>after(rnd(14,38),()=>{ if(!this.run) return; const run=++this.qaRun, spec=pick(['smoke','login','export','settings'])+'.spec.ts', id={org:cfg.id,repo,run,spec,tool:QA_DEMO_TOOL(cfg.id)};
@@ -1666,20 +1809,27 @@ const Sim={ vis:0, active:0,
     const imgLoop=()=>after(rnd(9,17),()=>{ if(!this.run) return; const kind=Math.random()<.65?'image':'video', r={id:++this.imgId,kind,title:pick(kind==='image'?['Cover image','Thumbnail','Post banner','Diagram']:['Scene clip','Intro sting','Loop for a post'])};
       bus.emit({type:'imago.requested',...r}); after(rnd(10,18),()=>bus.emit({type:'imago.delivered',...r})); imgLoop(); }); imgLoop();
     for(let k=0;k<7;k++) this.schedule();
+    /* one video already live per channel (20 minutes ago), so "live today" and the phone have something to show */
+    CONFIG.channels.forEach((ch,i)=>{ const slotMs=Math.floor((Date.now()-20*60e3)/60e3)*60e3, sv={id:'seed'+i,channel:ch,title:pick(TITLES.vid),concept:(CONFIG.concepts[ch]||[''])[0]};
+      bus.emit({type:'video.ready',...sv,kind:'video',targets:['youtube'],publishAt:tzHM(slotMs),publishAtMs:slotMs}); bus.emit({type:'video.published',...sv,kind:'video',platform:'youtube'}); });
     const schedLoop=()=>after(rnd(8,14),()=>{ if(!this.run) return; if(this.vq.length<10) this.schedule(); schedLoop(); }); schedLoop();
-    CONFIG.channels.forEach((ch,i)=>{ const loop=()=>after(rnd(3,7)+i*1.5,()=>{ if(!this.run) return; const k=this.vq.findIndex(v=>v.channel===ch); if(k<0) return loop(); const it=this.vq.splice(k,1)[0];
-        const collab=Math.random()<.4?pick(CONFIG.creators):undefined, kind=collab?'reel':'video', id={id:it.id,channel:ch,title:it.title};
+    CONFIG.channels.forEach((ch,i)=>{ const loop=()=>after(rnd(3,7)+i*1.5,()=>{ if(!this.run) return; const k=this.vq.findIndex(v=>v.channel===ch); if(k<0||chanQ(ch)>=CONFIG.queueTarget) return loop(); const it=this.vq.splice(k,1)[0];
+        const collab=Math.random()<.4?pick(CONFIG.creators):undefined, kind=collab?'reel':'video', id={id:it.id,channel:ch,title:it.title,concept:it.concept||''};
         bus.emit({type:'video.started',...id,source:it.source,...(collab?{collab}:{})});
         let reworked=false; const seq=['voice','scenes','render','review'];
         const next=j=>after(rnd(3,5),()=>{ if(j<seq.length){ bus.emit({type:'video.stage',...id,stage:seq[j]}); return next(j+1); }
           if(!reworked&&Math.random()<.2){ reworked=true; bus.emit({type:'video.stage',...id,stage:'scenes',rework:true}); return next(2); }
-          const nowH=tod*24, slot=Math.floor(nowH+.3)+1, targets=kind==='reel'?['youtube','facebook','instagram','tiktok']:['youtube','facebook'];
-          bus.emit({type:'video.ready',...id,kind,targets,publishAt:String(slot%24).padStart(2,'0')+':00'});
-          const t0=T; targets.forEach((t,i)=>{ const pid={...id,kind,platform:t}, stg=(stage,wait,then)=>after(wait,()=>{ bus.emit({type:'upload.stage',...pid,stage}); then(); });
-            stg('check',rnd(8,11)+i*.7,()=>stg('caption',rnd(3.2,4.6),()=>stg('slot',rnd(3.5,5),()=>stg('upload',t==='youtube'?Math.max(2.5,(slot-nowH)*CONFIG.dayLength/24-(T-t0)):rnd(2.5,6),()=>after(rnd(3.2,4),()=>bus.emit({type:'video.published',...pid})))))); }); loop(); });
+          const slotMs=Math.ceil(Math.max(Date.now()+150e3,(this.last[ch]||Date.now()+i*90e3)+CONFIG.slotGapMin*60e3)/60e3)*60e3; this.last[ch]=slotMs; const targets=kind==='reel'?['youtube','facebook','instagram','tiktok']:['youtube','facebook'];
+          bus.emit({type:'video.ready',...id,kind,targets,publishAt:tzHM(slotMs),publishAtMs:slotMs});
+          targets.forEach((t,i)=>{ const pid={...id,kind,platform:t}, stg=(stage,wait,then)=>after(wait,()=>{ bus.emit({type:'upload.stage',...pid,stage}); then(); });
+            stg('check',rnd(8,11)+i*.7,()=>stg('caption',rnd(3.2,4.6),()=>stg('slot',rnd(3.5,5),()=>{ this.dueQ.push({pid,slotMs}); }))); }); loop(); });
         next(0); }); loop(); });
   },
   dayTick(){ if(this.run) bus.emit({type:'magazine.printed',issue:127+day}); },
+  /* called every second by the wall clock: releases the slots that are due, at most one per channel and tick (upload, then published 3 s of town time later) */
+  due(now){ if(!this.dueQ.length) return; const seen=new Set();
+    for(const d of this.dueQ.slice().sort((a,b)=>a.slotMs-b.slotMs)){ if(d.slotMs>now) break; if(seen.has(d.pid.channel)) continue; seen.add(d.pid.channel); this.dueQ.splice(this.dueQ.indexOf(d),1);
+      bus.emit({type:'upload.stage',...d.pid,stage:'upload'}); after(3,()=>bus.emit({type:'video.published',...d.pid})); } },
   stop(){ this.run=false; }
 };
 
@@ -1773,12 +1923,13 @@ function finishSwitch(){
   OWN=LOWN; for(const ow of LOWN.values()){ ow.plot=null; assignInit(ow); }
   const inst=calm(); rankedOwners().slice(0,3).forEach((ow,i)=>bindOwner(PLOTS[i],ow,{instant:inst,noFade:true,delay:i*60}));
   VAL.live=true; VAL.switching=false; VREG.v++;
-  pendingLog.push([clockStr(),{type:'town',title:`GitHub Valley now shows ${LOWN.size} GitHub owner${LOWN.size===1?'':'s'}.`}]);
+  pendingLog.push([tzHM(Date.now()),{type:'town',title:`GitHub Valley now shows ${LOWN.size} GitHub owner${LOWN.size===1?'':'s'}.`}]);
   const b=VAL.buf; VAL.buf=[]; for(const ev of b) bus.emit(ev); }
 /* /api/town: merge into the live owners. After the switch a repo or owner that is no longer listed (and is older than the request) is removed: privacy beats stability. */
 /* an owner or repo that a live event created less than 15 s before the request may simply not be in the snapshot yet */
 const stale=(x,t0)=>!x.evt||x.evt<t0-15000;
 function mergeTown(d,t0){ if(!d||typeof d!=='object') return; const names=new Set();
+  if(!TZQ&&typeof d.timezone==='string'&&validTz(d.timezone)&&d.timezone!==TZ) setTz(d.timezone);
   for(const o of Array.isArray(d.owners)?d.owners:[]){ if(!o||typeof o.name!=='string') continue; names.add(o.name);
     let ow=LOWN.get(o.name); const fresh=!ow; if(fresh){ ow=mkOwner(o.name); LOWN.set(o.name,ow); }
     ow.hidden=!!o.hidden; ow.type=ow.hidden?'':(o.type||''); const l=Date.parse(o.lastEventAt); if(l>ow.last) ow.last=l;
@@ -1839,7 +1990,7 @@ function connectLive(url,onFail){ let opened=false, es;
   es.onerror=()=>{ if(!opened){ es.close(); if(onFail) onFail(); } else setMode('reconnecting'); };
   return es; }
 /* silent history: one extra stream (?replay=N&kind=animora) read once after the first open; no pops, log lines, highlights or box cars */
-function applyQuiet(ev){ animStore(ev,ago(ev.atMs));
+function applyQuiet(ev){ chxNote(ev); animStore(ev,ago(ev.atMs));
   if(ev.type==='video.ready') genState.rendered++;
   if(ev.type==='video.published'){ const pf=ev.platform||'youtube'; plat[pf]=(plat[pf]||0)+1; if(pf==='youtube'){ st.videos++; if(ev.kind==='reel') st.reels++; } } }
 function hydrateVideo(url){ let es, qt, ht, over=false; const buf=[];
@@ -1847,10 +1998,10 @@ function hydrateVideo(url){ let es, qt, ht, over=false; const buf=[];
   const flush=()=>{ for(const {seq,data} of buf){ if(LIVE_FIRST_SEQ&&seq>=LIVE_FIRST_SEQ) continue;
       let m; try{ m=JSON.parse(data); }catch(_){ continue; }
       for(const ev of fromPublic(m)) applyQuiet({...ev,live:true,replay:true}); }
-    buf.length=0; VID.hydrated=true; YTS.v++; PLS.v++; };
+    buf.length=0; VID.hydrated=true; officesFill(); YTS.v++; PLS.v++; };
   const done=()=>{ if(over) return; over=true; clearTimeout(qt); clearTimeout(ht); if(es) es.close(); setTimeout(flush,300); };
   const arm=()=>{ clearTimeout(qt); qt=setTimeout(done,1500); };
-  try{ es=new EventSource(url+(url.includes('?')?'&':'?')+'replay='+VID_REPLAY+'&kind=animora'); }catch(_){ VID.hydrated=true; return; }
+  try{ es=new EventSource(url+(url.includes('?')?'&':'?')+'replay='+VID_REPLAY+'&kind=animora'); }catch(_){ VID.hydrated=true; officesFill(); return; }
   const onMsg=e=>{ if(over) return; arm(); buf.push({seq:+e.lastEventId||0,data:e.data}); };
   for(const t of ANIM_TYPES) es.addEventListener(t,onMsg);
   es.onopen=arm; es.onerror=done; ht=setTimeout(done,10000); }
@@ -1868,7 +2019,6 @@ window.brainTown={ connect(url){ return connectLive(url); }, emit:ev=>deliver({l
    UI: feed log, stats, controls
    ============================================================ */
 const logEl=document.getElementById('log'); let pendingLog=[], booting=true;
-function clockStr(){ const m=Math.floor(tod*1440); return String(Math.floor(m/60)).padStart(2,'0')+':'+String(m%60).padStart(2,'0'); }
 const PN=ev=>ev.productName||ev.repo;
 function describe(ev){ switch(ev.type){
   case 'issue.opened': return `${ev.productName||ev.org+'/'+ev.repo} #${ev.number} ${ev.title||''}`;
@@ -1921,11 +2071,11 @@ function describe(ev){ switch(ev.type){
 /* an owner without a gate still shows a sign of life: one short pop at the register, at most every 10 s */
 let regPopT=-99;
 function unplacedPop(ev){ if(ev.type!=='issue.opened'||!ev.live||!ev.org||orgBy[ev.org]||!OWN.has(ev.org)||calm()||T-regPopT<10) return; regPopT=T; pop(REG.cx,REG.cy,1.9,cut(ev.org,16)+' · issue opened',orgColor(ev.org)); }
-bus.on(ev=>{ if(ev.gh&&ev.productName&&ev.org){ const p0=hallOf(ev); if(p0&&!p0.multi) p0.gh.name=ev.productName; } if(React[ev.type]) React[ev.type](ev); unplacedPop(ev); if(ev.type!=='qa.step'&&!ev.local) pendingLog.push([clockStr(),ev]); if(pendingLog.length>60) pendingLog.shift(); });
+bus.on(ev=>{ if(ev.gh&&ev.productName&&ev.org){ const p0=hallOf(ev); if(p0&&!p0.multi) p0.gh.name=ev.productName; } if(React[ev.type]) React[ev.type](ev); unplacedPop(ev); if(ev.type!=='qa.step'&&!ev.local) pendingLog.push([tzHM(Date.now()),ev]); if(pendingLog.length>60) pendingLog.shift(); });
 function flushLog(){ if(!pendingLog.length) return; for(const [t,ev] of pendingLog){ const li=document.createElement('li'); const tm=document.createElement('time'); tm.textContent=t; const b=document.createElement('b'); b.textContent=ev.type; li.append(tm,b,document.createTextNode(' '+describe(ev))); logEl.prepend(li); }
   pendingLog=[]; while(logEl.children.length>60) logEl.lastChild.remove(); }
 const $=id=>document.getElementById(id);
-function paintStats(){ $('s-mag').textContent='#'+st.mag; $('s-art').textContent=st.articles; $('s-ill').textContent=st.illos; $('s-vid').textContent=st.videos; $('s-open').textContent=st.open; $('s-closed').textContent=st.closed; $('clock').textContent=`Day ${day} · ${clockStr()} · ${phaseOf()[2]}`;
+function paintStats(){ $('s-mag').textContent='#'+st.mag; $('s-art').textContent=st.articles; $('s-ill').textContent=st.illos; $('s-vid').textContent=st.videos; $('s-open').textContent=st.open; $('s-closed').textContent=st.closed; $('clock').textContent=`Day ${day} · ${phaseOf()[2]}`;
   if(sel && sel.live) $('card-live').textContent=sel.live(); }
 
 let speed=1, paused=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -1940,7 +2090,7 @@ const HL=[]; let hlI=0, hlT=0;
 function hlSpot(h){ return h.follow&&!h.follow.dead?[h.follow.x,h.follow.y]:[h.x,h.y]; }
 function hlGo(h){ const q=hlSpot(h); flyTo={x:q[0],y:q[1],z:Math.max(cam.z,W<760?1.7:2)}; pops.push({x:q[0],y:q[1],z:.2,text:null,color:h.kind==='bad'?'#c8472f':'#dcae45',t:0,tiny:true,dur:1}); }
 function paintHL(fresh){ const el=$('hl'), h=HL[hlI]; if(!h){ el.hidden=true; return; } el.hidden=false; el.className=(h.kind==='bad'?'bad':h.kind==='good'?'good':'')+(fresh?' new':''); const sp=$('hl-text'); sp.textContent=h.text; const sm=document.createElement('small'); sm.textContent=`${h.clock} · highlight ${hlI+1} of ${HL.length}`; sp.append(sm); }
-function highlight(kind,text,x,y,follow){ const last=HL[0]; if(last&&last.text===text&&T-last.t<20) return; const h={kind,text,x,y,follow,t:T,clock:clockStr()}; HL.unshift(h); if(HL.length>5) HL.pop(); hlI=0; hlT=0; paintHL(true);
+function highlight(kind,text,x,y,follow){ const last=HL[0]; if(last&&last.text===text&&T-last.t<20) return; const h={kind,text,x,y,follow,t:T,clock:tzHM(Date.now())}; HL.unshift(h); if(HL.length>5) HL.pop(); hlI=0; hlT=0; paintHL(true);
   const li=document.createElement('li'); li.className='hl'; const tm=document.createElement('time'); tm.textContent=h.clock; const b=document.createElement('b'); b.textContent=kind==='bad'?'⚠ highlight':'★ highlight'; li.append(tm,b,document.createTextNode(' '+text)); li.onclick=()=>hlGo(h); logEl.prepend(li); }
 function hlTick(real){ hlT+=real; if(hlT>6&&HL.length>1){ hlT=0; hlI=(hlI+1)%HL.length; paintHL(false); } }
 /* a town-invented fender-bender: a car and a motorbike, nobody hurt, traffic queues until it is cleared */
@@ -2053,20 +2203,20 @@ const STAGES=[
   ['scenes','Scenes','Each scene gets an animated illustration timed to its voice clip. On a collab reel the creator studio joins here.'],
   ['render','Render','Scenes, captions and audio are composed into one portrait video.'],
   ['review','Review','A checking agent verifies length, audio sync and captions. A failed check sends the video back to Scenes.']];
-const chColor=n=>{ const i=CONFIG.channels.indexOf(n); if(i>=0) return chColors[i%chColors.length]; if(!n) return '#8a929b'; let h=0; for(const ch of String(n)) h=(h*31+ch.codePointAt(0))>>>0; return chColors[h%chColors.length]; };
+const chColor=n=>{ if(VID.live){ if(!n) return '#8a929b'; const i=studios.findIndex(o=>o.chan===n); if(i>=0) return chColors[i]; } else { const i=CONFIG.channels.indexOf(n); if(i>=0) return chColors[i%chColors.length]; } if(!n) return '#8a929b'; let h=0; for(const ch of String(n)) h=(h*31+ch.codePointAt(0))>>>0; return chColors[h%chColors.length]; };
 /* Animora video store: one YTS item per video (ready, scheduled, published) and one PLS item per video and platform (slot, failed, live) */
 const ARANK={building:1,ready:2,scheduled:3,published:4}, SRANK={script:1,render:2}, VID_STALE=90*60e3, VID_REPLAY=100;
 const VIDDONE=new Set();   // 'r:<run>' and 'c:<code>' that rendered or stopped; a late or replayed video.started for them is ignored (cap 300)
 const vidDone=k=>{ VIDDONE.add(k); if(VIDDONE.size>300) VIDDONE.delete(VIDDONE.values().next().value); };
 const genCount=()=>{ genState.n=[...YTS.items.values()].filter(x=>x.state==='building').length; };
 function resetVideoSample(){ YTS.items.clear(); PLS.items.clear(); for(const k in plat) plat[k]=0; genState.n=0; genState.rendered=0; genState.last=-1e9; st.videos=0; st.reels=0;
-  for(const k in CHAN) CHAN[k]=new Set(); VIDDONE.clear(); VID.hydrated=false; YTS.v++; PLS.v++; VID.live=true; if(detail) sceneReset(); }
+  for(const k in CHAN) CHAN[k]=new Set(); VIDDONE.clear(); VID.hydrated=false; CHX.clear(); officesUnbind(); YTS.v++; PLS.v++; VID.live=true; if(detail) sceneReset(); }
 function videoSnapshot(){ const platforms={}; for(const pf in PNAME){ const l=[...PLS.items.values()].filter(x=>x.platform===pf), n=k=>l.filter(x=>x.state===k).length;
     platforms[pf]={scheduled:n('slot'),failed:n('failed'),live:n('live'),published:plat[pf],channels:CHAN[pf].size}; }
   return {source:VID.live?'live':'sample',rendered:genState.rendered,building:[...YTS.items.values()].filter(x=>x.state==='building').length,hydrated:!!VID.hydrated,platforms}; }
 function animStore(ev,now){ const t=ev.type, pf=ev.platform, key=pf+'|'+ev.id;
-  const pget=st0=>{ let it=PLS.items.get(key); if(!it){ it={key,id:ev.id,platform:pf,title:ev.title,channel:ev.channel,kind:ev.kind||'video',state:st0,publishAt:null,at:now,seq:++PLS.seq,anim:true}; PLS.items.set(key,it); } return it; };
-  const pcap=state=>{ const l=[...PLS.items.values()].filter(x=>x.platform===pf&&x.state===state).sort((a,b)=>a.seq-b.seq); while(l.length>6) PLS.items.delete(l.shift().key); };
+  const pget=st0=>{ let it=PLS.items.get(key); if(!it){ it={key,id:ev.id,platform:pf,title:ev.title,channel:ev.channel,hidden:!!ev.hidden,kind:ev.kind||'video',state:st0,publishAt:null,at:now,seq:++PLS.seq,anim:true,concept:ev.concept||'',slotMs:null,liveMs:0}; PLS.items.set(key,it); } return it; };
+  const pcap=(state,n=6)=>{ const l=[...PLS.items.values()].filter(x=>x.platform===pf&&x.state===state).sort((a,b)=>a.seq-b.seq); while(l.length>n) PLS.items.delete(l.shift().key); };
   const yget=create=>{ let it=YTS.items.get(ev.id); if(!it&&create){ it={id:ev.id,akey:ev.id,first:++YTS.seq,source:'anim',title:ev.title,channel:ev.channel,kind:ev.kind||'video',state:'',at:now,reworks:0,plans:{},platforms:[],failed:null,upd:0}; YTS.items.set(ev.id,it); } if(it) it.upd=++YTS.seq; return it; };
   const up=(it,s2)=>{ if((ARANK[s2]||0)>=(ARANK[it.state]||0)) it.state=s2; };
   const ycap=(state,n)=>{ const l=[...YTS.items.values()].filter(x=>x.state===state).sort((a,b)=>state==='published'?a.seq-b.seq:a.upd-b.upd); while(l.length>n) YTS.items.delete(l.shift().id); };
@@ -2087,11 +2237,11 @@ function animStore(ev,now){ const t=ev.type, pf=ev.platform, key=pf+'|'+ev.id;
     if(b) YTS.items.delete(b.id);
     const y=yget(true); if(b){ y.akey=b.akey; if(!y.channel) y.channel=b.channel; }
     up(y,'ready'); y.rendMs=ev.replay?ev.atMs:0; y.kind=ev.kind||y.kind; ycap('ready',8); genCount(); YTS.v++; }
-  else if(t==='upload.planned'){ const p=pget('slot'); if(p.state!=='live') p.state='slot'; p.publishAt=ev.publishAt; pcap('slot'); PLS.v++;
+  else if(t==='upload.planned'){ const p=pget('slot'); if(p.state!=='live') p.state='slot'; p.publishAt=ev.publishAt; p.slotMs=ev.publishAtMs||null; if(ev.concept) p.concept=ev.concept; pcap('slot',60); PLS.v++;
     const y=yget(true); y.plans[pf]=ev.publishAt||''; y.failed=null; up(y,'scheduled'); ycap('scheduled',8); YTS.v++; }
   else if(t==='upload.failed'){ const p=pget('failed'); if(p.state!=='live') p.state='failed'; p.attempt=ev.attempt; p.seq=++PLS.seq; pcap('failed'); PLS.v++;
     const y=yget(false); if(y&&y.state!=='published') y.failed=pf; YTS.v++; }
-  else if(t==='video.published'){ const p=pget('slot'); p.state='live'; p.liveReal=performance.now(); p.liveAt=now; p.seq=++PLS.seq; pcap('live'); PLS.v++;
+  else if(t==='video.published'){ const p=pget('slot'); p.state='live'; p.liveReal=performance.now(); p.liveAt=now; p.liveMs=ev.atMs||Date.now(); if(ev.concept) p.concept=ev.concept; p.seq=++PLS.seq; pcap('live'); PLS.v++;
     const y=yget(true); up(y,'published'); if(!y.platforms.includes(pf)) y.platforms.push(pf); y.publishedAt=now; y.pubMs=ev.replay?ev.atMs:0; y.seq=++YTS.seq; y.failed=null; ycap('published',6); YTS.v++; }
   else if(t==='channel.connected'){ CHAN[pf].add(ev.channel||ev.id||'id:'+PLS.seq); PLS.v++; } }
 let pruneAt=0;
@@ -2100,7 +2250,7 @@ function pruneVideo(){ if(!VID.live) return; const n=Date.now(); let ch=false;
     else if(x.state==='stopped'&&(RMQ.matches||n-x.goneMs>8000)){ YTS.items.delete(k); ch=true; } }
   if(ch){ genCount(); YTS.v++; }
   else if(n-pruneAt>60e3){ pruneAt=n; if([...YTS.items.values()].some(x=>x.state==='building')) YTS.v++; } }
-bus.on(ev=>{ const t=ev.type, now=clockStr();
+bus.on(ev=>{ const t=ev.type, now=tzHM(Date.now());
   if(ev.anim){ animStore(ev,now); return; }
   if(t.startsWith('site.')){ let v=SITE.vis.get(ev.id);
     if(t==='site.visit'){ const pr=visitorProfile(ev), cc=ev.country||'ID'; v={id:ev.id,country:cc,persona:pr.persona,via:pr.via,state:ev.page||ev.landing||'home',title:ev.title,pages:1,at:now,seq:++SITE.seq,chats:0}; SITE.vis.set(ev.id,v); SITE.today++; SITE.pv++; SITE.ctry[cc]=(SITE.ctry[cc]||0)+1; SITE.pages[v.state]=(SITE.pages[v.state]||0)+1; }
@@ -2108,9 +2258,9 @@ bus.on(ev=>{ const t=ev.type, now=clockStr();
       else if(t==='site.chat'){ v.chats++; v.chatReal=performance.now(); SITE.chats++; }
       else if(t==='site.leave'){ v.state='left'; v.leftAt=now; v.seq=++SITE.seq; const gone=[...SITE.vis.values()].filter(x=>x.state==='left').sort((a,b)=>a.seq-b.seq); while(gone.length>6) SITE.vis.delete(gone.shift().id); } }
     st.siteNow=[...SITE.vis.values()].filter(x=>x.state!=='left').length; SITE.v++; return; }
-  if(t==='video.ready'){ for(const pf of (ev.targets||['youtube'])) PLS.items.set(pf+'|'+ev.id,{key:pf+'|'+ev.id,id:ev.id,platform:pf,title:ev.title,channel:ev.channel,kind:ev.kind,state:'arriving',publishAt:pf==='youtube'?ev.publishAt:null,at:now,seq:++PLS.seq}); PLS.v++; }
+  if(t==='video.ready'){ for(const pf of (ev.targets||['youtube'])) PLS.items.set(pf+'|'+ev.id,{key:pf+'|'+ev.id,id:ev.id,platform:pf,title:ev.title,channel:ev.channel,kind:ev.kind,state:'arriving',publishAt:ev.publishAt||null,slotMs:ev.publishAtMs||null,concept:ev.concept||'',at:now,seq:++PLS.seq}); PLS.v++; }
   if(t==='upload.stage'){ const it=PLS.items.get(ev.platform+'|'+ev.id); if(it){ it.state=ev.stage; it.stageReal=performance.now(); PLS.v++; } return; }
-  if(t==='video.published'){ const pf=ev.platform||'youtube', it=PLS.items.get(pf+'|'+ev.id); if(it){ it.state='live'; it.liveReal=performance.now(); it.liveAt=now; it.seq=++PLS.seq;
+  if(t==='video.published'){ const pf=ev.platform||'youtube', it=PLS.items.get(pf+'|'+ev.id); if(it){ it.state='live'; it.liveReal=performance.now(); it.liveAt=now; it.liveMs=Date.now(); it.seq=++PLS.seq;
       const live=[...PLS.items.values()].filter(x=>x.platform===pf&&x.state==='live').sort((a,b)=>a.seq-b.seq); while(live.length>6) PLS.items.delete(live.shift().key); PLS.v++; } }
   if(t.startsWith('article.')){ if(ev.to&&ev.to!=='linkedin') return; let it=LIS.items.get(ev.id);
     if(!it){ it={id:ev.id,title:ev.title,state:'drafting',at:now,seq:++LIS.seq}; LIS.items.set(ev.id,it); }
@@ -2212,7 +2362,7 @@ function ytQueues(){ if(VID.live) return animQueues(); const all=[...YTS.items.v
     return it? vCard(it,`<span class="chip">from ${it.source==='article'?'an article':'a topic'}</span>`)+(it.collab?`<div class="m">with ${esc(it.collab)}</div>`:'')+(it.reworks?`<div class="m">sent back by review ${it.reworks}×</div>`:'')+trackHtml(it)+'</article>'
       : `<article class="kc" style="border-left-color:${chColor(ch)}"><div class="top"><span class="chip">${esc(ch)}</span></div><div class="m">Line free. It takes the next item queued for this channel.</div></article>`; }).join('');
   const ready=all.filter(x=>x.state==='ready'), pub=all.filter(x=>x.state==='published').sort((a,b)=>b.seq-a.seq);
-  return `<p class="lede">Every video starts as a line in a queue. The Video Generator takes the oldest item waiting for each channel, builds it, then box cars carry the file to the platforms. YouTube publishes at the top of the next hour.</p>
+  return `<p class="lede">Every video starts as a line in a queue. The Video Generator takes the oldest item waiting for each channel, builds it, then box cars carry the file to the platforms. Each channel posts at its own next slot, one video per concept a day.</p>
   <div class="board">
     <div class="col"><h4>Articles to turn into videos <i>${sch.filter(x=>x.source==='article').length}</i></h4><p class="hint">Blog articles from mfardiansyah.id, oldest first.</p>${lane2('article')}
       <h4>Topics to turn into videos <i>${sch.filter(x=>x.source==='topic').length}</i></h4><p class="hint">Planned topics with no article yet.</p>${lane2('topic')}</div>
@@ -2272,8 +2422,8 @@ const KIND={
     intro:()=>`<p class="lede">Each person is one article. It is drafted at the Article Bureau, joins the line with its posting slot on the tag, and at that slot is pinned on the LinkedIn Street board. One post goes out every three hours, oldest first.</p>`},
   site:{store:()=>SITE,LH:480,where:'Kampung · mfardiansyah.id',title:()=>'Visitors on the site',views:[['people','People'],['board','Board']],draw:(...a)=>drawSiteScene(...a),html:()=>siteBoard(),
     intro:()=>`<p class="lede">Each person is one visit to the site. The feed only reports the country and the page; the town gives each visitor a character and a way of travelling, then lets them read, move between pages and leave. Point at anyone to see who they are and what they are reading.</p><div class="legend">${Object.values(PERSONA).map(q=>`<span><i style="background:${q.color}"></i>${q.label}</span>`).join('')}<span><i style="background:#6f8fb3"></i>chat agent</span></div>`},
-  plat:{store:()=>PLS,LH:440,where:'Platform company · upload room',title:()=>PNAME[detail.id]+' · reels in, posts out',views:[['people','People'],['board','Board']],draw:(...a)=>drawPlatScene(...a),html:()=>platBoard(detail.id),
-    intro:()=>`<p class="lede">Each person is one finished video that arrived by box car from the Video Generator. They pass the format check, get a caption and tags, wait for a slot, upload, and then appear on the phone as a live reel. Point at anyone to see the title.</p><div class="legend">${CONFIG.channels.map(ch=>`<span><i style="background:${chColor(ch)}"></i>${esc(ch)}</span>`).join('')}</div>`},
+  plat:{store:()=>({v:PLS.v+'|'+YTS.v+'|'+tzDay(Date.now())+'|'+TZ}),LH:600,where:'Platform company · upload room',title:()=>PNAME[detail.id]+' · reels in, posts out',views:[['people','People'],['channels','Channels'],['board','Board']],draw:(...a)=>drawPlatScene(...a),html:tab=>tab==='channels'?platChannels(detail.id):platBoard(detail.id),
+    intro:()=>`<p class="lede">Each person is one finished video that arrived by box car from the Video Generator. They pass the format check, get a caption and tags, wait for a slot, upload, and then appear on the phone as a live reel. Point at anyone to see the title. Below the room, each channel has its own influencer and a stack of tickets: its waiting list.</p><div class="legend">${(()=>{ const l=channelsFor(detail.id); return l.slice(0,6).map(ch=>`<span><i style="background:${ch.color}"></i><bdi>${esc(ch.name)}</bdi></span>`).join('')+(l.length>6?`<span>+${l.length-6} more</span>`:''); })()}<span data-testid="plat-tz-legend">times in ${esc(TZF.label)}</span></div>`},
   qa:{store:()=>QAS,LH:520,where:'Social Row · QA Lab',title:()=>'Automated test runs',views:[['people','People'],['board','Board']],draw:(...a)=>drawQaScene(...a),html:()=>qaBoard(),
     intro:()=>`<p class="lede">Each row is one product and its QA bot running a Playwright script in a browser. The agent walks the six steps, each pad turns green or red, and the result is filed at the report desk. A failed run opens a bug for that product in GitHub Valley.</p><div class="legend">${PLOTS.filter(o=>o.owner).map(o=>`<span><i style="background:${orgColor(o.id)}"></i>${esc(cut(o.id))}</span>`).join('')}<span><i style="background:#9ccfb5"></i>other owners</span><span><i style="background:#cfd3d6"></i>no owner</span><span><i style="background:#2f8f6b"></i>step passed</span><span><i style="background:#c8472f"></i>step failed</span></div>`},
 };
@@ -2323,7 +2473,7 @@ function qaBoard(){ const cls={passed:'done',doing:'doing',failed:'fail'}, rows=
 /* ---------- People mode: the same stores, drawn as walking figures ---------- */
 const LABELC={bug:'#eba595',feature:'#a9c6de',chore:'#d2d6d9',issue:'#a9c6de',pr:'#c7b3e0'};
 const scene={actors:new Map(),fresh:true,tick:0,mx:-99,my:-99};
-function sceneReset(){ scene.actors.clear(); scene.fresh=true; }
+function sceneReset(){ scene.actors.clear(); scene.fresh=true; scene.tk=new Map(); scene.slides=[]; scene.fl=new Map(); }
 function actor(key,item,tx,ty,spawn,dt,terminal){ let a=scene.actors.get(key);
   if(!a){ if(terminal) return null; a={x:scene.fresh?tx:spawn[0],y:scene.fresh?ty:spawn[1],ph:Math.random()*6}; scene.actors.set(key,a); }
   a.item=item; a.seen=scene.tick; if(a.gone) return a;
@@ -2441,7 +2591,7 @@ function drawYtScene(c,dt,LW,LH){ const all=[...YTS.items.values()], sch=all.fil
   // hanging station signs
   const sign=(x,label,step,fill='#fff',ink=INK)=>{ c.lineWidth=1; c.beginPath(); c.moveTo(x-30,11); c.lineTo(x-30,44); c.moveTo(x+30,11); c.lineTo(x+30,44); c.stroke(); c.lineWidth=1.4; c.fillStyle=fill; c.fillRect(x-40,44,80,34); c.strokeRect(x-40,44,80,34); txt(c,label,x,61,'600 13px "IBM Plex Sans"','center',ink); txt(c,step,x,73,'500 8.5px "IBM Plex Mono"','center',ink===INK?'#647282':ink); };
   STAGES.forEach(([k,name],i)=>{ dash(c,SX[k],96,SX[k],LH-24); sign(SX[k],name,'STEP '+(i+2)); });
-  const nowH=tod*24, slot=String((Math.floor(nowH)+1)%24).padStart(2,'0')+':00'; dash(c,890,96,890,LH-24); sign(890,'Slot '+slot,'STEP 7 · WAIT'); sign(1005,'▶ Publish','STEP 8','#d9523c','#fff');
+  const nx=nextSlotMs([...PLS.items.values()].filter(x=>x.platform==='youtube')); dash(c,890,96,890,LH-24); sign(890,nx?'Slot '+tzHM(nx):'Slot \u2013','STEP 7 · WAIT'); sign(1005,'▶ Publish','STEP 8','#d9523c','#fff');
   // loading dock with a box car
   c.lineWidth=1.4; c.fillStyle='#e6e9ec'; c.fillRect(960,124,88,380); c.strokeRect(960,124,88,380); for(let y=124;y<504;y+=16){ c.fillStyle=(y/16|0)%2?'#e6b655':INK; c.fillRect(960,y,7,Math.min(16,504-y)); }
   txt(c,'LOADING DOCK',1008,142,'500 9.5px "IBM Plex Mono"','center','#647282'); for(const [ln,ly] of [['box cars',470],['to the four',481],['platforms',492]]) txt(c,ln,1008,ly,'500 9.5px "IBM Plex Mono"','center','#647282');
@@ -2500,8 +2650,8 @@ function drawLiScene(c,dt,LW,LH){ const all=[...LIS.items.values()], G=400, mono
   // slot gate with clock and barrier
   c.lineWidth=1.4; c.fillStyle=K.ar.wall; for(const gx of [640,676]){ c.fillRect(gx,G-106,9,112); c.strokeRect(gx,G-106,9,112); } c.fillRect(632,G-116,60,10); c.strokeRect(632,G-116,60,10);
   c.beginPath(); c.arc(662,G-146,28,0,7); c.fillStyle='#fff'; c.fill(); c.stroke(); for(let i=0;i<12;i++){ const a=i/12*Math.PI*2; c.beginPath(); c.moveTo(662+Math.cos(a)*24,G-146+Math.sin(a)*24); c.lineTo(662+Math.cos(a)*27,G-146+Math.sin(a)*27); c.stroke(); }
-  const ang=tod*Math.PI*4-Math.PI/2; c.lineWidth=2; c.beginPath(); c.moveTo(662,G-146); c.lineTo(662+Math.cos(ang)*13,G-146+Math.sin(ang)*13); c.stroke(); c.lineWidth=1.3; c.beginPath(); c.moveTo(662,G-146); c.lineTo(662+Math.cos(ang*12)*21,G-146+Math.sin(ang*12)*21); c.stroke();
-  plaque(c,'now '+clockStr(),662,G-184,mono); txt(c,sched.length?'next slot '+sched[0].publishAt:'no post waiting',662,G+26,mono,'center','#647282');
+  const [ang,ang2]=tzAngles(); c.lineWidth=2; c.beginPath(); c.moveTo(662,G-146); c.lineTo(662+Math.cos(ang)*13,G-146+Math.sin(ang)*13); c.stroke(); c.lineWidth=1.3; c.beginPath(); c.moveTo(662,G-146); c.lineTo(662+Math.cos(ang2)*21,G-146+Math.sin(ang2)*21); c.stroke();
+  plaque(c,'now '+tzHM(Date.now()),662,G-184,mono); txt(c,sched.length?'next slot '+sched[0].publishAt:'no post waiting',662,G+26,mono,'center','#647282');
   scene.gateA=(scene.gateA||0)+((scene.gateOpen?1:0)-(scene.gateA||0))*.12; scene.gateOpen=false; const ga=-scene.gateA*1.25; c.lineWidth=4; c.strokeStyle='#c8472f'; c.beginPath(); c.moveTo(649,G-34); c.lineTo(649+Math.cos(ga)*28,G-34+Math.sin(ga)*28); c.stroke(); c.strokeStyle=INK; c.lineWidth=1.3;
   // notice board under a striped awning
   c.fillStyle='#fff'; c.fillRect(722,66,322,274); c.lineWidth=3; c.strokeStyle='#8a6a48'; c.strokeRect(722,66,322,274); c.strokeStyle=INK; c.lineWidth=1.3; c.strokeRect(719,63,328,280);
@@ -2598,24 +2748,104 @@ function drawSiteScene(c,dt,LW,LH){ const all=[...SITE.vis.values()], t=now_(), 
     person(c,a.x,a.y,(PERSONA[v.persona]||PERSONA.walker).color,{k:1.7,moving:a.moving,ph:a.ph,...o}); hoverCheck(a,`${(PERSONA[v.persona]||PERSONA.walker).label} from ${COUNTRY[v.country]||v.country}, ${VIA[v.via]||''}: ${v.state==='left'?'leaving after '+v.pages+' pages':v.title||({home:'home page',chat:'chatting',office:'office page',blog:'reading the blog'}[v.state])}`); } }
 
 const PSTG=[['check','Format check'],['caption','Caption + tags'],['slot','Slot'],['upload','Upload']], PX={check:330,caption:500,slot:660,upload:810};
+/* ---------- channels as influencers: derived, pure ----------
+   [{key,name,private,color,connected:[pf],concepts:[{name,color,status:made|scheduled|live|none,at}],queue:[{key,id,title,concept,color,slotMs,state}],liveToday,next}]
+   Live: the channels Animora connected or sent a video for on this platform; hidden ones are one "Private channel". Simulator: CONFIG.channels.
+   Status today: live (posted today) > scheduled (a slot today) > made (rendered today) > none. */
+const PFORDER=['youtube','facebook','instagram','tiktok'];
+function channelsFor(pf){ const live=VID.live, nowMs=Date.now(), today=tzDay(nowMs), out=new Map(), qs=live?['slot']:QS_SIM;
+  const add=(key,name,priv)=>{ let m=out.get(key); if(!m){ m={key,name,private:priv,color:chColor(priv||key===CHXNONE?'':name),connected:[],concepts:[],queue:[],liveToday:0,next:null}; out.set(key,m); } return m; };
+  if(live){ for(const n of CHAN[pf]){ const priv=String(n).startsWith('c:'); add(priv?CHXPRIV:chanKey(n),priv?'Private channel':String(n),priv); }
+    for(const c of CHX.values()) if(c.plat.has(pf)) add(c.key,c.name,c.private); }
+  else for(const n of CONFIG.channels) add(n,n,false);
+  for(const it of PLS.items.values()){ if(it.platform!==pf||!qs.includes(it.state)) continue; const m=out.get(itemKey(it)); if(m) m.queue.push({key:it.key,id:it.id,title:it.title,concept:m.private?'':(it.concept||''),slotMs:it.slotMs||null,state:it.state,seq:it.seq}); }
+  const list=[...out.values()];
+  for(const m of list){ const c=CHX.get(m.key); m.queue.sort((a,b)=>(a.slotMs==null)-(b.slotMs==null)||(a.slotMs||0)-(b.slotMs||0)||a.seq-b.seq);
+    m.connected=live?PFORDER.filter(p=>p===pf||(c&&c.plat.has(p))):PFORDER.slice();
+    m.liveToday=chxLT(c,pf);
+    if(!m.private){ const names=live?[]:(CONFIG.concepts[m.name]||[]).slice(); if(c) for(const k of c.concepts.keys()) if(!names.includes(k)) names.push(k);
+      if(m.queue.some(q=>!q.concept)) names.push('');
+      const cm=conceptColors(names);
+      m.concepts=names.map(name=>{ const cx=c&&c.concepts.get(name), its=m.queue.filter(q=>q.concept===name);
+        const lv=cx&&cx.live[pf]&&cx.live[pf].day===today, sch=its.filter(q=>q.slotMs&&tzDay(q.slotMs)===today), made=live?(cx&&cx.madeDay===today):its.some(q=>q.state==='arriving'||q.state==='check'||q.state==='caption');
+        const fut=its.find(q=>q.slotMs&&q.slotMs>nowMs), status=lv?'live':sch.length?'scheduled':made?'made':'none';
+        return {name,color:cm.get(name),status,at:status==='live'?cx.live[pf].ms:status==='scheduled'?sch[0].slotMs:fut?fut.slotMs:null}; });
+      for(const q of m.queue) q.color=cm.get(q.concept)||'#d2d6d9'; }
+    else for(const q of m.queue) q.color='#d2d6d9';
+    const nx=m.queue.find(q=>q.slotMs); m.next=nx?nx.slotMs:null; }
+  return list.sort((a,b)=>(a.next==null)-(b.next==null)||(a.next||0)-(b.next||0)||a.name.localeCompare(b.name)); }
+const nextSlotMs=l=>{ let m=0; for(const it of l) if(it.slotMs&&it.state!=='live'&&it.state!=='failed'&&(!m||it.slotMs<m)) m=it.slotMs; return m; };
+/* Channels view: one card per channel with its concepts today and its waiting list in slot order */
+function platChannels(pf){ const N=PNAME[pf], list=channelsFor(pf);
+  const head=`<p class="lede">Each channel (kanal) on ${N} posts one video per concept a day. Tickets wait in slot order.</p><div class="legend"><span data-testid="plat-tz-legend">times in ${esc(TZF.label)}</span><span>made: rendered today</span><span>scheduled: slot today</span><span>live: posted today</span></div>`+(VID.live?'':'<p class="hint">Demo: slots are a few minutes apart so you can watch them go out.</p>');
+  if(!list.length) return head+emptyBox('plat-channels-empty','No channels yet.',`Channels appear here when Animora connects one to ${N} or schedules a video for it.`);
+  const chip=cn=>cn.status==='live'?`<span class="chip passed">live ${tzHM(cn.at)}</span>`:cn.status==='scheduled'?`<span class="chip" style="border-color:var(--ink)">${tzHM(cn.at)}</span>`:cn.status==='made'?'<span class="chip running">made</span>'
+    :`<span class="chip" style="color:var(--ink-soft)">${cn.at?'next '+esc(fmtSlot(cn.at)):'not today'}</span>`;
+  const av=col=>`<svg class="av" viewBox="0 0 36 36" width="36" height="36" aria-hidden="true"><circle cx="18" cy="18" r="17" fill="${mix(col,'#ffffff',.7)}" stroke="#1f2b3a"/><path d="M8 34c1-7 5-10 10-10s9 3 10 10" fill="${col}" stroke="#1f2b3a" stroke-width="1.3"/><circle cx="18" cy="15" r="6" fill="#fff" stroke="#1f2b3a" stroke-width="1.3"/><path d="M12 12c1-4 4-5.5 6-5.5s5 1.5 6 5.5c-2-1.5-4-2-6-2s-4 .5-6 2z" fill="#262e3a"/><path d="M12.5 13.5h11v2.6h-4.2l-.8-1h-1l-.8 1h-4.2z" fill="#1f2b3a"/></svg>`;
+  const card=ch=>{ const q=ch.queue, cs=ch.concepts, cc=Math.min(6,cs.length);
+    return `<article class="kc chn" data-testid="plat-channel" data-channel="${esc(ch.name)}"${ch.private?' data-private="true"':''} style="border-left-color:${ch.color}">`
+      +`<div class="chn-h">${av(ch.color)}<div class="chn-n"><h4 class="t" dir="auto">${esc(ch.name)}</h4><div class="checks">${ch.connected.map(p=>`<span class="chip">${PNAME[p]}</span>`).join('')}</div></div><div class="chn-live"><b>${ch.liveToday}</b><span>live today</span></div></div>`
+      +(ch.private?'':`<h5>Concepts <i>${cs.length}</i></h5><ul class="cpt">${cs.slice(0,cc).map(cn=>`<li data-testid="plat-concept" data-concept="${esc(cn.name)}" data-status="${cn.status}"><i style="background:${cn.color}"></i><span dir="auto">${cn.name?esc(cn.name):'No concept'}</span>${chip(cn)}</li>`).join('')}${cs.length>cc?`<li class="more">+${cs.length-cc} more concepts</li>`:''}</ul>`)
+      +`<h5>Waiting list <i>${q.length}</i></h5>`+(q.length?'':none('Nothing waiting for this channel.'))
+      +`<ol class="q" data-testid="plat-channel-queue">${q.slice(0,8).map(it=>`<li data-testid="plat-queue-item" data-concept="${esc(it.concept)}" data-slot="${it.slotMs||''}"><time>${it.slotMs?esc(fmtSlot(it.slotMs)):'--:--'}</time><i style="background:${it.color}"></i><span class="t" dir="auto">${esc(ch.private?'Private video':it.title)}</span></li>`).join('')}${q.length>8?`<li class="more">+${q.length-8} more</li>`:''}</ol></article>`; };
+  return head+'<div class="chans">'+list.map(card).join('')+'</div>'; }
+/* the channel lineup under the upload room: an influencer on a stage with a ring light, and its tickets (the waiting list, next slot on top) */
+function rrect(c,x,y,w,h,r){ c.beginPath(); if(c.roundRect) c.roundRect(x,y,w,h,r); else c.rect(x,y,w,h); }
+function drawLineup(c,pf,all){ const chs=channelsFor(pf), Y=548, now=performance.now(), cm=calm(), mono='500 10.5px "IBM Plex Mono"', tk=new Map(), prev=(scene.tk&&now-(scene.tkAt||0)<250)?scene.tk:new Map();
+  c.strokeStyle=INK;
+  if(!scene.slides) scene.slides=[]; if(!scene.fl) scene.fl=new Map(); if(cm) scene.slides=[];
+  dash(c,20,380,1040,380); txt(c,`CHANNELS ON ${PNAME[pf].toUpperCase()} · TIMES IN ${TZF.label}`,20,398,'500 9px "IBM Plex Mono"','left','#647282');
+  if(!chs.length) txt(c,'no channel yet',530,470,mono,'center','#647282');
+  const over=chs.length>6, vis=over?chs.slice(0,5):chs, n=over?6:vis.length, X0=i=>(1060-n*170)/2+i*170;
+  vis.forEach((ch,i)=>{ const x0=X0(i), col=ch.color, cx=x0+36, q=ch.queue.length, dx=cm?0:Math.sin((now/2400+i*.25)*Math.PI*2)*1.2, ringY=Y-27;
+    // stage
+    c.lineWidth=1.3; c.fillStyle=mix(col,WHITE,.55); c.fillRect(x0+4,Y,64,10); c.strokeRect(x0+4,Y,64,10); c.fillStyle='#b99a77'; c.fillRect(x0+4,Y+10,64,4); c.strokeRect(x0+4,Y+10,64,4);
+    // ring light behind the head
+    c.beginPath(); c.moveTo(cx+dx*.3,Y); c.lineTo(cx+dx*.3,Y-12); c.stroke();
+    c.beginPath(); c.arc(cx+dx,ringY,15,0,7); c.fillStyle='rgba(255,240,200,.35)'; c.fill(); c.strokeStyle='#fff'; c.lineWidth=3.5; c.stroke(); c.strokeStyle=INK; c.lineWidth=1.2; c.beginPath(); c.arc(cx+dx,ringY,16.8,0,7); c.stroke(); c.beginPath(); c.arc(cx+dx,ringY,13.2,0,7); c.stroke();
+    person(c,cx,Y-2,col,{k:1.8});
+    c.fillStyle=mix(col,WHITE,.45); c.fillRect(cx-3.8,Y-2-18.4,7.6,2); c.fillStyle=INK; c.fillRect(cx-4.3,Y-27,8.6,2.4);
+    const fl=scene.fl.get(ch.key); if(fl&&!cm) flashAt(c,cx+dx,ringY,now-fl,1.8);
+    // name and counts
+    c.font='600 11px "IBM Plex Sans"'; txt(c,fitText(c,ch.name,150),x0+75,Y+30,'600 11px "IBM Plex Sans"','center',INK);
+    txt(c,`${q} waiting · ${ch.liveToday} live today`,x0+75,Y+44,'500 9px "IBM Plex Mono"','center','#647282');
+    const nc2=ch.concepts.filter(c=>c.name).length; hoverCheck({x:cx,y:Y-14},`${ch.name} · ${q} waiting · ${nc2} concept${nc2===1?'':'s'} · ${ch.liveToday} live today`);
+    // tickets: earliest slot on top, drawn last
+    if(!q){ c.save(); c.setLineDash([4,4]); c.lineWidth=1.2; rrect(c,x0+78,Y-30,84,22,3); c.stroke(); c.restore(); txt(c,'no slot',x0+120,Y-15,'500 9px "IBM Plex Mono"','center','#647282'); }
+    const nt=Math.min(4,q);
+    for(let k=nt-1;k>=0;k--){ const it=ch.queue[k], tx=x0+78+k*3, ty=Y-30-k*6;
+      c.lineWidth=1.2; rrect(c,tx,ty,84,22,3); c.fillStyle=it.color; c.fill(); c.stroke(); c.beginPath(); c.arc(tx,ty+11,3,-Math.PI/2,Math.PI/2); c.fillStyle='#ece8dc'; c.fill();
+      if(k===0){ const t0=it.slotMs?fmtSlot(it.slotMs):'next slot'; c.font='600 10.5px "IBM Plex Mono"'; const tw=c.measureText(t0).width; txt(c,t0,tx+8,ty+15,'600 10.5px "IBM Plex Mono"','left',INK);
+        const room=68-tw; if(room>=14){ c.font='500 8.5px "IBM Plex Mono"'; txt(c,fitText(c,it.concept||'No concept',Math.min(34,room)),tx+80,ty+15,'500 8.5px "IBM Plex Mono"','right',INK); } }
+      hoverCheck({x:tx+42,y:ty+27},`${it.concept||'No concept'} · ${ch.private?'Private video':it.title} · ${it.slotMs?slotTxt(it.slotMs):'next slot'}`);
+      tk.set(it.key,{x:tx+42,y:ty+11,col:it.color,ch:ch.key}); }
+    if(q>4) txt(c,'+'+(q-4),x0+164,Y-58,'500 9px "IBM Plex Mono"','right',INK); });
+  if(over){ const x0=X0(5); c.save(); c.setLineDash([5,4]); c.lineWidth=1.2; c.strokeStyle='rgba(31,43,58,.5)'; c.strokeRect(x0+10,Y-110,150,120); c.restore();
+    txt(c,`+${chs.length-5} more channels`,x0+85,Y-52,'600 12px "IBM Plex Sans"','center',INK); txt(c,'open the Channels tab',x0+85,Y-36,'500 9px "IBM Plex Mono"','center','#647282'); }
+  // a ticket that left the stack and is now live slides to the phone (700 ms, at most 3 at once); nothing moves when calm
+  for(const [key,info] of prev){ if(tk.has(key)) continue; const it=PLS.items.get(key); if(!it||it.state!=='live'||cm) continue; scene.fl.set(info.ch,now); if(scene.slides.length<3) scene.slides.push({x:info.x,y:info.y,col:info.col,t0:now}); }
+  scene.tk=tk; scene.tkAt=now; scene.slides=scene.slides.filter(sl=>now-sl.t0<700);
+  for(const sl of scene.slides){ const t=(now-sl.t0)/700, e=easeInOutCubic(t), x=sl.x+(970-sl.x)*e, y=sl.y+(220-sl.y)*e, sc=1-.45*e, ga=c.globalAlpha;
+    c.save(); c.globalAlpha=ga*(t<.8?1:1-(t-.8)/.2); c.translate(x,y); c.scale(sc,sc); c.lineWidth=1.2; rrect(c,-42,-11,84,22,3); c.fillStyle=sl.col; c.fill(); c.stroke(); c.restore(); } }
+
 function platBoardLive(pf){ const all=[...PLS.items.values()].filter(x=>x.platform===pf), nc=CHAN[pf].size, N=PNAME[pf];
-  const lede=`<p class="lede">What ${N} shows of the videos Animora sends. ${nc} channel${nc===1?'':'s'} connected.</p>`+(pf!=='youtube'?`<p class="hint">Animora does not upload to ${N} yet. Connected channels, schedules and failed attempts show here.</p>`:'');
+  const lede=`<p class="lede">What ${N} shows of the videos Animora sends. ${nc} channel${nc===1?'':'s'} connected. (<span data-testid="plat-tz-legend">times in ${esc(TZF.label)}</span>)</p>`+(pf!=='youtube'?`<p class="hint">Animora does not upload to ${N} yet. Connected channels, schedules and failed attempts show here.</p>`:'');
   if(!all.length) return lede+emptyBox('plat-board-empty','Nothing from Animora yet.',`Scheduled and published videos for ${N} appear here.`);
   const card=(it,meta)=>`<article class="kc" data-testid="plat-card" data-platform="${pf}" data-state="${it.state}" style="border-left-color:${chColor(it.channel)}"><div class="top">${it.channel?`<span class="chip" dir="auto" title="${esc(it.channel)}">${esc(it.channel)}</span>`:''}${it.kind==='reel'?'<span class="chip reel">reel</span>':''}</div><div class="t" dir="auto">${esc(it.title)}</div><div class="m">${meta}</div></article>`;
   const col=(stt,name,hint,meta,emptyT,cnt)=>{ const l=all.filter(x=>x.state===stt).sort((a,b)=>stt==='slot'?a.seq-b.seq:b.seq-a.seq); return `<div class="col"><h4>${name} <i>${cnt==null?l.length:cnt}</i></h4><p class="hint">${hint}</p>${l.length?l.map(it=>card(it,meta(it))).join(''):none(emptyT)}</div>`; };
   return lede+`<div class="board" style="grid-template-columns:repeat(3,minmax(170px,1fr))">`
-    +col('slot','Scheduled','Waiting for the planned slot.',it=>it.publishAt?'slot '+esc(it.publishAt):'no slot time','Nothing is scheduled.')
+    +col('slot','Scheduled','Waiting for the planned slot.',it=>it.slotMs?'slot '+esc(slotTxt(it.slotMs)):it.publishAt?'slot '+esc(it.publishAt):'no slot time','Nothing is scheduled.')
     +col('failed','Not published','The upload did not go out.',it=>'attempt '+esc(it.attempt||1),'Nothing failed.')
-    +col('live','Live','Latest, newest first.',it=>'live since '+esc(it.liveAt),'Nothing live yet.',plat[pf])+'</div>'; }
+    +col('live','Live','Latest, newest first.',it=>'live since '+esc(it.liveMs?tzHM(it.liveMs):it.liveAt),'Nothing live yet.',plat[pf])+'</div>'; }
 function platBoard(pf){ if(VID.live) return platBoardLive(pf); const all=[...PLS.items.values()].filter(x=>x.platform===pf), card=(it,meta)=>`<article class="kc" style="border-left-color:${chColor(it.channel)}"><div class="top"><span class="chip">${esc(it.channel)}</span>${it.kind==='reel'?'<span class="chip reel">reel</span>':''}</div><div class="t">${esc(it.title)}</div><div class="m">${meta}</div></article>`;
   const col=(stt,name,hint,meta,emptyT)=>{ const l=all.filter(x=>x.state===stt).sort((a,b)=>stt==='live'?b.seq-a.seq:a.seq-b.seq); return `<div class="col"><h4>${name} <i>${stt==='live'?plat[pf]:l.length}</i></h4><p class="hint">${hint}</p>${l.length?l.map(it=>card(it,meta(it))).join(''):none(emptyT)}</div>`; };
-  return `<p class="lede">What ${PNAME[pf]} does with each video the Video Generator sends. The input is a finished file; the output is a live reel.</p><div class="board" style="grid-template-columns:repeat(6,minmax(170px,1fr))">`
+  return `<p class="lede">What ${PNAME[pf]} does with each video the Video Generator sends. The input is a finished file; the output is a live reel. (<span data-testid="plat-tz-legend">times in ${esc(TZF.label)}</span>)</p><p class="hint">Demo: slots are a few minutes apart so you can watch them go out.</p><div class="board" style="grid-template-columns:repeat(6,minmax(170px,1fr))">`
     +col('arriving','On the way','In a box car from the generator.',it=>'left '+it.at,'No box car on the road.')
     +col('check','Format check','Portrait 9:16, length, file size.',()=>'checking','Nothing to check.')
     +col('caption','Caption and tags','Title, description, hashtags, cover.',()=>'writing','Nothing to caption.')
-    +col('slot','Waiting for a slot',pf==='youtube'?'YouTube posts at the top of the hour.':'Posts at the next free slot.',it=>it.publishAt?'slot '+esc(it.publishAt):'next free slot','No reel is waiting.')
+    +col('slot','Waiting for a slot','Each video posts at its planned slot.',it=>it.slotMs?'slot '+esc(slotTxt(it.slotMs)):it.publishAt?'slot '+esc(it.publishAt):'next free slot','No reel is waiting.')
     +col('upload','Uploading','File going up.',()=>'uploading','Nothing uploading.')
-    +col('live','Live','Latest reels, newest first.',it=>'live since '+it.liveAt,'Nothing live yet.')+'</div>'; }
+    +col('live','Live','Latest reels, newest first.',it=>'live since '+(it.liveMs?tzHM(it.liveMs):it.liveAt),'Nothing live yet.')+'</div>'; }
 function drawPlatScene(c,dt,LW,LH){ const pf=detail.id, col=PCOL[pf], cult=PCULT[pf], all=[...PLS.items.values()].filter(x=>x.platform===pf), t=now_(), G=350, mono='500 10.5px "IBM Plex Mono"', blink=Math.floor(performance.now()/400)%2===0;
   // room in the company's own style
   const wall={jp:'#f7f4ea',eu:'#ecd6c8',ar:'#f0e3c6',cn:'#f5efe2'}[cult]; c.fillStyle=mix(wall,'#7c7890',night*.3); c.fillRect(0,0,LW,G+6); c.strokeStyle=INK; c.lineWidth=1.3;
@@ -2639,8 +2869,9 @@ function drawPlatScene(c,dt,LW,LH){ const pf=detail.id, col=PCOL[pf], cult=PCULT
   { const x=PX.caption+30; c.lineWidth=1.3; c.fillStyle='#26323f'; c.fillRect(x,G-82,54,36); c.strokeRect(x,G-82,54,36); if(busy('caption')){ c.fillStyle='#fff'; for(let i=0;i<3;i++) c.fillRect(x+5,G-76+i*7,Math.min(44,((t*26+i*14)%50)),2.4); c.fillStyle=col; c.fillRect(x+5,G-54,12,4); c.fillRect(x+20,G-54,16,4); } else { c.fillStyle=blink?'#7fd6a3':'#26323f'; c.fillRect(x+25,G-66,4,4); }
     c.beginPath(); c.moveTo(x+27,G-46); c.lineTo(x+27,G-30); c.stroke(); c.fillStyle='#caa77d'; c.fillRect(x-10,G-30,76,5); c.strokeRect(x-10,G-30,76,5); c.beginPath(); c.moveTo(x-5,G-25); c.lineTo(x-5,G+4); c.moveTo(x+61,G-25); c.lineTo(x+61,G+4); c.stroke(); c.fillStyle='#dfe3e8'; c.fillRect(x+12,G-34,30,4); c.strokeRect(x+12,G-34,30,4); plaque(c,'# title · tags · cover',x+27,G-94,mono); }
   // slot board with a clock
-  { const x=PX.slot+34; c.lineWidth=1.3; c.fillStyle='#fff'; c.fillRect(x,G-122,66,74); c.strokeRect(x,G-122,66,74); c.fillStyle=col; c.fillRect(x,G-122,66,12); c.strokeRect(x,G-122,66,12); const hr=Math.floor(tod*24); for(let i=0;i<6;i++){ const cx2=x+5+(i%3)*20, cy2=G-104+Math.floor(i/3)*26; c.fillStyle=i===1?mix(col,WHITE,.6):'#f6f7f1'; c.fillRect(cx2,cy2,17,22); c.lineWidth=1; c.strokeRect(cx2,cy2,17,22); txt(c,String((hr+i)%24).padStart(2,'0'),cx2+8.5,cy2+15,'500 9.5px "IBM Plex Mono"','center'); }
-    c.lineWidth=1.3; c.beginPath(); c.moveTo(x+33,G-48); c.lineTo(x+33,G+4); c.stroke(); c.beginPath(); c.arc(x+33,G-146,15,0,7); c.fillStyle='#fff'; c.fill(); c.stroke(); const ang=tod*Math.PI*4-Math.PI/2; c.beginPath(); c.moveTo(x+33,G-146); c.lineTo(x+33+Math.cos(ang)*7,G-146+Math.sin(ang)*7); c.moveTo(x+33,G-146); c.lineTo(x+33+Math.cos(ang*12)*11,G-146+Math.sin(ang*12)*11); c.stroke(); }
+  { const x=PX.slot+34; c.lineWidth=1.3; c.fillStyle='#fff'; c.fillRect(x,G-122,66,74); c.strokeRect(x,G-122,66,74); c.fillStyle=col; c.fillRect(x,G-122,66,12); c.strokeRect(x,G-122,66,12); const hr=+TZF.hm.format(Date.now()).slice(0,2), nxs=nextSlotMs(all), hi=nxs?((+TZF.hm.format(nxs).slice(0,2))-hr+24)%24:-1; for(let i=0;i<6;i++){ const cx2=x+5+(i%3)*20, cy2=G-104+Math.floor(i/3)*26; c.fillStyle=i===hi?mix(col,WHITE,.6):'#f6f7f1'; c.fillRect(cx2,cy2,17,22); c.lineWidth=1; c.strokeRect(cx2,cy2,17,22); txt(c,String((hr+i)%24).padStart(2,'0'),cx2+8.5,cy2+15,'500 9.5px "IBM Plex Mono"','center'); }
+    txt(c,TZF.label,x+33,G-113,'500 8px "IBM Plex Mono"','center','#fff');
+    c.lineWidth=1.3; c.beginPath(); c.moveTo(x+33,G-48); c.lineTo(x+33,G+4); c.stroke(); c.beginPath(); c.arc(x+33,G-146,15,0,7); c.fillStyle='#fff'; c.fill(); c.stroke(); const [ang,ang2]=tzAngles(); c.beginPath(); c.moveTo(x+33,G-146); c.lineTo(x+33+Math.cos(ang)*7,G-146+Math.sin(ang)*7); c.moveTo(x+33,G-146); c.lineTo(x+33+Math.cos(ang2)*11,G-146+Math.sin(ang2)*11); c.stroke(); }
   // upload mast
   { const x=PX.upload+52, up=at('upload')[0]; c.lineWidth=1.4; c.beginPath(); c.moveTo(x-16,G+4); c.lineTo(x,G-130); c.lineTo(x+16,G+4); c.moveTo(x-11,G-40); c.lineTo(x+11,G-40); c.moveTo(x-7,G-80); c.lineTo(x+7,G-80); c.moveTo(x-11,G-40); c.lineTo(x+7,G-80); c.moveTo(x+11,G-40); c.lineTo(x-7,G-80); c.stroke(); c.beginPath(); c.arc(x,G-134,4,0,7); c.fillStyle=up?col:'#fff'; c.fill(); c.stroke();
     if(up){ for(let i=0;i<3;i++){ const r=8+((t*22+i*11)%33); c.globalAlpha=Math.max(0,1-r/41); c.strokeStyle=col; c.lineWidth=2; c.beginPath(); c.arc(x,G-134,r,-Math.PI*.85,-Math.PI*.15); c.stroke(); c.globalAlpha=1; } c.strokeStyle=INK; const pr=Math.min(1,(performance.now()-(up.stageReal||0))/3400); c.fillStyle='#fff'; c.lineWidth=1.2; c.fillRect(PX.upload-46,82,92,9); c.strokeRect(PX.upload-46,82,92,9); c.fillStyle=col; c.fillRect(PX.upload-46,82,92*pr,9); txt(c,Math.round(pr*100)+'%',PX.upload+56,90,mono,'left'); } }
@@ -2648,16 +2879,17 @@ function drawPlatScene(c,dt,LW,LH){ const pf=detail.id, col=PCOL[pf], cult=PCULT
   { const live=at('live').reverse(), cur=live[0], px=908, py=G-240, pw=124, ph=212; c.lineWidth=2; c.fillStyle='#1f2b3a'; c.beginPath(); c.roundRect?c.roundRect(px,py,pw,ph,14):c.rect(px,py,pw,ph); c.fill(); c.stroke(); c.fillStyle=cur?mix(chColor(cur.channel),WHITE,.55):'#dfe3e8'; c.fillRect(px+7,py+16,pw-14,ph-32); c.lineWidth=1.2;
     if(cur){ const age=(performance.now()-cur.liveReal)/1000, views=Math.floor(12+age*age*.9+age*9), likes=Math.floor(views*.11); c.fillStyle='rgba(31,43,58,.22)'; for(let i=0;i<4;i++){ const bw=14+((i*37+Math.floor(t*2))%30); c.fillRect(px+16+i*24,py+110-bw,16,bw); }
       c.beginPath(); c.moveTo(px+54,py+56); c.lineTo(px+54,py+84); c.lineTo(px+78,py+70); c.closePath(); c.fillStyle='#fff'; c.fill(); c.stroke();
-      c.fillStyle='rgba(31,43,58,.78)'; c.fillRect(px+7,py+ph-92,pw-14,76); c.fillStyle='#fff'; c.font='600 10.5px "IBM Plex Sans"'; c.textAlign='left'; wrapText(c,cur.title,px+13,py+ph-78,pw-28,12.5,3); txt(c,short(cur.channel,18),px+13,py+ph-38,'500 9px "IBM Plex Mono"','left','#dfe3e8'); txt(c,VID.live?'live since '+cur.liveAt:`▶ ${views.toLocaleString('en-US')}   ♥ ${likes.toLocaleString('en-US')}`,px+13,py+ph-23,'500 9.5px "IBM Plex Mono"','left','#fff'); }
+      c.fillStyle='rgba(31,43,58,.78)'; c.fillRect(px+7,py+ph-92,pw-14,76); c.fillStyle='#fff'; c.font='600 10.5px "IBM Plex Sans"'; c.textAlign='left'; wrapText(c,cur.title,px+13,py+ph-78,pw-28,12.5,3); txt(c,short(cur.channel,18),px+13,py+ph-38,'500 9px "IBM Plex Mono"','left','#dfe3e8'); txt(c,VID.live?'live since '+(cur.liveMs?tzHM(cur.liveMs):cur.liveAt):`▶ ${views.toLocaleString('en-US')}   ♥ ${likes.toLocaleString('en-US')}`,px+13,py+ph-23,'500 9.5px "IBM Plex Mono"','left','#fff'); }
     else txt(c,'no reel yet',px+pw/2,py+ph/2,mono,'center','#647282');
     c.fillStyle='#1f2b3a'; c.fillRect(px+pw/2-16,py+5,32,5); plaque(c,VID.live?plat[pf]+' live':plat[pf]+' live today',px+pw/2,py-10,mono,col,'#fff'); }
   // people
-  if(VID.live){ const nf=all.filter(x=>x.state==='failed').length; if(nf) plaque(c,nf+' not published',PX.slot+67,G+22,mono,'#fff','#8a929b'); }
+  if(VID.live){ const nf=all.filter(x=>x.state==='failed').length; if(nf) plaque(c,nf+' not published',PX.slot+67,G+20,mono,'#fff','#8a929b'); }
   for(const it of all){ if(it.state==='arriving'||it.state==='failed') continue; let tx,terminal=false,o={carry:'reel'};
     if(it.state==='live'){ tx=892; terminal=true; } else { const q=at(it.state); tx=PX[it.state]-q.indexOf(it)*64; }
     const a=actor('p'+it.key,it,tx,G,[196,G],dt,terminal); if(!a||a.gone) continue;
-    if(!a.moving) o.tag={check:'9:16 check',caption:'# caption',slot:it.publishAt||'next slot',upload:'↑ upload'}[it.state]; else if(it.state==='live'){ o.tag='▶ live'; o.tagFill=col; o.tagInk='#fff'; }
-    person(c,a.x,a.y,chColor(it.channel),{moving:a.moving,ph:a.ph,...o}); hoverCheck(a,`${it.channel?it.channel+': ':''}${it.title} (${it.kind||'video'})`); } }
+    if(!a.moving) o.tag={check:'9:16 check',caption:'# caption',slot:it.slotMs?fmtSlot(it.slotMs):(it.publishAt||'next slot'),upload:'↑ upload'}[it.state]; else if(it.state==='live'){ o.tag='▶ live'; o.tagFill=col; o.tagInk='#fff'; }
+    person(c,a.x,a.y,chColor(it.channel),{moving:a.moving,ph:a.ph,...o}); hoverCheck(a,`${it.channel?it.channel+': ':''}${it.title} (${it.kind||'video'})`); }
+  drawLineup(c,pf,all); }
 
 function drawScene(dt){ const cv2=$('scene'); if(!cv2||!detail) return; const LW=1060, LH=KIND[detail.kind].LH, cw=cv2.clientWidth; if(!cw) return;
   const d=Math.min(window.devicePixelRatio||1,2), w=Math.round(cw*d), h=Math.round(cw*LH/LW*d); if(cv2.width!==w||cv2.height!==h){ cv2.width=w; cv2.height=h; }
@@ -2806,6 +3038,7 @@ for(let i=0;i<900;i++) update(.05);
 booting=false; flushLog(); paintStats();
 if(!SIM_ONLY){ connectLive('/events',startDemo); fetchTown(); setTimeout(()=>{ VAL.snapDone=true; trySwitch(); },2000); }   // wait at most 2 s for the snapshot before the first layout
 else VAL.snapDone=true;
+clockTick();                                        // the wall-clock chip and the simulator's slot release start here
 let last=performance.now(), uiT=0;
 function frame(now){ const real=Math.max(0,Math.min(.05,(now-last)/1000)); last=now; if(!paused){ const steps=speed; for(let i=0;i<steps;i++) update(real); }
   render(); if(detail&&detail.tab==='people') drawScene(paused?0:real*speed); uiT+=real; hlTick(real); if(uiT>.25){ uiT=0; flushLog(); paintStats(); pruneVideo(); renderDetail(); } requestAnimationFrame(frame); }

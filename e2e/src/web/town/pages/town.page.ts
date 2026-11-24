@@ -28,6 +28,7 @@ const PlatformSchema = z.object({
 });
 const VideoSchema = z.object({
   source: z.enum(['sample', 'live']),
+  hydrated: z.boolean().optional(),
   rendered: z.number().int().nonnegative(),
   platforms: z.record(z.string(), PlatformSchema),
 });
@@ -82,24 +83,30 @@ export class TownPage extends BasePage {
 
   /**
    * Opens the town with its /events stream replaced by one this test controls, so no event from a parallel test
-   * can reach the page. The stream is empty (valid SSE, reconnecting every 100 ms) until `deliver` hands it one
-   * frame, copied from the real public stream; /api/town stays the real one; returns once the page has switched from the sample town to the live one.
+   * can reach the page. The stream is empty (valid SSE, reconnecting every 100 ms) until `deliver` hands it frames (queued, all handed over on the next reconnect),
+   * copied from the real public stream; /api/town stays the real one; returns once the page has switched from the sample town to the live one.
    */
-  async gotoIsolated(): Promise<{ deliver(frame: { id: string; event: string; data: string }): void }> {
+  async gotoIsolated(zone?: string): Promise<{ deliver(frame: { id: string; event: string; data: string }): void }> {
     let pending = '';
     await this.page.route('**/events', async (route) => {
       const body = `retry: 100\n\n${pending}`;
       pending = '';
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
     });
+    // The town also reads the last 100 Animora events once (`?replay=100&kind=animora`) to rebuild its video state after a
+    // reload; that history would carry the events of parallel tests, so it is empty here too.
+    await this.page.route('**/events?*replay=*', async (route) => {
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: 'retry: 100\n\n' });
+    });
     const snapshot = this.page.waitForResponse((r) => new URL(r.url()).pathname === '/api/town');
-    await this.goto();
+    await this.page.goto(zone ? `./?tz=${encodeURIComponent(zone)}` : this.path);
+    await this.expectLoaded();
     expect((await snapshot).ok()).toBe(true);
     // The sample town (with its demo QA cards) is swapped for the live one once the snapshot is bound.
     await expect.poll(async () => (await this.valley()).source).toBe('live');
     return {
       deliver: (f) => {
-        pending = `id: ${f.id}\nevent: ${f.event}\ndata: ${f.data}\n\n`;
+        pending += `id: ${f.id}\nevent: ${f.event}\ndata: ${f.data}\n\n`;
       },
     };
   }
@@ -147,6 +154,85 @@ export class TownPage extends BasePage {
       return hook.snapshot().video;
     });
     return VideoSchema.parse(raw);
+  }
+
+  /** The header clock: `data-tz` is the zone, the text is "HH:MM:SS <label>". */
+  readonly clock = this.page.getByTestId('town-clock');
+
+  /** Opens the town with the zone forced by `?tz=` (it then wins over the zone in GET /api/town). */
+  async gotoInZone(zone: string): Promise<void> {
+    await this.page.goto(`./?tz=${encodeURIComponent(zone)}`);
+    await this.expectLoaded();
+  }
+
+  /** Starts the page's fake clock at `time` before the first navigation; time keeps flowing until `pauseClockAt`. */
+  async installClock(time: Date): Promise<void> {
+    await this.page.clock.install({ time });
+  }
+
+  /** Jumps the fake clock to `time` and stops it: timers (the header tick) only run on `tickClock`. */
+  async pauseClockAt(time: Date): Promise<void> {
+    await this.page.clock.pauseAt(time);
+  }
+
+  /** Runs the page's timers for `ms` of fake time. */
+  async tickClock(ms: number): Promise<void> {
+    await this.page.clock.runFor(ms);
+  }
+
+  /** The Channels view of one platform room (tabs People, Channels, Board). */
+  async openPlatformChannels(platform: 'youtube' | 'facebook' | 'instagram' | 'tiktok'): Promise<void> {
+    await this.openDetail('plat', 'channels', platform);
+  }
+
+  readonly channelsEmpty = this.page.getByTestId('plat-channels-empty');
+  /** The "times in <label>" legend (the room intro and the Channels view each carry one; they always agree). */
+  readonly tzLegend = this.page.getByTestId('plat-tz-legend');
+  /** The whole page text, to prove a masked name is nowhere on it. */
+  readonly body = this.page.locator('body');
+
+  /** One channel card of the Channels view, found by the channel name. */
+  channelCard(channel: string) {
+    return this.page.locator(`[data-testid="plat-channel"][data-channel=${JSON.stringify(channel)}]`);
+  }
+
+  /** The private channel card (every hidden channel shares it). */
+  readonly privateChannelCard = this.page.locator('[data-testid="plat-channel"][data-private="true"]');
+
+  /** One concept row inside a channel card. */
+  conceptRow(card: Locator, concept: string) {
+    return card.locator(`[data-testid="plat-concept"][data-concept=${JSON.stringify(concept)}]`);
+  }
+
+  /** Every concept row inside a channel card. */
+  conceptRows(card: Locator) {
+    return card.getByTestId('plat-concept');
+  }
+
+  /** The waiting-list item of a card with the given slot (epoch ms). */
+  queueItemAt(card: Locator, slotMs: number) {
+    return this.queueItems(card).and(this.page.locator(`[data-slot="${slotMs}"]`));
+  }
+
+  /** Slot, concept and title of the waiting-list items of a card, in the order shown. */
+  async queueOrder(card: Locator): Promise<{ slot: number; concept: string | null; title: string }[]> {
+    return this.queueItems(card).evaluateAll((items) =>
+      items.map((el) => ({
+        slot: Number((el as HTMLElement).dataset['slot']),
+        concept: (el as HTMLElement).dataset['concept'] ?? null,
+        title: el.querySelector('.t')?.textContent ?? '',
+      })),
+    );
+  }
+
+  /** The waiting-list items of a channel card, in the order shown. */
+  queueItems(card: Locator) {
+    return card.getByTestId('plat-channel-queue').getByTestId('plat-queue-item');
+  }
+
+  /** Waits until the live video state exists and the silent history replay has been applied. */
+  async expectVideoHydrated(): Promise<void> {
+    await expect.poll(async () => (await this.video()).hydrated).toBe(true);
   }
 
   async gotoSimulated(): Promise<void> {

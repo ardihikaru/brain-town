@@ -39,6 +39,7 @@ button.primary{background:var(--ink);color:var(--ground)} button.primary:hover{b
 button.quiet{border-color:var(--rule)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input[type=text],input[type=email],input[type=password],input[type=number],select{background:var(--ground);border:1px solid var(--ink);border-radius:3px;padding:6px 9px;min-width:0}
+#tz{max-width:100%;width:100%}
 label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;gap:4px}
 .panel{background:var(--panel);border:1px solid var(--ink);border-radius:3px;box-shadow:3px 3px 0 rgba(31,43,58,.1)}
 .pad{padding:14px 16px}
@@ -511,6 +512,7 @@ body.still .oa-act.fade{animation:none}
             <dl class="kv"><dt>Address</dt><dd id="svc-addr">https://town.mfardiansyah.id</dd><dt>Public stream</dt><dd id="svc-pub">https://town.mfardiansyah.id/events</dd><dt>Back-office stream</dt><dd id="svc-adm">https://town.mfardiansyah.id/admin/events</dd><dt>Heartbeat</dt><dd>every 15 s</dd></dl>
             <div class="row"><label>Keep events (days)<input type="number" id="keep" value="30" min="1" max="3650" style="width:110px"></label>
               <label>Animation<span class="switch" id="motion"><button type="button" aria-pressed="true" data-v="on">On</button><button type="button" aria-pressed="false" data-v="off">Off</button></span></label></div>
+            <div class="row"><label style="flex:1 1 220px;min-width:0">Timezone<select id="tz" data-testid="svc-timezone"></select></label><span class="small muted" id="tz-now" data-testid="svc-timezone-preview">Now: 14:05 WIB</span></div>
             <div><button id="save-svc">Save</button></div></div>
           <form class="panel pad stackf" id="pwform"><h2>Account</h2>
             <label>Email<input type="email" id="acc-email" value="me@mfardiansyah.id"></label>
@@ -682,9 +684,16 @@ const TITLES=['Fix PDF margin on page 2','Add export to Excel','Retry failed wor
 const stats={events:967,opened:41,closed:36,qaRuns:54,qaFail:5,tasks:63,posts:4,videos:12,vidFail:1};
 const EVENTS=[]; let seq=48000, paused=false;
 const ulid=()=>'01JD'+(++seq).toString(36).toUpperCase()+Math.random().toString(36).slice(2,8).toUpperCase();
-const hhmmss=d=>new Date(d).toTimeString().slice(0,8);
+let BO_TZ='Asia/Jakarta', BO_TZF=null;
+const TZ_COMMON=[['Asia/Jakarta','WIB','GMT+7'],['Asia/Makassar','WITA','GMT+8'],['Asia/Jayapura','WIT','GMT+9'],['UTC','UTC','GMT+0'],['Asia/Singapore','GMT+8','GMT+8'],['Asia/Tokyo','GMT+9','GMT+9'],['Europe/London','GMT/BST','GMT+0/+1'],['America/New_York','EST/EDT','GMT-5/-4']];
+function tzLabel(z){ const m={'Asia/Jakarta':'WIB','Asia/Pontianak':'WIB','Asia/Makassar':'WITA','Asia/Jayapura':'WIT','UTC':'UTC','Etc/UTC':'UTC'}; if(m[z]) return m[z];
+  const nm=style=>{ const p=new Intl.DateTimeFormat('en-US',{timeZone:z,timeZoneName:style}).formatToParts(new Date()).find(x=>x.type==='timeZoneName'); return p?p.value:z; };
+  try{ return nm('shortOffset'); }catch(e){ try{ return nm('short'); }catch(e2){ return z; } } }
+function setBoTz(z){ BO_TZ=z; BO_TZF={hms:new Intl.DateTimeFormat('en-GB',{timeZone:z,hourCycle:'h23',hour:'2-digit',minute:'2-digit',second:'2-digit'}),hm:new Intl.DateTimeFormat('en-GB',{timeZone:z,hourCycle:'h23',hour:'2-digit',minute:'2-digit'}),label:tzLabel(z)}; }
+setBoTz('Asia/Jakarta');
+const hhmmss=d=>{ const t=new Date(d); return isNaN(t)?'':BO_TZF.hms.format(t); };
 const ANIM_TITLES=['Why cats sleep 16 hours','How tea reached Japan','The tiny town with no cars','Three minutes on black holes'], ANIM_CHANNELS=['Cerita Kecil','Sains Singkat'], ANIM_PN={youtube:'YouTube',facebook:'Facebook',instagram:'Instagram',tiktok:'TikTok'};
-const hhmm=t=>{ const d=new Date(t); return isNaN(d)?'':String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); };
+const hhmm=t=>{ const d=new Date(t); return isNaN(d)?'':BO_TZF.hm.format(d); };
 const animSum=(type,d)=>{ d=d||{}; return [ANIM_PN[d.vendor],d.title||d.channel,type==='video.scheduled'&&d.dueAt?'due '+hhmm(d.dueAt):'',type==='video.publish_failed'?'not published':''].filter(Boolean).join(' · '); };
 function makeEvent(int,forceType){ const k=int.kind; let type,data,sum; const prods=PRODUCTS.filter(p=>!int.org||p.org===int.org), p=pick(prods.length?prods:PRODUCTS), n=40+Math.floor(Math.random()*60), title=pick(TITLES);
   if(k==='github'){ type=forceType||pick(['issue.opened','issue.assigned','task.done','pr.opened','pr.checks','pr.merged','issue.closed']); data={org:int.org,repo:p.key,number:n,title}; if(type==='pr.checks') data.check=pick(['lint','tests','build']),data.status=pick(['passed','passed','passed','failed']); sum=`${int.org}/${p.key} #${n} ${type.startsWith('pr.')?(data.check?data.check+' '+data.status:'pull request'):title}`; }
@@ -1264,7 +1273,7 @@ function paintLog(){ const b=$('ev-body'); b.innerHTML=''; EVENTS.filter(passes)
 ['f-int','f-type','f-st'].forEach(id=>$(id).onchange=paintLog); $('f-q').oninput=paintLog;
 $('ev-pause').onclick=e=>{ paused=!paused; e.target.setAttribute('aria-pressed',paused); e.target.textContent=paused?'Resume stream':'Pause stream'; $('sse-pill').className='pill '+(paused?'off':'ok'); $('sse-pill').innerHTML='<i></i>'+(paused?'stream paused':'stream connected'); };
 $('ev-body').addEventListener('click',e=>{ const tr=e.target.closest('tr[data-id]'); if(!tr) return; const ev=EVENTS.find(x=>x.id===tr.dataset.id); if(!ev) return; const i=INTS.find(x=>x.id===ev.int);
-  $('dr-title').textContent=ev.type; $('dr-kv').innerHTML=`<dt>Event id</dt><dd>${ev.id}</dd><dt>Integration</dt><dd>${esc(i?i.name:ev.int)}</dd><dt>Received</dt><dd>${new Date(ev.at).toISOString()}</dd><dt>Delivery</dt><dd>${ev.st}${ev.err?' · '+ev.err:''}</dd>`;
+  $('dr-title').textContent=ev.type; $('dr-kv').innerHTML=`<dt>Event id</dt><dd>${ev.id}</dd><dt>Integration</dt><dd>${esc(i?i.name:ev.int)}</dd><dt>Received</dt><dd>${new Date(ev.at).toISOString()} (${hhmmss(ev.at)} ${BO_TZF.label})</dd><dt>Delivery</dt><dd>${ev.st}${ev.err?' · '+ev.err:''}</dd>`;
   $('dr-raw').textContent=JSON.stringify(rawView(ev),null,2); $('dr-pub').textContent=ev.st==='ok'?JSON.stringify(ev.pub||publicView(ev),null,2):'Nothing. A rejected delivery never reaches the stream.'; $('drawer').classList.add('on'); $('dr-x').focus(); });
 $('dr-x').onclick=()=>$('drawer').classList.remove('on'); addEventListener('keydown',e=>{ if(e.key==='Escape'){ $('drawer').classList.remove('on'); if(ghp.open) ghPopClose(true); } });
 
@@ -1285,7 +1294,17 @@ function paintDb(){ if(LIVE){ const c=liveStats, rows=c?[['Integration (vertex)'
     $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); return; }
   const rows=[['Integration (vertex)',INTS.length],['Org (vertex)',ORGS.length],['Product (vertex)',PRODUCTS.length],['Delivery (vertex)',14210+EVENTS.length],['Event (vertex)',13872+EVENTS.filter(e=>e.st==='ok').length],['PRODUCED (Delivery → Event)',13872+EVENTS.filter(e=>e.st==='ok').length],['ABOUT (Event → Product)',12950+EVENTS.filter(e=>e.st==='ok'&&e.kind!=='site').length],['User, Session (vertex)',3]];
   $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); }
-$('save-svc').onclick=async()=>{ if(LIVE){ const r=await apiCall('PUT','/api/admin/settings',{retentionDays:+$('keep').value,animation:!document.body.classList.contains('still')}); if(!r.ok) return toast(r.data&&r.data.error||'Could not save'); $('keep').value=r.data.retentionDays; } toast('Saved. Events are kept '+$('keep').value+' days.'); };
+function tzFill(sel){ const have=new Set(), mk=(v,t)=>{ const o=document.createElement('option'); o.value=v; o.textContent=t; return o; };
+  const g1=document.createElement('optgroup'); g1.label='Common'; TZ_COMMON.forEach(([z,l,o])=>{ have.add(z); g1.append(mk(z,z+' \u2014 '+(l===o?l:l+' ('+o+')'))); }); sel.append(g1);
+  try{ const all=Intl.supportedValuesOf('timeZone').filter(z=>!have.has(z)); if(all.length){ const g2=document.createElement('optgroup'); g2.label='All zones\u2026'; all.forEach(z=>g2.append(mk(z,z))); sel.append(g2); } }catch(e){} }
+function tzSet(z){ const sel=$('tz'); if(!z) z='Asia/Jakarta'; if(![...sel.options].some(o=>o.value===z)) sel.querySelector('optgroup').prepend(Object.assign(document.createElement('option'),{value:z,textContent:z})); sel.value=z; tzApply(); }
+function tzApply(){ let z=$('tz').value||'Asia/Jakarta'; try{ setBoTz(z); }catch(e){ setBoTz('Asia/Jakarta'); }
+  tzPreview(); $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); paintLog(); }
+let tzDirty=false;
+function tzPreview(){ $('tz-now').textContent='Now: '+BO_TZF.hm.format(new Date())+' '+BO_TZF.label+(tzDirty?' (not saved)':''); }
+function tzTick(){ tzPreview(); setTimeout(tzTick,60000-Date.now()%60000+5); }
+tzFill($('tz')); $('tz').value='Asia/Jakarta'; tzTick(); $('tz').addEventListener('change',()=>{ $('tz').removeAttribute('aria-invalid'); tzDirty=true; tzApply(); });
+$('save-svc').onclick=async()=>{ let label=BO_TZF.label; if(LIVE){ const r=await apiCall('PUT','/api/admin/settings',{retentionDays:+$('keep').value,animation:!document.body.classList.contains('still'),timezone:$('tz').value}); if(!r.ok){ if(r.status===422||(r.data&&/timezone/i.test(r.data.error||''))){ $('tz').setAttribute('aria-invalid','true'); return toast(r.data&&r.data.error||'Unknown timezone'); } return toast(r.data&&r.data.error||'Could not save'); } $('keep').value=r.data.retentionDays; if(r.data.timezone) tzSet(r.data.timezone); label=BO_TZF.label; } $('tz').removeAttribute('aria-invalid'); tzDirty=false; tzPreview(); toast('Saved. Events are kept '+$('keep').value+' days. Town time: '+label+'.'); };
 $('motion').onclick=e=>{ const v=e.target.dataset.v; if(!v) return; document.body.classList.toggle('still',v==='off'); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v)); };
 $('pwform').onsubmit=e=>{ e.preventDefault(); if($('acc-p1').value!==$('acc-p2').value) return toast('The two passwords differ. Type the same one twice.'); toast('Account updated'); };
 
@@ -1346,7 +1365,7 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   if(!a.ok||!b.ok||!c.ok) throw new Error('api'); INTS.splice(0,INTS.length,...a.data.map(mapInt)); applyProducts(b.data); EVENTS.splice(0,EVENTS.length,...c.data.map(mapEv));
   stats.events=EVENTS.filter(e=>e.st==='ok').length; stats.opened=stats.closed=stats.qaRuns=stats.qaFail=stats.tasks=stats.posts=stats.videos=stats.vidFail=0;
   EVENTS.forEach(e=>{ if(e.st!=='ok') return; if(e.type==='qa.run.finished'){ stats.qaRuns++; if(e.data.data&&e.data.data.failed) stats.qaFail++; } if(e.kind==='gaos'&&e.type==='task.done') stats.tasks++; if(e.kind==='site') stats.posts++; if(e.type==='video.published') stats.videos++; if(e.type==='video.publish_failed') stats.vidFail++; });
-  const st=await apiCall('GET','/api/admin/settings'); if(st.ok){ $('keep').value=st.data.retentionDays; document.body.classList.toggle('still',!st.data.animation); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='on')===st.data.animation)); }
+  const st=await apiCall('GET','/api/admin/settings'); if(st.ok){ $('keep').value=st.data.retentionDays; tzDirty=false; tzSet(st.data.timezone||'Asia/Jakarta'); document.body.classList.toggle('still',!st.data.animation); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='on')===st.data.animation)); }
   $('svc-addr').textContent=location.origin; $('svc-pub').textContent=location.origin+'/events'; $('svc-adm').textContent=location.origin+'/admin/events'; await refreshStats();
   $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;

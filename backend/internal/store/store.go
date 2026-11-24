@@ -105,9 +105,13 @@ type Event struct {
 }
 
 type Settings struct {
-	RetentionDays int  `json:"retentionDays"`
-	Animation     bool `json:"animation"`
+	RetentionDays int    `json:"retentionDays"`
+	Animation     bool   `json:"animation"`
+	Timezone      string `json:"timezone"` // IANA name used for every time the town shows
 }
+
+// DefaultTimezone is used when no timezone was ever stored.
+const DefaultTimezone = "Asia/Jakarta"
 
 type state struct {
 	Integrations map[string]*Integration `json:"integrations"`
@@ -132,7 +136,7 @@ const maxOps = 50000 // cap on the unwritten queue if the database is down for l
 func New(p Persister) (*Store, error) {
 	st := &Store{p: p, s: state{
 		Integrations: map[string]*Integration{}, Orgs: map[string]*Org{}, Products: map[string]*Product{},
-		Seen: map[string]time.Time{}, NextSeq: 1, Settings: Settings{RetentionDays: 30, Animation: true},
+		Seen: map[string]time.Time{}, NextSeq: 1, Settings: Settings{RetentionDays: 30, Animation: true, Timezone: DefaultTimezone},
 	}}
 	if p == nil {
 		return st, nil
@@ -164,6 +168,9 @@ func New(p Persister) (*Store, error) {
 	}
 	if sn.Settings != nil {
 		st.s.Settings = *sn.Settings
+		if st.s.Settings.Timezone == "" {
+			st.s.Settings.Timezone = DefaultTimezone
+		}
 	}
 	last := sn.LastSeq
 	for _, e := range sn.Events {
@@ -1049,6 +1056,9 @@ func (st *Store) Settings() Settings { st.mu.RLock(); defer st.mu.RUnlock(); ret
 func (st *Store) SetSettings(s Settings) Settings {
 	st.mu.Lock()
 	defer st.mu.Unlock()
+	if s.Timezone == "" {
+		s.Timezone = st.s.Settings.Timezone
+	}
 	if s.RetentionDays < 1 {
 		s.RetentionDays = 1
 	}

@@ -54,12 +54,12 @@ Idempotency-Key: <event id>
 
 | Moment | `type` | `id` | `data` (`*` = required) |
 | --- | --- | --- | --- |
-| A scheduled daily run starts a stage (script, then render) | `video.started` | `run-<run>-<stage>` | `run`*, `stage`* (`naskah` or `render`), `title`, `channel`, `format` (`video` or `reel`), `code` |
-| A video finishes rendering | `video.rendered` | `video-<code>` | `title`*, `channel`, `language`, `duration` (number, seconds), `format` (`video` or `reel`), `code`, `run` |
-| A run did not finish rendering | `video.render_failed` | `run-<run>-failed` | `run`*, `stage`* (`naskah` or `render`), `channel`, `code` |
-| A publish is scheduled on a vendor | `video.scheduled` | `plan-<video>-<channel>-<vendor>-sched` | `vendor`*, `channel`, `title`*, `dueAt`* (RFC 3339), `code` |
-| A video is live on a vendor | `video.published` | `video-<code>-<vendor>-<external_id>` | `vendor`*, `channel`, `title`*, `url`* (https), `publishedAt` (RFC 3339), `code` |
-| A publish attempt failed | `video.publish_failed` | `plan-<video>-<channel>-<vendor>-fail<N>` | `vendor`*, `channel`, `title`*, `code` |
+| A scheduled daily run starts a stage (script, then render) | `video.started` | `run-<run>-<stage>` | `run`*, `stage`* (`naskah` or `render`), `title`, `channel`, `concept`, `format` (`video` or `reel`), `code` |
+| A video finishes rendering | `video.rendered` | `video-<code>` | `title`*, `channel`, `concept`, `language`, `duration` (number, seconds), `format` (`video` or `reel`), `code`, `run` |
+| A run did not finish rendering | `video.render_failed` | `run-<run>-failed` | `run`*, `stage`* (`naskah` or `render`), `channel`, `concept`, `code` |
+| A publish is scheduled on a vendor | `video.scheduled` | `plan-<video>-<channel>-<vendor>-sched` | `vendor`*, `channel`, `concept`, `title`*, `dueAt`* (RFC 3339), `code` |
+| A video is live on a vendor | `video.published` | `video-<code>-<vendor>-<external_id>` | `vendor`*, `channel`, `concept`, `title`*, `url`* (https), `publishedAt` (RFC 3339), `code` |
+| A publish attempt failed | `video.publish_failed` | `plan-<video>-<channel>-<vendor>-fail<N>` | `vendor`*, `channel`, `concept`, `title`*, `code` |
 | A kanal connects a vendor account | `channel.connected` | `chan-<channel>-<vendor>-<connected_at unix>` | `vendor`*, `channel`*, `account` |
 
 ```json
@@ -76,13 +76,14 @@ Idempotency-Key: <event id>
 
 - `vendor` is one of `youtube`, `facebook`, `instagram`, `tiktok`; anything else is `422` with `field` `data.vendor`.
 - A missing required field is `422` with `field` `data.<name>` (for example `data.title`); a bad timestamp names its field (`data.dueAt`, `data.publishedAt`).
-- Strings are trimmed and capped: `title` 200, `channel` and `account` 120, `url` 512, `language` 16 characters.
+- Strings are trimmed and capped: `title` 200, `channel`, `concept` and `account` 120, `url` 512, `language` 16 characters.
 - `url` must be https, otherwise `422` `data.url`.
 - `code` (every `video.*` type, never `channel.connected`) is the opaque Animora video code, the same in the render, schedule and publish of one video: 1 to 32 characters of `A-Z a-z 0-9 _ -`. It is optional, and an invalid one is silently dropped (never `422`). The town uses it to follow one video across its events; without it, it falls back to the title.
 - `run` (`video.started`, `video.render_failed`, and optionally `video.rendered`) is the opaque autodaily run id, the same across the stages of one run: 1 to 64 characters of `A-Z a-z 0-9 _ -`. On `video.started` and `video.render_failed` it is required, otherwise `422` `data.run`; on `video.rendered` an invalid one is silently dropped (never `422`).
 - `stage` (`video.started`, `video.render_failed`) is `naskah` or `render`; anything else or missing is `422` `data.stage`. `run` is checked first, then `stage`.
 - `video.started` and `video.render_failed` need no `vendor`, and `title` is optional on `video.started` (cap 200); `video.render_failed` takes no title. `code` follows the rule above (optional, invalid dropped).
 - `format` outside `video`/`reel` is dropped. An `account` that contains `@` is dropped (no emails).
+- `concept` (optional, every `video.*` type except none; never on `channel.connected`) is the **public** concept name: one Animora concept is a recurring series that makes one video a day per channel. Omitted when absent or blank. The town groups a kanal's waiting list by it.
 - `channel` is the kanal's **public** display name; `account` is the connected platform account's **public** display name.
 - Only the fields in the table are kept; anything else in `data` is dropped by Brain Town. Never send the prompt, the script (naskah) or failure text; `video.render_failed` drops any failure text, error or message.
 - Private and `nonaktif` videos are never sent.
@@ -122,15 +123,15 @@ Needs no secret and catches anything a push lost.
   "items": [
     { "id": "video-a1b2c3-youtube-dQw4w9WgXcQ", "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
       "title": "Kancil and the crocodiles", "date_published": "2026-11-23T09:14:00Z",
-      "_animora": { "vendor": "youtube", "channel": "Kanal Cerita", "code": "a1b2c3" } }
+      "_animora": { "vendor": "youtube", "channel": "Kanal Cerita", "concept": "Dongeng Kancil", "code": "a1b2c3" } }
   ]
 }
 ```
 
 - Item `id` is the same `video-<code>-<vendor>-<external_id>` as the `video.published` push, so the two paths dedupe each other.
-- `_animora.vendor` is required (one of the four vendors); `channel` is the public kanal name; `code` is the video code (same rules as `data.code`).
+- `_animora.vendor` is required (one of the four vendors); `channel` is the public kanal name; `concept` is the optional public concept name (same rules as `data.concept`); `code` is the video code (same rules as `data.code`).
 
-On the Brain Town side, set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the https URL of that feed. The puller checks it every 5 minutes (`FEED_PULL_INTERVAL_SECONDS`) and records each new item as `video.published` with `id` = item id and `data` `{vendor, channel, title, url, publishedAt = date_published, code = _animora.code}`. Items without a valid `_animora.vendor` are skipped.
+On the Brain Town side, set the integration's `feedUrl` (PATCH `/api/admin/integrations/{id}`) to the https URL of that feed. The puller checks it every 5 minutes (`FEED_PULL_INTERVAL_SECONDS`) and records each new item as `video.published` with `id` = item id and `data` `{vendor, channel, concept, title, url, publishedAt = date_published, code = _animora.code}`. Items without a valid `_animora.vendor` are skipped.
 
 ## In the town
 
@@ -153,7 +154,7 @@ Animora has no Facebook, Instagram or TikTok uploader yet, so those companies on
 - Brain Town stores a rebuilt event, never the raw body: `{"id","type","at","product":"animora","org":<the integration's org, if set>,"data":<allowlisted data>}`.
 - Accepted events register the product `animora` (name "Animora", public, Sources label "Animora", default hall "Video Studio hall").
 - On `/events` the frame is `{"seq","id","type","source":"animora","at","payload":{...}}`.
-- If the product `animora` or its org is set to hidden in the back-office, the product and org are replaced by their aliases and `title`, `url`, `channel` and `account` (and `prompt`, `script`, `failure` if they ever appear) are removed from `data`. `vendor`, `dueAt`, `publishedAt`, `language`, `duration`, `format`, `code`, `run` and `stage` stay (`code` and `run` are opaque ids, needed to follow one video or one run across events).
+- If the product `animora` or its org is set to hidden in the back-office, the product and org are replaced by their aliases and `title`, `url`, `channel`, `concept` and `account` (and `prompt`, `script`, `failure` if they ever appear) are removed from `data`. `vendor`, `dueAt`, `publishedAt`, `language`, `duration`, `format`, `code`, `run` and `stage` stay (`code` and `run` are opaque ids, needed to follow one video or one run across events).
 
 ## Done when
 

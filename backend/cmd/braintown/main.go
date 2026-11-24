@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata" // zone database embedded so the container needs no system tzdata
 
 	"github.com/ardihikaru/brain-town/backend/internal/admin"
 	"github.com/ardihikaru/brain-town/backend/internal/config"
