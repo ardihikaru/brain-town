@@ -41,16 +41,19 @@ test.describe('backoffice · settings timezone', () => {
       await backoffice.settings.goto();
       await expect(backoffice.settings.timezone).toHaveValue(before.timezone);
 
+      const now = `Now: ${zoneHm(zone, NOW)} ${zoneLabel(zone, NOW)}`;
+
       await backoffice.settings.chooseTimezone(zone);
-      await expect(backoffice.settings.timezonePreview).toHaveText(`Now: ${zoneHm(zone, NOW)} ${zoneLabel(zone, NOW)}`);
+      await expect(backoffice.settings.timezonePreview).toHaveText(`${now} (not saved)`);
       await backoffice.settings.save.click();
 
+      await expect(backoffice.settings.timezonePreview).toHaveText(now);
       await expect
         .poll(async () => (await expectJson(await adminApi.getSettings(), SettingsSchema)).timezone)
         .toBe(zone);
       await backoffice.settings.reload();
       await expect(backoffice.settings.timezone).toHaveValue(zone);
-      await expect(backoffice.settings.timezonePreview).toHaveText(`Now: ${zoneHm(zone, NOW)} ${zoneLabel(zone, NOW)}`);
+      await expect(backoffice.settings.timezonePreview).toHaveText(now);
     },
   );
 });

@@ -66,4 +66,4 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 
 **Fixed bug (TC-BO-003).** `paintProducts()` in `src/backoffice.src.html` read `o.vis` for the product's org, and `o` was undefined for a product without an org (every GAOS product), so the live back-office failed to load. It is guarded now and TC-BO-001/010/020/021 run without `test.fail()`.
 | ☑ | TC-BO-070 | US-BO-09 | Given a stored timezone, when Settings opens, then the select has that zone and the preview reads "Now: HH:MM <label>" for it | + | E2E | P0 | automated | `tests/web/backoffice/timezone.spec.ts` |
-| ☑ | TC-BO-071 | US-BO-09 | Given Settings, when another zone is chosen and saved, then the preview updates, the API has the zone and it survives a reload | + | E2E | P0 | automated | `tests/web/backoffice/timezone.spec.ts` |
+| ☑ | TC-BO-071 | US-BO-09 | Given Settings, when another zone is chosen and saved, then the preview updates and reads "(not saved)" until Save, the API has the zone and it survives a reload without the hint | + | E2E | P0 | automated | `tests/web/backoffice/timezone.spec.ts` |

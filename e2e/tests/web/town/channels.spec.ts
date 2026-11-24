@@ -138,7 +138,7 @@ test.describe('town · platform channels view', () => {
       await expect(town.home.privateChannelCard).toBeVisible();
       const item = town.home.queueItemAt(town.home.privateChannelCard, slot.ms);
       await expect(item).toContainText('Private video');
-      await expect(town.home.privateChannelCard.getByTestId('plat-concept')).toHaveCount(0);
+      await expect(town.home.conceptRows(town.home.privateChannelCard)).toHaveCount(0);
       for (const secret of [parts.title, parts.channel, concept]) {
         await expect(town.home.body).not.toContainText(secret);
       }

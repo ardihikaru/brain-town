@@ -204,6 +204,11 @@ export class TownPage extends BasePage {
     return card.locator(`[data-testid="plat-concept"][data-concept=${JSON.stringify(concept)}]`);
   }
 
+  /** Every concept row inside a channel card. */
+  conceptRows(card: Locator) {
+    return card.getByTestId('plat-concept');
+  }
+
   /** The waiting-list item of a card with the given slot (epoch ms). */
   queueItemAt(card: Locator, slotMs: number) {
     return this.queueItems(card).and(this.page.locator(`[data-slot="${slotMs}"]`));
