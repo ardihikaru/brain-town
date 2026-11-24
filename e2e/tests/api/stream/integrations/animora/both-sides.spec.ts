@@ -1,6 +1,11 @@
 import { test, expect } from '@fixtures';
 import { expectJson, expectStatus } from '@api/core/assertions';
-import { AdminEventSchema, IntegrationSchema, CreatedIntegrationSchema } from '@api/rest/admin/admin.schemas';
+import {
+  AdminEventSchema,
+  IntegrationSchema,
+  CreatedIntegrationSchema,
+  OrgSchema,
+} from '@api/rest/admin/admin.schemas';
 import { AnimoraFeedSchema, AnimoraRawSchema } from '@api/stream/integrations/animora/animora.schemas';
 import {
   ANIMORA_AVAILABLE,
@@ -9,6 +14,7 @@ import {
   senderResults,
   setupAnimora,
 } from '@api/stream/integrations/animora/animora.setup';
+import { skipUnlessDestructiveAllowed } from '@utils/guards';
 import { Tag } from '@utils/tags';
 import { uniqueId } from '@utils/unique';
 
@@ -50,6 +56,7 @@ test.describe('animora · both sides (real server and real sender)', () => {
         expect(raw.data).toMatchObject({
           title: seed.videos.public.title,
           channel: seed.channel.title,
+          concept: seed.concept.name,
           code: seed.videos.public.code,
         });
       }
@@ -72,7 +79,12 @@ test.describe('animora · both sides (real server and real sender)', () => {
       expect(item).toMatchObject({
         url: seed.videos.public.url,
         title: seed.videos.public.title,
-        _animora: { vendor: 'youtube', channel: seed.channel.title, code: seed.videos.public.code },
+        _animora: {
+          vendor: 'youtube',
+          channel: seed.channel.title,
+          concept: seed.concept.name,
+          code: seed.videos.public.code,
+        },
       });
     },
   );
@@ -108,6 +120,7 @@ test.describe('animora · both sides (real server and real sender)', () => {
       expect(AnimoraRawSchema.parse(delivery.raw).data).toEqual({
         vendor: 'youtube',
         channel: seed.channel.title,
+        concept: seed.concept.name,
         title: seed.videos.public.title,
         url: seed.videos.public.url,
         publishedAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
@@ -144,6 +157,43 @@ test.describe('animora · both sides (real server and real sender)', () => {
       expect(stored.filter((e) => e.id === seed.videos.public.feedId)).toHaveLength(1);
       expect(stored.map((e) => e.id)).not.toContain(seed.videos.private.feedId);
       expect(stored.map((e) => e.id)).not.toContain(seed.videos.nonaktif.feedId);
+    },
+  );
+
+  test(
+    'a hidden org masks the concept of what Brain Town pulled from the real feed (TC-INTG-136)',
+    { tag: [Tag.regression, Tag.destructive] },
+    async ({ apiContextFor, adminApi, sse, cleanup }) => {
+      skipUnlessDestructiveAllowed();
+      const { seed } = await setupAnimora({ apiContextFor });
+      // A pull-only witness on its own org, hidden before the first pull: the puller's events are masked before output.
+      const org = uniqueId('org');
+      const witness = await expectJson(
+        await adminApi.createIntegration({ kind: 'animora', name: uniqueId('animora-witness'), org }),
+        CreatedIntegrationSchema,
+        201,
+      );
+      cleanup.add(() => adminApi.deleteIntegration(witness.integration.id));
+      cleanup.add(() => adminApi.putOrg(org, { visibility: 'public' }));
+      await expectJson(await adminApi.putOrg(org, { visibility: 'hidden', alias: uniqueId('Studio') }), OrgSchema);
+      const adminStream = await sse.connect('admin');
+
+      await expectJson(
+        await adminApi.updateIntegration(witness.integration.id, { feedUrl: seed.feedUrl }),
+        IntegrationSchema,
+      );
+
+      const delivery = await adminStream.waitForJson(
+        AdminEventSchema,
+        (e) => e.integration === witness.integration.id && e.id === seed.videos.public.feedId,
+        PULL_WAIT_MS,
+      );
+      expect(AnimoraRawSchema.parse(delivery.raw).data).toMatchObject({ concept: seed.concept.name });
+      // The public view of this very delivery (other tests pull the same feed on visible orgs, so the shared public
+      // stream cannot tell whose frame is whose).
+      const masked = JSON.stringify(delivery.public);
+      expect(masked).not.toContain(seed.concept.name);
+      expect(masked).not.toContain(seed.videos.public.title);
     },
   );
 
