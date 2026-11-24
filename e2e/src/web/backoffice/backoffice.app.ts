@@ -5,6 +5,7 @@ import { GithubSetupPage } from './pages/github-setup.page';
 import { IntegrationsPage } from './pages/integrations.page';
 import { OwnerPage } from './pages/owner.page';
 import { LoginPage } from './pages/login.page';
+import { SettingsPage } from './pages/settings.page';
 import { SetupPage } from './pages/setup.page';
 
 /** Exposed to tests as the `backoffice` fixture. */
@@ -16,6 +17,7 @@ export class BackofficeApp {
   readonly events: EventsPage;
   readonly githubSetup: GithubSetupPage;
   readonly owner: OwnerPage;
+  readonly settings: SettingsPage;
 
   constructor(readonly page: Page) {
     this.login = new LoginPage(page);
@@ -25,5 +27,6 @@ export class BackofficeApp {
     this.events = new EventsPage(page);
     this.githubSetup = new GithubSetupPage(page);
     this.owner = new OwnerPage(page);
+    this.settings = new SettingsPage(page);
   }
 }

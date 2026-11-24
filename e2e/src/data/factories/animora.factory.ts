@@ -98,6 +98,12 @@ export function buildVideoScheduled(parts: Parts = buildVideoParts(), overrides:
   );
 }
 
+/** A `video.scheduled` for a given slot and, optionally, a concept (the town groups the waiting list by it). */
+export function buildVideoScheduledAt(parts: Parts, dueAt: string, concept?: string): AnimoraEnvelope {
+  const base = buildVideoScheduled(parts);
+  return { ...base, data: { ...base.data, dueAt, ...(concept === undefined ? {} : { concept }) } };
+}
+
 export function buildVideoPublished(parts: Parts = buildVideoParts(), overrides: Override = {}): AnimoraEnvelope {
   const external = uniqueId('ext');
   return envelope(

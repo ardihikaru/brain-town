@@ -9,6 +9,7 @@ import {
   buildVideoRendered,
 } from '@data/factories/animora.factory';
 import { skipUnlessDestructiveAllowed } from '@utils/guards';
+import { lockAnimoraProduct } from '@utils/shared-lock';
 import { Tag } from '@utils/tags';
 import { uniqueId } from '@utils/unique';
 
@@ -83,6 +84,7 @@ test.describe('animora · masking', () => {
     { tag: [Tag.regression, Tag.destructive] },
     async ({ adminApi, ingestApi, integration, sse, cleanup }) => {
       skipUnlessDestructiveAllowed();
+      cleanup.add(await lockAnimoraProduct());
       const alias = uniqueId('Studio');
       const animora = await integration('animora');
       // The product exists once its first event is accepted; it is shared by every animora integration, so it is

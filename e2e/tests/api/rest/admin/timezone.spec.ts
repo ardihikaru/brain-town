@@ -1,14 +1,14 @@
 import { test, expect } from '@fixtures';
 import { expectError, expectJson } from '@api/core/assertions';
 import { SettingsSchema } from '@api/rest/admin/admin.schemas';
+import { holdTimezone } from '@api/rest/admin/timezone.setup';
 import { TownClient } from '@api/rest/town/town.client';
 import { TownSnapshotSchema } from '@api/rest/town/town.schemas';
 import { skipUnlessDestructiveAllowed } from '@utils/guards';
 import { Tag } from '@utils/tags';
-import type { AdminClient } from '@api/rest/admin/admin.client';
 
 // The timezone is part of the one shared settings record, and these tests read it back after writing it, so they run
-// serially in one worker and every other spec leaves the timezone out of its writes (an omitted timezone keeps the
+// serially in one worker, hold the machine-wide settings lock (holdTimezone) against the web specs that write the zone, and every other spec leaves the timezone out of its writes (an omitted timezone keeps the
 // current one). Each test restores the zone it found.
 
 test.describe.configure({ mode: 'serial' });
@@ -16,20 +16,6 @@ test.describe.configure({ mode: 'serial' });
 /** A valid zone different from `current`, so a save is visible. */
 function zoneOtherThan(current: string): string {
   return current === 'Asia/Tokyo' ? 'UTC' : 'Asia/Tokyo';
-}
-
-/** Reads the current settings and registers a cleanup that puts the original timezone back. */
-async function rememberTimezone(adminApi: AdminClient, cleanup: { add: (fn: () => Promise<unknown>) => void }) {
-  const before = await expectJson(await adminApi.getSettings(), SettingsSchema);
-  cleanup.add(async () => {
-    const now = await expectJson(await adminApi.getSettings(), SettingsSchema);
-    return adminApi.putSettings({
-      retentionDays: now.retentionDays,
-      animation: now.animation,
-      timezone: before.timezone,
-    });
-  });
-  return before;
 }
 
 test.describe('admin · settings timezone', () => {
@@ -48,7 +34,7 @@ test.describe('admin · settings timezone', () => {
       { tag: [Tag.regression, Tag.destructive] },
       async ({ adminApi, cleanup }) => {
         skipUnlessDestructiveAllowed();
-        const before = await rememberTimezone(adminApi, cleanup);
+        const before = await holdTimezone(adminApi, cleanup);
 
         const saved = await expectJson(
           await adminApi.putSettings({
@@ -72,7 +58,7 @@ test.describe('admin · settings timezone', () => {
       { tag: [Tag.regression, Tag.destructive] },
       async ({ adminApi, cleanup }) => {
         skipUnlessDestructiveAllowed();
-        const before = await rememberTimezone(adminApi, cleanup);
+        const before = await holdTimezone(adminApi, cleanup);
 
         const error = await expectError(
           await adminApi.putSettings({
@@ -95,7 +81,7 @@ test.describe('admin · settings timezone', () => {
     { tag: [Tag.regression, Tag.destructive] },
     async ({ adminApi, cleanup }) => {
       skipUnlessDestructiveAllowed();
-      const before = await rememberTimezone(adminApi, cleanup);
+      const before = await holdTimezone(adminApi, cleanup);
       const zone = zoneOtherThan(before.timezone);
       await expectJson(
         await adminApi.putSettings({
@@ -120,7 +106,7 @@ test.describe('admin · settings timezone', () => {
     { tag: [Tag.smoke, Tag.destructive] },
     async ({ adminApi, apiContextFor, cleanup }) => {
       skipUnlessDestructiveAllowed();
-      const before = await rememberTimezone(adminApi, cleanup);
+      const before = await holdTimezone(adminApi, cleanup);
       const zone = zoneOtherThan(before.timezone);
       await expectJson(
         await adminApi.putSettings({
