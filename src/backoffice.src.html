@@ -652,7 +652,7 @@ const PRODUCTS=[
   {key:'brain-notes',org:'mf-dev',src:'GitHub',vis:'public',alias:'brain-notes',hall:'GitHub Valley hall'},
   {key:'dotfiles',org:'mf-dev',src:'GitHub',vis:'hidden',alias:'Workbench',hall:'GitHub Valley hall'},
   {key:'homelab',org:'mf-dev',src:'GitHub',vis:'hidden',alias:'Product I',hall:'GitHub Valley hall'},
-  {key:'animora',org:'',src:'Animora',vis:'public',alias:'animora',hall:'Video Studio hall'},
+  {key:'@animora-video',org:'',src:'Animora',vis:'public',alias:'@animora-video',hall:'Video Studio hall'},
 ];
 const HALLS=['GitHub Valley hall','Video Generator','Magazine House','Article Bureau','Imago','LinkedIn Hall','Video Studio hall'];
 /* sample repos of an organization, built from its products (no GH_* constants here: they are defined later) */
@@ -710,8 +710,8 @@ function makeEvent(int,forceType){ const k=int.kind; let type,data,sum; const pr
   else { type=forceType||pick(['article.published','illustration.published']); data={title:pick(['Shipping reports as images','One kanban board, many agents','Pendopo at dusk']),url:'https://mfardiansyah.id/blog/'+Math.random().toString(36).slice(2,8)}; sum=data.title; }
   const st=Math.random()<.02&&!forceType?'rejected':'ok';
   return {id:ulid(),type,int:int.id,kind:k,at:Date.now(),data,sum,st,err:st==='rejected'?'signature did not match':''}; }
-function publicView(ev){ if(ev.kind==='animora'){ const d=JSON.parse(JSON.stringify(ev.data)), ap=PRODUCTS.find(x=>x.key==='animora');
-    if(ap&&ap.vis==='hidden') for(const k of ['title','url','channel','account']) delete d[k];
+function publicView(ev){ if(ev.kind==='animora'){ const d=JSON.parse(JSON.stringify(ev.data)), ap=PRODUCTS.find(x=>x.key==='@animora-video');
+    if(ap&&ap.vis==='hidden') for(const k of ['title','url','channel','account','concept']) delete d[k];
     return {id:ev.id,type:ev.type,at:new Date(ev.at).toISOString(),data:d}; }
   const d=JSON.parse(JSON.stringify(ev.data)); const o=ORGS.find(o=>o.id===d.org), p=PRODUCTS.find(p=>p.key===(d.repo||d.product)); const hidden=(o&&o.vis==='hidden')||(p&&p.vis==='hidden');
   if(o&&d.org) d.org=o.alias||o.id; if(p){ if(d.repo) d.repo=p.vis==='hidden'||(o&&o.vis==='hidden')?p.alias:p.key; if(d.product) d.product=p.vis==='hidden'||(o&&o.vis==='hidden')?p.alias:p.key; }
