@@ -70,6 +70,7 @@ func (a *API) Routes(mux *http.ServeMux) {
 // town serves the public, masked snapshot of GitHub owners and repos (no auth).
 func (a *API) town(w http.ResponseWriter, r *http.Request) {
 	v := visibility.Town(a.St, a.St.Orgs(), a.St.Products(), a.St.Integrations(), a.St.LastEventByProduct())
+	v.Timezone = a.St.Settings().Timezone
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, 200, v)
 }
@@ -494,7 +495,15 @@ func (a *API) putSettings(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &in) {
 		return
 	}
-	writeJSON(w, 200, a.St.SetSettings(in))
+	in.Timezone = strings.TrimSpace(in.Timezone)
+	if in.Timezone != "" {
+		// "Local" and "" are accepted by time.LoadLocation but are not portable IANA zones.
+		if _, err := time.LoadLocation(in.Timezone); err != nil || strings.EqualFold(in.Timezone, "local") {
+			fail(w, 422, "timezone must be an IANA time zone name such as Asia/Jakarta or UTC")
+			return
+		}
+	}
+	writeJSON(w, 200, a.St.SetSettings(in)) // an empty timezone keeps the current one
 }
 
 func (a *API) stats(w http.ResponseWriter, r *http.Request) { writeJSON(w, 200, a.St.Counts()) }

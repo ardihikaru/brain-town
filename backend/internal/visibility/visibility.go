@@ -28,7 +28,7 @@ type Resolver interface {
 }
 
 // sensitive data fields removed when the event is about a hidden org or product.
-var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check", "channel", "account", "prompt", "script", "failure"}
+var sensitive = []string{"title", "url", "reason", "step", "spec", "steps", "ref", "label", "branch", "workflow", "check", "channel", "concept", "account", "prompt", "script", "failure"}
 
 // PublicOrgName is the one place that decides how an org is named in public output.
 func PublicOrgName(o store.Org) string {
@@ -225,6 +225,8 @@ type TownOwner struct {
 type TownView struct {
 	Owners  []TownOwner `json:"owners"`
 	Unowned []TownRepo  `json:"unowned"`
+	// Timezone is the configured IANA zone for every time the town shows (set by the /api/town handler).
+	Timezone string `json:"timezone,omitempty"`
 }
 
 // Town builds the public snapshot of owners and repos. Names go through Aliases, so a hidden org or product shows

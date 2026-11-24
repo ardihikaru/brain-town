@@ -100,7 +100,7 @@ func TestLatest20(t *testing.T) {
 
 const animoraSample = `{"version":"https://jsonfeed.org/version/1.1","items":[
  {"id":"video-c1-youtube-y1","url":"https://youtu.be/y1","title":"One","date_published":"2026-11-20T09:00:00Z","_animora":{"vendor":"youtube","channel":"Kanal","code":"c1"}},
- {"id":"video-c2-youtube-y2","url":"https://youtu.be/y2","title":"Two","date_published":"2026-11-21T09:00:00Z","_animora":{"vendor":"youtube","channel":"Kanal","code":"c2"}},
+ {"id":"video-c2-youtube-y2","url":"https://youtu.be/y2","title":"Two","date_published":"2026-11-21T09:00:00Z","_animora":{"vendor":"youtube","channel":"Kanal","concept":"Seri","code":"c2"}},
  {"id":"video-c3-x-y3","url":"https://youtu.be/y3","title":"Bad vendor","date_published":"2026-11-21T09:00:00Z","_animora":{"vendor":"vimeo"}},
  {"id":"video-c4","url":"https://youtu.be/y4","title":"No ext","date_published":"2026-11-21T09:00:00Z"}]}`
 
@@ -124,7 +124,7 @@ func TestPullAnimora(t *testing.T) {
 	}
 	d := ev.Raw["data"].(map[string]any)
 	if ev.Raw["product"] != "animora" || ev.Raw["org"] != "studio" || d["vendor"] != "youtube" || d["channel"] != "Kanal" ||
-		d["title"] != "Two" || d["url"] != "https://youtu.be/y2" || d["publishedAt"] != "2026-11-21T09:00:00Z" || d["code"] != "c2" || len(d) != 6 {
+		d["title"] != "Two" || d["url"] != "https://youtu.be/y2" || d["publishedAt"] != "2026-11-21T09:00:00Z" || d["code"] != "c2" || d["concept"] != "Seri" || len(d) != 7 {
 		t.Fatalf("raw %+v", ev.Raw)
 	}
 	if got := len(st.Events(store.Query{})); got != 2 { // the earlier push plus c2
