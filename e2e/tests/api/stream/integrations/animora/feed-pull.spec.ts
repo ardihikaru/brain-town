@@ -39,7 +39,7 @@ test.describe('animora · feed pull (https fixture feed)', () => {
         id: item.id,
         type: 'video.published',
         at: item.date_published,
-        product: 'animora',
+        product: '@animora-video',
         data: {
           vendor: 'tiktok',
           channel: parts.channel,

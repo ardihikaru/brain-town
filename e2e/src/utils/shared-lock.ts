@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { expect } from '@playwright/test';
 
 /**
- * Some records are shared by the whole stack (the settings timezone, the product "animora") and Playwright runs
+ * Some records are shared by the whole stack (the settings timezone, the product "@animora-video") and Playwright runs
  * projects in parallel, so a test that flips one and a test that reads its effect could see each other. Both hold a
  * machine-wide named lock (an atomic mkdir) for their whole body and release it from `cleanup`, registered BEFORE the
  * restore task (cleanup runs in reverse, so the record is restored while the lock is still held).
@@ -36,5 +36,7 @@ export async function lockShared(name: string): Promise<() => Promise<void>> {
 }
 
 export const lockSettings = (): Promise<() => Promise<void>> => lockShared('settings');
-/** The product "animora" is shared by every Animora integration; its visibility decides whether channels are masked. */
-export const lockAnimoraProduct = (): Promise<() => Promise<void>> => lockShared('animora-product');
+/** The product "@animora-video" is shared by every Animora integration; its visibility decides whether channels are masked. */
+export const lockAnimoraVideoProduct = (): Promise<() => Promise<void>> => lockShared('animora-video-product');
+/** The GitHub product "animora" (a repo named like the platform) is shared by every spec that uses that repo name. */
+export const lockGithubAnimoraProduct = (): Promise<() => Promise<void>> => lockShared('github-animora-product');

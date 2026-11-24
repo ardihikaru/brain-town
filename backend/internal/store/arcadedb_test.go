@@ -190,3 +190,91 @@ func TestBuildScriptCarriesOwnerTypeAndRepos(t *testing.T) {
 		t.Error("rejected event creates an ABOUT edge")
 	}
 }
+
+func rows(t *testing.T, a *Arcade, sql string) []map[string]any {
+	r, err := a.query(context.Background(), sql, nil)
+	if err != nil {
+		t.Fatalf("%s: %v", sql, err)
+	}
+	return r
+}
+
+// Old-shape data (Animora events and a GitHub repo "animora" sharing the product key) written through the store,
+// then migrated by the next start; checks columns, raw, ABOUT edges and products in the real database.
+func TestArcadeMigratesAnimoraProduct(t *testing.T) {
+	a := arcade(t)
+	st, err := New(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gi := st.CreateSecretIntegration("github", "alice", "ardihikaru", "sealed", "wxyz")
+	ai, _ := st.CreateIntegration("animora", "A", "ardihikaru")
+	if _, ok := st.AddAccepted(Accept{Integration: gi.ID, Kind: "github", Key: "g1", ID: "g1", Type: "github.push", At: time.Now(),
+		Product: "animora", Org: "ardihikaru", Raw: map[string]any{"id": "g1", "product": "animora"}}); !ok {
+		t.Fatal("github event")
+	}
+	for _, id := range []string{"v1", "v2"} {
+		if _, ok := st.AddAccepted(Accept{Integration: ai.ID, Kind: "animora", Key: id, ID: id, Type: "video.published", At: time.Now(),
+			Product: "animora", ProductName: "Animora", Vis: Public, Org: "ardihikaru", Raw: map[string]any{"id": id, "product": "animora", "data": map[string]any{"title": "T"}}}); !ok {
+			t.Fatal("animora event")
+		}
+	}
+	st.SetProduct("animora", ptr(Hidden), nil, nil) // the owner hid the repo
+	if err := st.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if n := count(t, a, "SELECT count(*) AS c FROM ABOUT"); n != 3 {
+		t.Fatalf("ABOUT before = %d", n)
+	}
+
+	check := func(label string) {
+		t.Helper()
+		if n := count(t, a, "SELECT count(*) AS c FROM Event WHERE kind='animora' AND product='@animora-video'"); n != 2 {
+			t.Errorf("%s: re-keyed events = %d", label, n)
+		}
+		if n := count(t, a, "SELECT count(*) AS c FROM Event WHERE kind='github' AND product='animora'"); n != 1 {
+			t.Errorf("%s: github events = %d", label, n)
+		}
+		if n := count(t, a, "SELECT count(*) AS c FROM Event WHERE raw LIKE '%\"product\":\"@animora-video\"%'"); n != 2 {
+			t.Errorf("%s: raw re-keyed = %d", label, n)
+		}
+		targets := map[string]int{}
+		for _, r := range rows(t, a, "SELECT key FROM (SELECT expand(out('ABOUT')) FROM Event)") {
+			targets[str(r, "key")]++
+		}
+		if targets["@animora-video"] != 2 || targets["animora"] != 1 || len(targets) != 2 {
+			t.Errorf("%s: ABOUT targets %v", label, targets)
+		}
+		ps := rows(t, a, "SELECT key, visibility, sources, hall FROM Product")
+		got := map[string]map[string]any{}
+		for _, r := range ps {
+			got[str(r, "key")] = r
+		}
+		if len(got) != 2 || str(got["@animora-video"], "visibility") != Public || str(got["@animora-video"], "sources") != `["Animora"]` ||
+			str(got["animora"], "visibility") != Hidden || str(got["animora"], "sources") != `["GitHub"]` {
+			t.Errorf("%s: products %v", label, ps)
+		}
+	}
+
+	st2, err := New(a) // migration runs
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := st2.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	check("after migration")
+
+	st3, err := New(a) // nothing left to do
+	if err != nil {
+		t.Fatal(err)
+	}
+	st3.mu.Lock()
+	n := len(st3.ops)
+	st3.mu.Unlock()
+	if n != 0 {
+		t.Errorf("third start queued %d ops", n)
+	}
+	st3.Flush()
+	check("after third start")
+}

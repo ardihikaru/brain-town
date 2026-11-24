@@ -4,7 +4,7 @@ import { CreatedIntegrationSchema, IntegrationSchema } from '@api/rest/admin/adm
 import { setupGithub } from '@api/rest/github/github.setup';
 import { ANIMORA_AVAILABLE, ANIMORA_SKIP_REASON, setupAnimora } from '@api/stream/integrations/animora/animora.setup';
 import { buildGithubScope } from '@data/factories/github.factory';
-import { lockAnimoraProduct } from '@utils/shared-lock';
+import { lockAnimoraVideoProduct } from '@utils/shared-lock';
 import { Tag } from '@utils/tags';
 import { uniqueId } from '@utils/unique';
 
@@ -20,8 +20,8 @@ test.describe('town · animora both sides (real feed)', () => {
     'the Channels view shows the concept of the video pulled from the real Animora feed (TC-TOWN-063)',
     { tag: [Tag.regression] },
     async ({ town, adminApi, sse, apiContextFor, cleanup }) => {
-      // A parallel masking spec hides the shared product "animora"; that would turn this channel private.
-      cleanup.add(await lockAnimoraProduct());
+      // A parallel masking spec hides the shared product "@animora-video"; that would turn this channel private.
+      cleanup.add(await lockAnimoraVideoProduct());
       const { seed } = await setupAnimora({ apiContextFor });
       const scope = buildGithubScope();
       await setupGithub(

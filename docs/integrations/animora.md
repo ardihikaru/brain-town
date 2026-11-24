@@ -151,10 +151,28 @@ Animora has no Facebook, Instagram or TikTok uploader yet, so those companies on
 
 ## Privacy and masking
 
-- Brain Town stores a rebuilt event, never the raw body: `{"id","type","at","product":"animora","org":<the integration's org, if set>,"data":<allowlisted data>}`.
-- Accepted events register the product `animora` (name "Animora", public, Sources label "Animora", default hall "Video Studio hall").
+- Brain Town stores a rebuilt event, never the raw body: `{"id","type","at","product":"@animora-video","org":<the integration's org, if set>,"data":<allowlisted data>}`.
+- Accepted events register the product `@animora-video` (name "Animora", public, Sources label "Animora", default hall "Video Studio hall").
 - On `/events` the frame is `{"seq","id","type","source":"animora","at","payload":{...}}`.
-- If the product `animora` or its org is set to hidden in the back-office, the product and org are replaced by their aliases and `title`, `url`, `channel`, `concept` and `account` (and `prompt`, `script`, `failure` if they ever appear) are removed from `data`. `vendor`, `dueAt`, `publishedAt`, `language`, `duration`, `format`, `code`, `run` and `stage` stay (`code` and `run` are opaque ids, needed to follow one video or one run across events).
+- If the product `@animora-video` or its org is set to hidden in the back-office, the product and org are replaced by their aliases and `title`, `url`, `channel`, `concept` and `account` (and `prompt`, `script`, `failure` if they ever appear) are removed from `data`. `vendor`, `dueAt`, `publishedAt`, `language`, `duration`, `format`, `code`, `run` and `stage` stay (`code` and `run` are opaque ids, needed to follow one video or one run across events).
+
+## Product key and migration
+
+Animora video events have their own product key, `@animora-video`. Before, they used `animora`, which is also the
+product of the GitHub repository `ardihikaru/animora`; hiding that repo in the back-office then masked every video
+event too. `@` cannot occur in a GitHub repository name, so the two keys cannot collide. The GitHub product `animora`
+stays the repo's own; `kind`/source `animora` and `/events?kind=animora` are unchanged (they name the integration kind).
+
+On startup the store migrates old data by itself (`backend/internal/store/migrate.go`), without a manual step:
+- events of kind `animora` with product `animora` (column or `raw.product`) get product `@animora-video`; GitHub events are never touched;
+- the product `@animora-video` is created (name "Animora", source "Animora", hall "Video Studio hall", the org of the Animora events or integrations). When the old `animora` product also had a GitHub source it starts public; when it was purely the video product, its visibility, alias and hall carry over (nothing hidden is ever unmasked);
+- the old product loses its Animora source; a hall "Video Studio hall" returns to "GitHub Valley hall"; with no source left it is deleted;
+- dedupe keys (`integration` + event id) do not contain the product, so push and feed pull still dedupe.
+
+It is idempotent: it detects the work from the stored data and does nothing once done. It logs one line per change
+(`store: migrate animora product: re-keyed N event(s) from "animora" to "@animora-video"`, `created product ...`,
+`removed source Animora from product "animora"`, `reset hall of product "animora" to GitHub Valley hall`,
+`deleted product "animora" (no sources left)`) or exactly `store: migrate animora product: nothing to do`.
 
 ## Done when
 

@@ -179,6 +179,9 @@ func New(p Persister) (*Store, error) {
 		}
 	}
 	st.s.NextSeq = last + 1
+	st.mu.Lock()
+	st.migrateAnimoraProduct()
+	st.mu.Unlock()
 	return st, nil
 }
 

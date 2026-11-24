@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/ardihikaru/brain-town/backend/internal/animora"
 	"github.com/ardihikaru/brain-town/backend/internal/hub"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
 )
@@ -119,11 +120,11 @@ func TestPullAnimora(t *testing.T) {
 	ch, _ := p.Hub.Subscribe()
 	p.PullAll()
 	ev := <-ch
-	if ev.ID != "video-c2-youtube-y2" || ev.Type != "video.published" || ev.Kind != "animora" || ev.Product != "animora" || ev.Org != "studio" {
+	if ev.ID != "video-c2-youtube-y2" || ev.Type != "video.published" || ev.Kind != "animora" || ev.Product != animora.Product || ev.Org != "studio" {
 		t.Fatalf("unexpected event %+v", ev)
 	}
 	d := ev.Raw["data"].(map[string]any)
-	if ev.Raw["product"] != "animora" || ev.Raw["org"] != "studio" || d["vendor"] != "youtube" || d["channel"] != "Kanal" ||
+	if ev.Raw["product"] != animora.Product || ev.Raw["org"] != "studio" || d["vendor"] != "youtube" || d["channel"] != "Kanal" ||
 		d["title"] != "Two" || d["url"] != "https://youtu.be/y2" || d["publishedAt"] != "2026-11-21T09:00:00Z" || d["code"] != "c2" || d["concept"] != "Seri" || len(d) != 7 {
 		t.Fatalf("raw %+v", ev.Raw)
 	}

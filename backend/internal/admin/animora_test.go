@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ardihikaru/brain-town/backend/internal/animora"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
 	"github.com/ardihikaru/brain-town/backend/internal/visibility"
 )
@@ -44,14 +45,14 @@ func TestAnimoraIngest(t *testing.T) {
 		t.Fatalf("events %d", len(evs))
 	}
 	ev := evs[0]
-	if ev.Product != "animora" || ev.Kind != "animora" || ev.Raw["product"] != "animora" {
+	if ev.Product != animora.Product || ev.Kind != "animora" || ev.Raw["product"] != animora.Product {
 		t.Fatalf("%+v", ev)
 	}
 	if d := ev.Raw["data"].(map[string]any); d["title"] != "Hello" {
 		t.Fatalf("title not trimmed: %v", d)
 	}
 	for _, p := range e.st.Products() {
-		if p.Key == "animora" && (p.Name != "Animora" || p.Hall != "Video Studio hall" || len(p.Sources) != 1 || p.Sources[0] != "Animora" || p.Visibility != store.Public) {
+		if p.Key == animora.Product && (p.Name != "Animora" || p.Hall != "Video Studio hall" || len(p.Sources) != 1 || p.Sources[0] != "Animora" || p.Visibility != store.Public) {
 			t.Fatalf("product %+v", p)
 		}
 	}
@@ -102,7 +103,7 @@ func TestAnimoraScrub(t *testing.T) {
 	}
 	raw := post(`{"id":"r1","type":"video.rendered","at":"2026-11-23T08:00:00Z","product":"evil","org":"evil","secret":1,
 	  "data":{"title":"T","channel":"C","language":"id","duration":12.5,"format":"short","prompt":"p","script":"s","failure":"f","extra":"x"}}`)
-	if raw["product"] != "animora" {
+	if raw["product"] != animora.Product {
 		t.Fatalf("product %v", raw["product"])
 	}
 	if _, has := raw["org"]; has {
@@ -173,7 +174,7 @@ func TestAnimoraMasking(t *testing.T) {
 		}
 		h := store.Hidden
 		if hideWhat == "product" {
-			e.st.SetProduct("animora", &h, nil, nil)
+			e.st.SetProduct(animora.Product, &h, nil, nil)
 		} else {
 			e.st.SetOrg("studio", &h, nil)
 		}
@@ -227,7 +228,7 @@ func TestAnimoraCode(t *testing.T) {
 		t.Fatalf("%d %s", c, b)
 	}
 	h := store.Hidden
-	e.st.SetProduct("animora", &h, nil, nil)
+	e.st.SetProduct(animora.Product, &h, nil, nil)
 	for _, ev := range e.st.Events(store.Query{Delivery: "ok"}) {
 		if ev.ID != "k3" {
 			continue
@@ -303,7 +304,7 @@ func TestAnimoraInProgressMasking(t *testing.T) {
 		}
 		h := store.Hidden
 		if hideWhat == "product" {
-			e.st.SetProduct("animora", &h, nil, nil)
+			e.st.SetProduct(animora.Product, &h, nil, nil)
 		} else {
 			e.st.SetOrg("studio", &h, nil)
 		}

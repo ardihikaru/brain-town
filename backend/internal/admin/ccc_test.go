@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/ardihikaru/brain-town/backend/internal/animora"
 	"github.com/ardihikaru/brain-town/backend/internal/store"
 	"github.com/ardihikaru/brain-town/backend/internal/visibility"
 )
@@ -79,7 +80,7 @@ func TestAnimoraConcept(t *testing.T) {
 	}
 	// Hidden product drops the concept in the public view.
 	h := store.Hidden
-	e.st.SetProduct("animora", &h, nil, nil)
+	e.st.SetProduct(animora.Product, &h, nil, nil)
 	for _, ev := range e.st.Events(store.Query{Delivery: "ok"}) {
 		out, _ := json.Marshal(visibility.View(e.st, ev))
 		if strings.Contains(string(out), "concept") || strings.Contains(string(out), "Seri") {
