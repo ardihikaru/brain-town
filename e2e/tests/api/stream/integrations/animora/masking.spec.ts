@@ -119,8 +119,9 @@ test.describe('animora · masking', () => {
       // Both products are shared by key: "animora" (the repo) and "@animora-video" (the platform).
       cleanup.add(await lockGithubAnimoraProduct());
       cleanup.add(await lockAnimoraVideoProduct());
-      const { github, target } = await setupGithub({ apiContextFor, adminApi, cleanup }, { org: uniqueId('org') });
-      const scope = buildGithubScope({ repo: 'animora' });
+      const githubOrg = uniqueId('org');
+      const { github, target } = await setupGithub({ apiContextFor, adminApi, cleanup }, { org: githubOrg });
+      const scope = buildGithubScope({ org: githubOrg, repo: 'animora' });
       const alias = uniqueId('Repo');
       const animora = await integration('animora', { org: uniqueId('org') });
       await expectStatus(await ingestApi.send(animora.ingestPath, buildVideoRendered(), { token: animora.token }), 202);
@@ -155,7 +156,7 @@ test.describe('animora · masking', () => {
       );
 
       const frame = await publicStream.waitForJson(PublicEventSchema, (e) => e.id === envelope.id);
-      expect(frame.payload.product).not.toBe(alias);
+      expect(frame.payload.product).toBe('@animora-video');
       expect(frame.payload.data).toMatchObject({ title: parts.title, channel: parts.channel, concept });
       const githubFrame = await publicStream.waitForJson(PublicEventSchema, (e) => e.id === `gh-${hiddenIssue}`);
       expect(githubFrame.payload.product).toBe(alias);
