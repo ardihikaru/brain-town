@@ -23,3 +23,8 @@
    leave `git status` clean and `main` equal to `origin/main`. If the pull fails or the checkout has
    local changes, stop and fix that (commit it through a worktree PR, or ask the user) rather than
    forcing it. When the merge is also being deployed, pull on the server too.
+
+## No CI jobs (always)
+Never run CI jobs: do not trigger, re-run or wait for GitHub Actions, and never hold a merge on CI
+status (red, pending or missing). The gate is the local checks (`go vet`/`go test`, and E2E when asked).
+In the PR body, say CI was not used.
