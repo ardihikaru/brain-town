@@ -159,7 +159,7 @@ test.describe('animora · masking', () => {
       expect(frame.payload.product).toBe('@animora-video');
       expect(frame.payload.data).toMatchObject({ title: parts.title, channel: parts.channel, concept });
       const githubFrame = await publicStream.waitForJson(PublicEventSchema, (e) => e.id === `gh-${hiddenIssue}`);
-      expect(githubFrame.payload.product).toBe(alias);
+      expect(githubFrame.payload.product).toEqual({ key: alias, name: alias, visibility: 'hidden' });
     },
   );
 });
