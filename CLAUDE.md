@@ -47,3 +47,4 @@ are binding.
 - **Always work in a git worktree**, PR, then delete the worktree. See
   `.claude/rules/worktree-and-pr.md`.
 - Conventional Commits; PR title ends with the `(#N)` on merge.
+- **Never run CI jobs** (no GitHub Actions runs, re-runs or waits); local checks gate the merge.
