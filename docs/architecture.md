@@ -67,7 +67,7 @@ animation detail (who a visitor looks like, the route they take, how long they s
   refs, labels, stars) into one rollup per subject every 15 s. Contract:
   [`integrations/github.md`](integrations/github.md).
 - **Animora receiver** (`/ingest/animora/<id>`). One integration per Animora deployment, shared by its two senders.
-  It keeps only an allowlist of `data` fields per type and rebuilds the stored event with `product: "animora"`.
+  It keeps only an allowlist of `data` fields per type and rebuilds the stored event with `product: "@animora-video"` (its own key, so a GitHub repo called animora is never confused with it).
   Contract: [`integrations/animora.md`](integrations/animora.md).
 - **Feed puller** (`backend/internal/feed`). Every `FEED_PULL_INTERVAL_SECONDS` (default 300) it pulls the JSON Feed 1.1 of each `site` or `animora` integration that has a `feedUrl` and records new items, deduped against pushes by item id: `article.published` for `site`, `video.published` for `animora` (items without a valid `_animora.vendor` are skipped).
 - **ArcadeDB.** A graph database (HTTP API on port 2480). Products, tasks, runs, integrations

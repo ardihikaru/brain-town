@@ -10,9 +10,13 @@ import (
 )
 
 // Product is the product key, and Name its display name, of every accepted Animora event.
+// The key starts with "@", which a GitHub repository name can never contain, so it cannot collide with the
+// GitHub product of a repo called "animora". LegacyProduct is the key used before the split; only the startup
+// migration in internal/store refers to it.
 const (
-	Product = "animora"
-	Name    = "Animora"
+	Product       = "@animora-video"
+	LegacyProduct = "animora"
+	Name          = "Animora"
 )
 
 // Types are the accepted event types.

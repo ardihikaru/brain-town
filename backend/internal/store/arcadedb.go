@@ -226,6 +226,19 @@ func buildScript(ops []Op) (string, map[string]any) {
 				fmt.Fprintf(&sb, "CREATE EDGE ABOUT FROM (SELECT FROM Event WHERE seq=%s) TO (SELECT FROM Product WHERE key=%s);\n", k("seq"), k("prod"))
 			}
 			fmt.Fprintf(&sb, "UPDATE Meta SET name='seq', n=%s UPSERT WHERE name='seq';\n", k("seq"))
+		case OpEventUpdate:
+			e := o.Event
+			fmt.Fprintf(&sb, "UPDATE Event SET product=%s, raw=%s WHERE seq=%s;\n", set("prod", e.Product), set("raw", jsonStr(e.Raw)), set("seq", e.Seq))
+			fmt.Fprintf(&sb, "DELETE FROM ABOUT WHERE @out IN (SELECT @rid FROM Event WHERE seq=%s);\n", k("seq"))
+			if e.Product != "" && e.Delivery == OK {
+				fmt.Fprintf(&sb, "CREATE EDGE ABOUT FROM (SELECT FROM Event WHERE seq=%s) TO (SELECT FROM Product WHERE key=%s);\n", k("seq"), k("prod"))
+			}
+		case OpRekeyEvents:
+			// Column only, no ABOUT edges: this reaches rows older than the newest maxEvents that Load brings
+			// into memory. Those rows are never loaded again, so nothing reads their edges.
+			fmt.Fprintf(&sb, "UPDATE Event SET product=%s WHERE kind=%s AND product=%s;\n", set("to", o.To), set("kind", o.EventKind), set("from", o.From))
+		case OpProductDel:
+			fmt.Fprintf(&sb, "DELETE VERTEX FROM Product WHERE key=%s;\n", set("key", o.Key))
 		case OpSeen:
 			fmt.Fprintf(&sb, "UPDATE Seen SET k=%s, at=%s UPSERT WHERE k=%s;\n", set("k", o.Key), set("at", o.At.UTC().Format(TimeFmt)), k("k"))
 		case OpSettings:

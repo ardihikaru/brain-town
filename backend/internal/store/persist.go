@@ -34,7 +34,10 @@ const (
 	OpEvent // insert, plus edges PRODUCED and ABOUT, and the sequence counter
 	OpSeen
 	OpSettings
-	OpPrune // delete events and dedupe keys older than Cut
+	OpPrune       // delete events and dedupe keys older than Cut
+	OpEventUpdate // update product and raw of an existing event (by Seq) and replace its ABOUT edge
+	OpRekeyEvents // bulk column update: events of Kind with product From get product To (no raw, no edges)
+	OpProductDel  // delete the product vertex Key
 )
 
 type Op struct {
@@ -44,7 +47,9 @@ type Op struct {
 	Product     *Product
 	Event       *Event
 	Settings    *Settings
-	Key         string // OpSeen key, OpIntegrationDel id
+	Key         string // OpSeen key, OpIntegrationDel id, OpProductDel product key
+	EventKind   string // OpRekeyEvents: the event kind to re-key
+	From, To    string // OpRekeyEvents: old and new product key
 	At          time.Time
 	Cut         time.Time
 }

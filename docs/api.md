@@ -42,7 +42,7 @@ Rejected deliveries (401 for a known integration, 422) are logged and show in th
 Animora events (`/ingest/animora/<id>`): `video.started`, `video.rendered`, `video.render_failed`, `video.scheduled`,
 `video.published`, `video.publish_failed` and `channel.connected`. Only the documented `data` fields are kept (anything else is dropped); `vendor` must be
 `youtube`, `facebook`, `instagram` or `tiktok` and `url` https, else `422` with `field` `data.<name>`. Every `video.*` type may carry an optional `data.code` (opaque video code, `[A-Za-z0-9_-]`, max 32; anything else is silently dropped, not `422`). `video.started` and `video.render_failed` also require `data.run` (opaque run id, `[A-Za-z0-9_-]`, max 64) and `data.stage` (`naskah` or `render`), else `422`; `video.rendered` may carry an optional `data.run` (invalid is dropped, not `422`). The stored event is
-rebuilt as `{"id","type","at","product":"animora","org","data"}` (`org` from the integration, when set). Contract:
+rebuilt as `{"id","type","at","product":"@animora-video","org","data"}` (`org` from the integration, when set). Contract:
 [`integrations/animora.md`](integrations/animora.md).
 
 ### GitHub
