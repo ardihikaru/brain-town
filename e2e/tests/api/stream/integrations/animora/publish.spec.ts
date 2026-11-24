@@ -54,7 +54,7 @@ test.describe('animora · push', () => {
           id: envelope.id,
           type: envelope.type,
           at: envelope.at,
-          product: 'animora',
+          product: '@animora-video',
           data: envelope.data,
         });
       },
@@ -70,7 +70,7 @@ test.describe('animora · push', () => {
       await expectStatus(await ingestApi.send(animora.ingestPath, buildVideoRendered(), { token: animora.token }), 202);
 
       const { products } = await expectJson(await adminApi.products(), ProductsSchema);
-      const product = products.find((p) => p.key === 'animora');
+      const product = products.find((p) => p.key === '@animora-video');
       expect(product).toMatchObject({ name: 'Animora', hall: 'Video Studio hall' });
       expect(product?.sources).toContain('Animora');
     },
