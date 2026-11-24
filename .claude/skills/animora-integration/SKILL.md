@@ -63,6 +63,7 @@ Watch deliveries with `GET /api/admin/events?integration=<id>` (fields `delivery
 | 10 | Hidden org/product masks title, url, channel, account; keeps vendor and code | contract push with a hidden org / product | TC-INTG-110 to 112 |
 
 ## Known results
+- **2026-11-24, local both-sides with concept** (Animora PR #101 `e8192ed`, Brain Town `7176c66`): `npm run test:local -- --grep "animora|channels" --repeat-each=3` 196 passed, 0 failed, 0 flaky, 0 skipped; real sender 6 delivered, 0 failed; the real sender and the real feed carry the konsep name, Brain Town stores it, masks it for a hidden org and the Channels view shows it live (TC-INTG-136, TC-TOWN-063).
 - **2026-11-23, local both-sides** (Animora `ac4b432`, Brain Town `c11b644`): full `npm run test:local` 284 passed, 0 failed, 0 flaky, 0 skipped; real sender 6 delivered, 0 failed; TC-INTG-130 to 135 pass.
 - **2026-11-23, production read-only check** (after deploy): `/api/feed.json` 200 `application/feed+json`, 25 items; Brain Town pulled 20 `video.published` events (all `202`, delivery `ok`), `data` keys only `channel, code, publishedAt, title, url, vendor`. Only YouTube is live; Facebook/Instagram/TikTok show connected/scheduled/failed events only once Animora emits them.
 - Found while wiring prod: the api image had no CA bundle, so https feed pulls failed with `x509: certificate signed by unknown authority` (fixed in #37). If a pull logs `feed: <id>: fetch failed`, check this first.

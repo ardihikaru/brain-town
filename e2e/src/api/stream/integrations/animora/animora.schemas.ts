@@ -52,6 +52,7 @@ export const AnimoraStackSchema = z.object({
   integration: z.object({ id: z.string() }),
   feedUrl: z.url(),
   channel: z.object({ code: z.string(), title: z.string() }),
+  concept: z.object({ code: z.string(), name: z.string() }),
   videos: z.object({ public: SeededVideoSchema, private: SeededVideoSchema, nonaktif: SeededVideoSchema }),
   senderEvents: z.array(z.object({ id: z.string(), type: z.string() })),
 });

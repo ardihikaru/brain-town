@@ -63,6 +63,9 @@ async function pre() {
 
   const n = crypto.randomBytes(3).toString('hex');
   const channel = { code: `e2ekanal${n}`, title: `Kanal E2E ${n}` };
+  // The konsep (series) the public video belongs to: the server's feed carries its name as _animora.concept and the
+  // real sender is given the same name on its video.* envelopes.
+  const concept = { code: `e2ekonsep${n}`, name: `Konsep E2E ${n}` };
   const video = (kind) => ({
     code: `e2e${n}${kind}`,
     title: `E2E Animora ${kind} ${n}`,
@@ -88,13 +91,28 @@ async function pre() {
       id: `video-${pub.code}`,
       type: 'video.rendered',
       at,
-      data: { title: pub.title, channel: channel.title, language: 'id', duration: 42, format: 'video', code: pub.code },
+      data: {
+        title: pub.title,
+        channel: channel.title,
+        concept: concept.name,
+        language: 'id',
+        duration: 42,
+        format: 'video',
+        code: pub.code,
+      },
     },
     '2-scheduled': {
       id: `plan-${pub.code}-${channel.code}-youtube-sched`,
       type: 'video.scheduled',
       at,
-      data: { vendor: 'youtube', channel: channel.title, title: pub.title, dueAt: at, code: pub.code },
+      data: {
+        vendor: 'youtube',
+        channel: channel.title,
+        concept: concept.name,
+        title: pub.title,
+        dueAt: at,
+        code: pub.code,
+      },
     },
     // Same id as the item the server's /feed.json carries for this video: push and pull dedupe each other.
     '3-published': {
@@ -104,6 +122,7 @@ async function pre() {
       data: {
         vendor: 'youtube',
         channel: channel.title,
+        concept: concept.name,
         title: pub.title,
         url: pub.url,
         publishedAt: at,
@@ -115,7 +134,7 @@ async function pre() {
     write(`events/${name}.json`, `${JSON.stringify(envelope)}\n`);
   write(
     'stack.json',
-    `${JSON.stringify({ integration: { id: created.integration.id }, feedUrl: FEED_URL, channel, videos, senderEvents: Object.values(envelopes).map((e) => ({ id: e.id, type: e.type })) })}\n`,
+    `${JSON.stringify({ integration: { id: created.integration.id }, feedUrl: FEED_URL, channel, concept, videos, senderEvents: Object.values(envelopes).map((e) => ({ id: e.id, type: e.type })) })}\n`,
   );
   console.log(`✔ animora integration created (${created.integration.id})`);
 }
@@ -127,6 +146,12 @@ async function seed() {
   const post = (route, body) => call(SERVER, 'POST', route, body, auth);
 
   await post('/channels', { code: stack.channel.code, title: stack.channel.title, status: 'active' });
+  await post('/concepts', {
+    code: stack.concept.code,
+    channel: stack.channel.code,
+    name: stack.concept.name,
+    status: 'active',
+  });
   const flags = { public: {}, private: { privat: true }, nonaktif: { nonaktif: true } };
   for (const [kind, v] of Object.entries(stack.videos)) {
     await post('/videos', {
@@ -136,6 +161,7 @@ async function seed() {
       status: 'rendered',
       language: 'id',
       channel: stack.channel.code,
+      concept: stack.concept.code,
       ...flags[kind],
     });
     // Every video has a public YouTube publication: only the video's own flags keep private and nonaktif ones out.
