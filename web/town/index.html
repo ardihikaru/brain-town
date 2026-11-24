@@ -204,6 +204,7 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .cpt li>span[dir]{flex:1;min-width:0;overflow-wrap:anywhere}
 .q time{font:500 11px var(--font-mono);font-variant-numeric:tabular-nums;flex:none;min-width:5.5ch}
 .q .t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cpt .chip{flex:none}
 .cpt li.more,.q li.more{color:var(--ink-soft);font-size:11px}
 @keyframes pulse{50%{opacity:.45}}
 @media (prefers-reduced-motion:reduce){.tasks li.doing::before,.ck.running,.track span.now{animation:none}}
@@ -221,7 +222,8 @@ button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
   #zoom{display:none}
   #jump{bottom:12px;flex-wrap:nowrap;overflow-x:auto;width:auto}
   #jump button{white-space:nowrap}
-  #card{bottom:auto;top:150px}
+  #card{bottom:auto;top:196px}
+  #clock{display:none}
 }
 </style>
 </head>
@@ -884,7 +886,7 @@ const fxAlpha=l=>{ let a=1; if(l) for(const f of l) a*=fxVal(f); return a; };
    CHX keeps what the events said about each channel (key = channel name, or CHXPRIV for every hidden one):
    {key,name,private,last,concepts:Map<concept,{live:{pf:{day,ms}},madeDay,madeMs}>,lt:Map<pf,{day,n}>,plat:Set<pf>}.
    Placed offices never move during the session; a new channel fills the first free office, in index order. */
-const CHX=new Map(), CHXPRIV='\u0000private', chanKey=n=>n?String(n):CHXPRIV;
+const CHX=new Map(), CHXPRIV='\u0000private', CHXNONE='\u0000none', chanKey=n=>n?String(n):CHXNONE, itemKey=it=>it.hidden?CHXPRIV:chanKey(it.channel);
 const CHXT=new Set(['video.started','video.ready','upload.planned','video.published','upload.failed','channel.connected']);
 const chxLT=(c,pf)=>{ const l=c&&c.lt.get(pf); return l&&l.day===tzDay(Date.now())?l.n:0; };
 const CONCEPTC=['#f2c14e','#7cc6de','#f29fb5','#a8d47a','#f6a96b','#b9a7e8'];
@@ -897,10 +899,10 @@ function conceptColors(names){ const used=new Set(), out=new Map();
 const conceptColor=(name,names)=>conceptColors(names&&names.length?names:[name]).get(name)||'#d2d6d9';
 const QS_SIM=['arriving','check','caption','slot','upload'];
 /* items waiting for a slot on a platform for one channel (live: scheduled uploads; simulator: everything between the render and the upload) */
-function chanQ(key,pf='youtube'){ const st=VID.live?['slot']:QS_SIM; let n=0; for(const it of PLS.items.values()) if(it.platform===pf&&st.includes(it.state)&&chanKey(it.channel)===key) n++; return n; }
+function chanQ(key,pf='youtube'){ const st=VID.live?['slot']:QS_SIM; let n=0; for(const it of PLS.items.values()) if(it.platform===pf&&st.includes(it.state)&&itemKey(it)===key) n++; return n; }
 function chxNote(ev){ const t=ev.type; if(!CHXT.has(t)) return;
   const key=ev.hidden?CHXPRIV:chanKey(ev.channel), at=ev.atMs||Date.now(), pf=ev.platform||'', day=tzDay(at); let c=CHX.get(key);
-  if(!c){ c={key,name:key===CHXPRIV?'Private channel':key,private:key===CHXPRIV,last:0,concepts:new Map(),lt:new Map(),plat:new Set()}; CHX.set(key,c);
+  if(!c){ c={key,name:key===CHXPRIV?'Private channel':key===CHXNONE?'No channel':key,private:key===CHXPRIV,last:0,concepts:new Map(),lt:new Map(),plat:new Set()}; CHX.set(key,c);
     if(CHX.size>60){ let old=null; const bound=new Set(studios.map(o=>o.chan)); for(const x of CHX.values()){ if(x===c||bound.has(x.key)) continue; if(!old||x.last<old.last) old=x; } if(!old) for(const x of CHX.values()) if(x!==c&&(!old||x.last<old.last)) old=x; if(old) CHX.delete(old.key); } }
   c.last=Math.max(c.last,at); if(pf) c.plat.add(pf);
   const cn=(!c.private&&!ev.hidden&&ev.concept)?String(ev.concept):''; let cx=null;
@@ -915,7 +917,7 @@ function officeConcepts(o){ if(!o.chan) return []; if(!VID.live) return CONFIG.c
 function officeLive(o){ const c=CHX.get(o.chan), q=chanQ(o.chan), k=VID.live?(c?c.concepts.size:0):(CONFIG.concepts[o.chan]||[]).length, lt=chxLT(c,'youtube');
   return `${q} waiting on YouTube · ${k} concept${k===1?'':'s'} · ${lt} live today`; }
 function officeFree(o){ o.chan=null; o.name=o.full='Free studio'; o.live=null; o.detail=null; o.desc='A free channel office. The next Animora channel moves in here.'; if(sel===o) closeCard(); }
-function bindOffice(o,key,delay=0){ const c=CHX.get(key), disp=key===CHXPRIV?'Private channel':(c?c.name:String(key)), wasFree=!o.chan;
+function bindOffice(o,key,delay=0){ const c=CHX.get(key), disp=key===CHXPRIV?'Private channel':key===CHXNONE?'No channel':(c?c.name:String(key)), wasFree=!o.chan;
   o.chan=key; o.name=cut(disp,20); o.full=disp; o.label=true;
   o.desc=`Channel office of ${disp}. Its influencer posts one video per concept a day; the tickets are its waiting list.`;
   o.live=()=>officeLive(o); o.detail={label:'Open the channel lineup',open:()=>openDetail('plat','youtube','channels')};
@@ -934,7 +936,7 @@ function flashAt(c,x,y,age,k=1){ if(age<0||age>=250) return; const e=easeOutQuin
   for(const col of ['rgba(31,43,58,.55)','#fff']){ c.strokeStyle=col; c.lineWidth=col==='#fff'?1.1*k:2.2*k; for(let n=0;n<4;n++){ const an=Math.PI/4+n*Math.PI/2; c.beginPath(); c.moveTo(x+Math.cos(an)*(r+1.5*k),y+Math.sin(an)*(r+1.5*k)); c.lineTo(x+Math.cos(an)*(r+1.5*k+4*k),y+Math.sin(an)*(r+1.5*k+4*k)); c.stroke(); } }
   c.globalAlpha=ga; c.strokeStyle=INK; }
 /* the influencer (about 18 world px tall): sunglasses, a jacket in the office colour, a selfie stick (even office) or a ring light (odd office). The jacket colour is the office colour, grey for a private channel. */
-function drawInfluencer(o,i){ const key=o.chan, cm=calm(), now=performance.now(), c=CHX.get(key), priv=key===CHXPRIV||!!(c&&c.private), col=priv?'#8a929b':chColors[i];
+function drawInfluencer(o,i){ const key=o.chan, cm=calm(), now=performance.now(), c=CHX.get(key), priv=key===CHXPRIV||!!(c&&c.private), col=(priv||key===CHXNONE)?'#8a929b':chColors[i];
   const names=priv?[]:officeConcepts(o);
   if(names.length){ if(o._ck!==names.join('\u0001')){ o._ck=names.join('\u0001'); o._cm=conceptColors(names); } const b=P(o.x+o.w+.15,o.y+o.d+.1,0); ctx.lineWidth=LIGHT;
     for(let k=0;k<Math.min(3,names.length);k++){ const py=b[1]-11+k*4.2; ctx.beginPath(); ctx.moveTo(b[0],py); ctx.lineTo(b[0]+5,py+1.75); ctx.lineTo(b[0],py+3.5); ctx.closePath(); ctx.fillStyle=o._cm.get(names[k]); ctx.fill(); ctx.stroke(); } }
@@ -2213,8 +2215,8 @@ function videoSnapshot(){ const platforms={}; for(const pf in PNAME){ const l=[.
     platforms[pf]={scheduled:n('slot'),failed:n('failed'),live:n('live'),published:plat[pf],channels:CHAN[pf].size}; }
   return {source:VID.live?'live':'sample',rendered:genState.rendered,building:[...YTS.items.values()].filter(x=>x.state==='building').length,hydrated:!!VID.hydrated,platforms}; }
 function animStore(ev,now){ const t=ev.type, pf=ev.platform, key=pf+'|'+ev.id;
-  const pget=st0=>{ let it=PLS.items.get(key); if(!it){ it={key,id:ev.id,platform:pf,title:ev.title,channel:ev.channel,kind:ev.kind||'video',state:st0,publishAt:null,at:now,seq:++PLS.seq,anim:true,concept:ev.concept||'',slotMs:null,liveMs:0}; PLS.items.set(key,it); } return it; };
-  const pcap=state=>{ const l=[...PLS.items.values()].filter(x=>x.platform===pf&&x.state===state).sort((a,b)=>a.seq-b.seq); while(l.length>6) PLS.items.delete(l.shift().key); };
+  const pget=st0=>{ let it=PLS.items.get(key); if(!it){ it={key,id:ev.id,platform:pf,title:ev.title,channel:ev.channel,hidden:!!ev.hidden,kind:ev.kind||'video',state:st0,publishAt:null,at:now,seq:++PLS.seq,anim:true,concept:ev.concept||'',slotMs:null,liveMs:0}; PLS.items.set(key,it); } return it; };
+  const pcap=(state,n=6)=>{ const l=[...PLS.items.values()].filter(x=>x.platform===pf&&x.state===state).sort((a,b)=>a.seq-b.seq); while(l.length>n) PLS.items.delete(l.shift().key); };
   const yget=create=>{ let it=YTS.items.get(ev.id); if(!it&&create){ it={id:ev.id,akey:ev.id,first:++YTS.seq,source:'anim',title:ev.title,channel:ev.channel,kind:ev.kind||'video',state:'',at:now,reworks:0,plans:{},platforms:[],failed:null,upd:0}; YTS.items.set(ev.id,it); } if(it) it.upd=++YTS.seq; return it; };
   const up=(it,s2)=>{ if((ARANK[s2]||0)>=(ARANK[it.state]||0)) it.state=s2; };
   const ycap=(state,n)=>{ const l=[...YTS.items.values()].filter(x=>x.state===state).sort((a,b)=>state==='published'?a.seq-b.seq:a.upd-b.upd); while(l.length>n) YTS.items.delete(l.shift().id); };
@@ -2235,7 +2237,7 @@ function animStore(ev,now){ const t=ev.type, pf=ev.platform, key=pf+'|'+ev.id;
     if(b) YTS.items.delete(b.id);
     const y=yget(true); if(b){ y.akey=b.akey; if(!y.channel) y.channel=b.channel; }
     up(y,'ready'); y.rendMs=ev.replay?ev.atMs:0; y.kind=ev.kind||y.kind; ycap('ready',8); genCount(); YTS.v++; }
-  else if(t==='upload.planned'){ const p=pget('slot'); if(p.state!=='live') p.state='slot'; p.publishAt=ev.publishAt; p.slotMs=ev.publishAtMs||null; if(ev.concept) p.concept=ev.concept; pcap('slot'); PLS.v++;
+  else if(t==='upload.planned'){ const p=pget('slot'); if(p.state!=='live') p.state='slot'; p.publishAt=ev.publishAt; p.slotMs=ev.publishAtMs||null; if(ev.concept) p.concept=ev.concept; pcap('slot',60); PLS.v++;
     const y=yget(true); y.plans[pf]=ev.publishAt||''; y.failed=null; up(y,'scheduled'); ycap('scheduled',8); YTS.v++; }
   else if(t==='upload.failed'){ const p=pget('failed'); if(p.state!=='live') p.state='failed'; p.attempt=ev.attempt; p.seq=++PLS.seq; pcap('failed'); PLS.v++;
     const y=yget(false); if(y&&y.state!=='published') y.failed=pf; YTS.v++; }
@@ -2589,7 +2591,7 @@ function drawYtScene(c,dt,LW,LH){ const all=[...YTS.items.values()], sch=all.fil
   // hanging station signs
   const sign=(x,label,step,fill='#fff',ink=INK)=>{ c.lineWidth=1; c.beginPath(); c.moveTo(x-30,11); c.lineTo(x-30,44); c.moveTo(x+30,11); c.lineTo(x+30,44); c.stroke(); c.lineWidth=1.4; c.fillStyle=fill; c.fillRect(x-40,44,80,34); c.strokeRect(x-40,44,80,34); txt(c,label,x,61,'600 13px "IBM Plex Sans"','center',ink); txt(c,step,x,73,'500 8.5px "IBM Plex Mono"','center',ink===INK?'#647282':ink); };
   STAGES.forEach(([k,name],i)=>{ dash(c,SX[k],96,SX[k],LH-24); sign(SX[k],name,'STEP '+(i+2)); });
-  const nowH=tod*24, slot=String((Math.floor(nowH)+1)%24).padStart(2,'0')+':00'; dash(c,890,96,890,LH-24); sign(890,'Slot '+slot,'STEP 7 · WAIT'); sign(1005,'▶ Publish','STEP 8','#d9523c','#fff');
+  const nx=nextSlotMs([...PLS.items.values()].filter(x=>x.platform==='youtube')); dash(c,890,96,890,LH-24); sign(890,nx?'Slot '+tzHM(nx):'Slot \u2013','STEP 7 · WAIT'); sign(1005,'▶ Publish','STEP 8','#d9523c','#fff');
   // loading dock with a box car
   c.lineWidth=1.4; c.fillStyle='#e6e9ec'; c.fillRect(960,124,88,380); c.strokeRect(960,124,88,380); for(let y=124;y<504;y+=16){ c.fillStyle=(y/16|0)%2?'#e6b655':INK; c.fillRect(960,y,7,Math.min(16,504-y)); }
   txt(c,'LOADING DOCK',1008,142,'500 9.5px "IBM Plex Mono"','center','#647282'); for(const [ln,ly] of [['box cars',470],['to the four',481],['platforms',492]]) txt(c,ln,1008,ly,'500 9.5px "IBM Plex Mono"','center','#647282');
@@ -2752,11 +2754,11 @@ const PSTG=[['check','Format check'],['caption','Caption + tags'],['slot','Slot'
    Status today: live (posted today) > scheduled (a slot today) > made (rendered today) > none. */
 const PFORDER=['youtube','facebook','instagram','tiktok'];
 function channelsFor(pf){ const live=VID.live, nowMs=Date.now(), today=tzDay(nowMs), out=new Map(), qs=live?['slot']:QS_SIM;
-  const add=(key,name,priv)=>{ let m=out.get(key); if(!m){ m={key,name,private:priv,color:chColor(priv?'':name),connected:[],concepts:[],queue:[],liveToday:0,next:null}; out.set(key,m); } return m; };
+  const add=(key,name,priv)=>{ let m=out.get(key); if(!m){ m={key,name,private:priv,color:chColor(priv||key===CHXNONE?'':name),connected:[],concepts:[],queue:[],liveToday:0,next:null}; out.set(key,m); } return m; };
   if(live){ for(const n of CHAN[pf]){ const priv=String(n).startsWith('c:'); add(priv?CHXPRIV:chanKey(n),priv?'Private channel':String(n),priv); }
     for(const c of CHX.values()) if(c.plat.has(pf)) add(c.key,c.name,c.private); }
   else for(const n of CONFIG.channels) add(n,n,false);
-  for(const it of PLS.items.values()){ if(it.platform!==pf||!qs.includes(it.state)) continue; const m=out.get(chanKey(it.channel)); if(m) m.queue.push({key:it.key,id:it.id,title:it.title,concept:m.private?'':(it.concept||''),slotMs:it.slotMs||null,state:it.state,seq:it.seq}); }
+  for(const it of PLS.items.values()){ if(it.platform!==pf||!qs.includes(it.state)) continue; const m=out.get(itemKey(it)); if(m) m.queue.push({key:it.key,id:it.id,title:it.title,concept:m.private?'':(it.concept||''),slotMs:it.slotMs||null,state:it.state,seq:it.seq}); }
   const list=[...out.values()];
   for(const m of list){ const c=CHX.get(m.key); m.queue.sort((a,b)=>(a.slotMs==null)-(b.slotMs==null)||(a.slotMs||0)-(b.slotMs||0)||a.seq-b.seq);
     m.connected=live?PFORDER.filter(p=>p===pf||(c&&c.plat.has(p))):PFORDER.slice();
@@ -2789,7 +2791,7 @@ function platChannels(pf){ const N=PNAME[pf], list=channelsFor(pf);
   return head+'<div class="chans">'+list.map(card).join('')+'</div>'; }
 /* the channel lineup under the upload room: an influencer on a stage with a ring light, and its tickets (the waiting list, next slot on top) */
 function rrect(c,x,y,w,h,r){ c.beginPath(); if(c.roundRect) c.roundRect(x,y,w,h,r); else c.rect(x,y,w,h); }
-function drawLineup(c,pf,all){ const chs=channelsFor(pf), Y=548, now=performance.now(), cm=calm(), mono='500 10.5px "IBM Plex Mono"', tk=new Map(), prev=scene.tk||new Map();
+function drawLineup(c,pf,all){ const chs=channelsFor(pf), Y=548, now=performance.now(), cm=calm(), mono='500 10.5px "IBM Plex Mono"', tk=new Map(), prev=(scene.tk&&now-(scene.tkAt||0)<250)?scene.tk:new Map();
   c.strokeStyle=INK;
   if(!scene.slides) scene.slides=[]; if(!scene.fl) scene.fl=new Map(); if(cm) scene.slides=[];
   dash(c,20,380,1040,380); txt(c,`CHANNELS ON ${PNAME[pf].toUpperCase()} · TIMES IN ${TZF.label}`,20,398,'500 9px "IBM Plex Mono"','left','#647282');
@@ -2807,7 +2809,7 @@ function drawLineup(c,pf,all){ const chs=channelsFor(pf), Y=548, now=performance
     // name and counts
     c.font='600 11px "IBM Plex Sans"'; txt(c,fitText(c,ch.name,150),x0+75,Y+30,'600 11px "IBM Plex Sans"','center',INK);
     txt(c,`${q} waiting · ${ch.liveToday} live today`,x0+75,Y+44,'500 9px "IBM Plex Mono"','center','#647282');
-    hoverCheck({x:cx,y:Y-14},`${ch.name} · ${q} waiting · ${ch.concepts.length} concept${ch.concepts.length===1?'':'s'} · ${ch.liveToday} live today`);
+    const nc2=ch.concepts.filter(c=>c.name).length; hoverCheck({x:cx,y:Y-14},`${ch.name} · ${q} waiting · ${nc2} concept${nc2===1?'':'s'} · ${ch.liveToday} live today`);
     // tickets: earliest slot on top, drawn last
     if(!q){ c.save(); c.setLineDash([4,4]); c.lineWidth=1.2; rrect(c,x0+78,Y-30,84,22,3); c.stroke(); c.restore(); txt(c,'no slot',x0+120,Y-15,'500 9px "IBM Plex Mono"','center','#647282'); }
     const nt=Math.min(4,q);
@@ -2822,7 +2824,7 @@ function drawLineup(c,pf,all){ const chs=channelsFor(pf), Y=548, now=performance
     txt(c,`+${chs.length-5} more channels`,x0+85,Y-52,'600 12px "IBM Plex Sans"','center',INK); txt(c,'open the Channels tab',x0+85,Y-36,'500 9px "IBM Plex Mono"','center','#647282'); }
   // a ticket that left the stack and is now live slides to the phone (700 ms, at most 3 at once); nothing moves when calm
   for(const [key,info] of prev){ if(tk.has(key)) continue; const it=PLS.items.get(key); if(!it||it.state!=='live'||cm) continue; scene.fl.set(info.ch,now); if(scene.slides.length<3) scene.slides.push({x:info.x,y:info.y,col:info.col,t0:now}); }
-  scene.tk=tk; scene.slides=scene.slides.filter(sl=>now-sl.t0<700);
+  scene.tk=tk; scene.tkAt=now; scene.slides=scene.slides.filter(sl=>now-sl.t0<700);
   for(const sl of scene.slides){ const t=(now-sl.t0)/700, e=easeInOutCubic(t), x=sl.x+(970-sl.x)*e, y=sl.y+(220-sl.y)*e, sc=1-.45*e, ga=c.globalAlpha;
     c.save(); c.globalAlpha=ga*(t<.8?1:1-(t-.8)/.2); c.translate(x,y); c.scale(sc,sc); c.lineWidth=1.2; rrect(c,-42,-11,84,22,3); c.fillStyle=sl.col; c.fill(); c.stroke(); c.restore(); } }
 

@@ -39,6 +39,7 @@ button.primary{background:var(--ink);color:var(--ground)} button.primary:hover{b
 button.quiet{border-color:var(--rule)}
 :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 input[type=text],input[type=email],input[type=password],input[type=number],select{background:var(--ground);border:1px solid var(--ink);border-radius:3px;padding:6px 9px;min-width:0}
+#tz{max-width:100%;width:100%}
 label{font-size:12px;color:var(--ink-soft);display:flex;flex-direction:column;gap:4px}
 .panel{background:var(--panel);border:1px solid var(--ink);border-radius:3px;box-shadow:3px 3px 0 rgba(31,43,58,.1)}
 .pad{padding:14px 16px}
@@ -511,7 +512,7 @@ body.still .oa-act.fade{animation:none}
             <dl class="kv"><dt>Address</dt><dd id="svc-addr">https://town.mfardiansyah.id</dd><dt>Public stream</dt><dd id="svc-pub">https://town.mfardiansyah.id/events</dd><dt>Back-office stream</dt><dd id="svc-adm">https://town.mfardiansyah.id/admin/events</dd><dt>Heartbeat</dt><dd>every 15 s</dd></dl>
             <div class="row"><label>Keep events (days)<input type="number" id="keep" value="30" min="1" max="3650" style="width:110px"></label>
               <label>Animation<span class="switch" id="motion"><button type="button" aria-pressed="true" data-v="on">On</button><button type="button" aria-pressed="false" data-v="off">Off</button></span></label></div>
-            <div class="row"><label>Timezone<select id="tz" data-testid="svc-timezone"></select></label><span class="small muted" id="tz-now" data-testid="svc-timezone-preview">Now: 14:05 WIB</span></div>
+            <div class="row"><label style="flex:1 1 220px;min-width:0">Timezone<select id="tz" data-testid="svc-timezone"></select></label><span class="small muted" id="tz-now" data-testid="svc-timezone-preview">Now: 14:05 WIB</span></div>
             <div><button id="save-svc">Save</button></div></div>
           <form class="panel pad stackf" id="pwform"><h2>Account</h2>
             <label>Email<input type="email" id="acc-email" value="me@mfardiansyah.id"></label>
@@ -1299,10 +1300,11 @@ function tzFill(sel){ const have=new Set(), mk=(v,t)=>{ const o=document.createE
 function tzSet(z){ const sel=$('tz'); if(!z) z='Asia/Jakarta'; if(![...sel.options].some(o=>o.value===z)) sel.querySelector('optgroup').prepend(Object.assign(document.createElement('option'),{value:z,textContent:z})); sel.value=z; tzApply(); }
 function tzApply(){ let z=$('tz').value||'Asia/Jakarta'; try{ setBoTz(z); }catch(e){ setBoTz('Asia/Jakarta'); }
   tzPreview(); $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); paintLog(); }
-function tzPreview(){ $('tz-now').textContent='Now: '+BO_TZF.hm.format(new Date())+' '+BO_TZF.label; }
+let tzDirty=false;
+function tzPreview(){ $('tz-now').textContent='Now: '+BO_TZF.hm.format(new Date())+' '+BO_TZF.label+(tzDirty?' (not saved)':''); }
 function tzTick(){ tzPreview(); setTimeout(tzTick,60000-Date.now()%60000+5); }
-tzFill($('tz')); $('tz').value='Asia/Jakarta'; tzTick(); $('tz').addEventListener('change',()=>{ $('tz').removeAttribute('aria-invalid'); tzApply(); });
-$('save-svc').onclick=async()=>{ let label=BO_TZF.label; if(LIVE){ const r=await apiCall('PUT','/api/admin/settings',{retentionDays:+$('keep').value,animation:!document.body.classList.contains('still'),timezone:$('tz').value}); if(!r.ok){ if(r.status===422||(r.data&&/timezone/i.test(r.data.error||''))){ $('tz').setAttribute('aria-invalid','true'); return toast(r.data&&r.data.error||'Unknown timezone'); } return toast(r.data&&r.data.error||'Could not save'); } $('keep').value=r.data.retentionDays; if(r.data.timezone) tzSet(r.data.timezone); label=BO_TZF.label; } $('tz').removeAttribute('aria-invalid'); toast('Saved. Events are kept '+$('keep').value+' days. Town time: '+label+'.'); };
+tzFill($('tz')); $('tz').value='Asia/Jakarta'; tzTick(); $('tz').addEventListener('change',()=>{ $('tz').removeAttribute('aria-invalid'); tzDirty=true; tzApply(); });
+$('save-svc').onclick=async()=>{ let label=BO_TZF.label; if(LIVE){ const r=await apiCall('PUT','/api/admin/settings',{retentionDays:+$('keep').value,animation:!document.body.classList.contains('still'),timezone:$('tz').value}); if(!r.ok){ if(r.status===422||(r.data&&/timezone/i.test(r.data.error||''))){ $('tz').setAttribute('aria-invalid','true'); return toast(r.data&&r.data.error||'Unknown timezone'); } return toast(r.data&&r.data.error||'Could not save'); } $('keep').value=r.data.retentionDays; if(r.data.timezone) tzSet(r.data.timezone); label=BO_TZF.label; } $('tz').removeAttribute('aria-invalid'); tzDirty=false; tzPreview(); toast('Saved. Events are kept '+$('keep').value+' days. Town time: '+label+'.'); };
 $('motion').onclick=e=>{ const v=e.target.dataset.v; if(!v) return; document.body.classList.toggle('still',v==='off'); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===v)); };
 $('pwform').onsubmit=e=>{ e.preventDefault(); if($('acc-p1').value!==$('acc-p2').value) return toast('The two passwords differ. Type the same one twice.'); toast('Account updated'); };
 
@@ -1363,7 +1365,7 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   if(!a.ok||!b.ok||!c.ok) throw new Error('api'); INTS.splice(0,INTS.length,...a.data.map(mapInt)); applyProducts(b.data); EVENTS.splice(0,EVENTS.length,...c.data.map(mapEv));
   stats.events=EVENTS.filter(e=>e.st==='ok').length; stats.opened=stats.closed=stats.qaRuns=stats.qaFail=stats.tasks=stats.posts=stats.videos=stats.vidFail=0;
   EVENTS.forEach(e=>{ if(e.st!=='ok') return; if(e.type==='qa.run.finished'){ stats.qaRuns++; if(e.data.data&&e.data.data.failed) stats.qaFail++; } if(e.kind==='gaos'&&e.type==='task.done') stats.tasks++; if(e.kind==='site') stats.posts++; if(e.type==='video.published') stats.videos++; if(e.type==='video.publish_failed') stats.vidFail++; });
-  const st=await apiCall('GET','/api/admin/settings'); if(st.ok){ $('keep').value=st.data.retentionDays; tzSet(st.data.timezone||'Asia/Jakarta'); document.body.classList.toggle('still',!st.data.animation); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='on')===st.data.animation)); }
+  const st=await apiCall('GET','/api/admin/settings'); if(st.ok){ $('keep').value=st.data.retentionDays; tzDirty=false; tzSet(st.data.timezone||'Asia/Jakarta'); document.body.classList.toggle('still',!st.data.animation); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='on')===st.data.animation)); }
   $('svc-addr').textContent=location.origin; $('svc-pub').textContent=location.origin+'/events'; $('svc-adm').textContent=location.origin+'/admin/events'; await refreshStats();
   $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;
