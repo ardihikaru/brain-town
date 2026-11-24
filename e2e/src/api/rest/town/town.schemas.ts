@@ -16,6 +16,8 @@ export const TownOwnerSchema = z.object({
 });
 
 export const TownSnapshotSchema = z.object({
+  /** The configured IANA time zone (admin settings). */
+  timezone: z.string().min(1),
   owners: z.array(TownOwnerSchema),
   unowned: z.array(TownRepoSchema),
 });

@@ -112,7 +112,10 @@ export const AdminEventSchema = z.object({
 export const AdminEventListSchema = z.array(AdminEventSchema);
 export type AdminEvent = z.infer<typeof AdminEventSchema>;
 
-export const SettingsSchema = z.object({ retentionDays: z.number().int(), animation: z.boolean() }).strict();
+/** `timezone` is the IANA name the town clock and day boundaries use (default Asia/Jakarta). */
+export const SettingsSchema = z
+  .object({ retentionDays: z.number().int(), animation: z.boolean(), timezone: z.string().min(1) })
+  .strict();
 export type Settings = z.infer<typeof SettingsSchema>;
 
 export const StatsSchema = z.object({

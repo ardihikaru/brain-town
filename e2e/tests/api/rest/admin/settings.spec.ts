@@ -21,14 +21,14 @@ test.describe('admin · settings and stats', () => {
     async ({ adminApi, cleanup }) => {
       skipUnlessDestructiveAllowed();
       const before = await expectJson(await adminApi.getSettings(), SettingsSchema);
-      cleanup.add(() => adminApi.putSettings(before));
+      cleanup.add(() => adminApi.putSettings({ retentionDays: before.retentionDays, animation: before.animation }));
 
       const saved = await expectJson(
         await adminApi.putSettings({ retentionDays: 7, animation: false }),
         SettingsSchema,
       );
 
-      expect(saved).toEqual({ retentionDays: 7, animation: false });
+      expect(saved).toMatchObject({ retentionDays: 7, animation: false });
     },
   );
 
@@ -47,7 +47,7 @@ test.describe('admin · settings and stats', () => {
       async ({ adminApi, cleanup }) => {
         skipUnlessDestructiveAllowed();
         const before = await expectJson(await adminApi.getSettings(), SettingsSchema);
-        cleanup.add(() => adminApi.putSettings(before));
+        cleanup.add(() => adminApi.putSettings({ retentionDays: before.retentionDays, animation: before.animation }));
 
         const saved = await expectJson(
           await adminApi.putSettings({ retentionDays: sent, animation: true }),

@@ -130,6 +130,25 @@ export function buildVideoPublishFailed(parts: Parts = buildVideoParts(), overri
   );
 }
 
+/** An autodaily run id (1 to 64 of A-Za-z0-9_-). */
+export function buildRunId(): string {
+  return uniqueId('run');
+}
+
+export function buildVideoStarted(run: string = buildRunId(), overrides: Override = {}): AnimoraEnvelope {
+  return envelope(
+    { id: `run-${run}-naskah`, type: 'video.started', at: now(), data: { run, stage: 'naskah' } },
+    overrides,
+  );
+}
+
+export function buildVideoRenderFailed(run: string = buildRunId(), overrides: Override = {}): AnimoraEnvelope {
+  return envelope(
+    { id: `run-${run}-failed`, type: 'video.render_failed', at: now(), data: { run, stage: 'render' } },
+    overrides,
+  );
+}
+
 export function buildChannelConnected(parts: Parts = buildVideoParts(), overrides: Override = {}): AnimoraEnvelope {
   return envelope(
     {
@@ -164,7 +183,7 @@ export interface AnimoraFeedItem {
   url: string;
   title: string;
   date_published: string;
-  _animora: { vendor: string; channel: string; code: string };
+  _animora: { vendor: string; channel: string; concept?: string; code: string };
 }
 
 export function buildAnimoraFeedItem(

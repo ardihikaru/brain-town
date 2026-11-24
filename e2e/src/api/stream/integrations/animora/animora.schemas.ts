@@ -8,7 +8,12 @@ export const AnimoraFeedItemSchema = z.object({
   url: z.url(),
   title: z.string().min(1),
   date_published: z.iso.datetime(),
-  _animora: z.strictObject({ vendor: VendorSchema, channel: z.string(), code: z.string() }),
+  _animora: z.strictObject({
+    vendor: VendorSchema,
+    channel: z.string(),
+    concept: z.string().optional(),
+    code: z.string(),
+  }),
 });
 export type AnimoraFeedItemOut = z.infer<typeof AnimoraFeedItemSchema>;
 

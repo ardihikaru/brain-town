@@ -13,6 +13,7 @@
 - **US-ADM-07** — As the admin I want a GitHub owner to have a type and per-repo state, with a resettable alias for hidden repos, so that personal accounts (one webhook per repo) work like organizations.
 - **US-ADM-08** — As the admin I want each QA deployment to have its own name, and any integration to be renamed with checks, so that the town can say which tool ran a test.
 - **US-ADM-09** — As the admin I want to give an org a public alias, also for a public org, so that the town shows a friendly name instead of the key.
+- **US-ADM-10** — As the admin I want to set the town time zone so that the town clock and day boundaries follow my region.
 
 ## Test cases
 
@@ -68,5 +69,9 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-ADM-093 | US-ADM-09 | Given another org key, when an org takes it as alias, then 409 and its own alias stays                                             | -   | API   | P1  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
 | ☑    | TC-ADM-094 | US-ADM-09 | Given an org, when its alias is 61 characters, then 422 and the alias is kept                                                      | -   | API   | P2  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
 | ☑    | TC-ADM-095 | US-ADM-09 | Given an org, when its alias has a character outside the allowed set, then 422 and the alias is kept                               | -   | API   | P2  | automated   | `tests/api/rest/admin/org-alias.spec.ts`      |
+| ☑    | TC-ADM-100 | US-ADM-10 | Given a session, when settings are read, then they carry a valid IANA timezone (default Asia/Jakarta)                              | +   | API   | P0  | automated   | `tests/api/rest/admin/timezone.spec.ts`       |
+| ☑    | TC-ADM-101 | US-ADM-10 | Given Asia/Tokyo or UTC, when saved, then the PUT answer and the next read return it (original restored)                           | +   | API   | P1  | automated   | `tests/api/rest/admin/timezone.spec.ts`       |
+| ☑    | TC-ADM-102 | US-ADM-10 | Given Mars/Olympus or Local, when saved, then 422 naming timezone and the old zone is kept                                         | -   | API   | P1  | automated   | `tests/api/rest/admin/timezone.spec.ts`       |
+| ☑    | TC-ADM-103 | US-ADM-10 | Given a changed timezone, when settings are saved without a timezone, then the zone is kept                                        | +   | API   | P2  | automated   | `tests/api/rest/admin/timezone.spec.ts`       |
 
 TC-ADM-007 is `manual-only`: the failure cap is global for the whole API, so tripping it would break every other sign-in for a minute during a parallel run.
