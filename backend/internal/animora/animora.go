@@ -19,6 +19,7 @@ const (
 var Types = map[string]bool{
 	"video.rendered": true, "video.scheduled": true, "video.published": true,
 	"video.publish_failed": true, "channel.connected": true,
+	"video.started": true, "video.render_failed": true,
 }
 
 var vendors = map[string]bool{"youtube": true, "facebook": true, "instagram": true, "tiktok": true}
@@ -60,8 +61,11 @@ func stamp(d map[string]any, k string, must bool) (string, error) {
 }
 
 // validCode reports whether c is an opaque video code: 1 to 32 characters of [A-Za-z0-9_-].
-func validCode(c string) bool {
-	if c == "" || len(c) > 32 {
+func validCode(c string) bool { return validOpaque(c, 32) }
+
+// validOpaque reports whether c is 1 to max characters of [A-Za-z0-9_-].
+func validOpaque(c string, max int) bool {
+	if c == "" || len(c) > max {
 		return false
 	}
 	for _, r := range c {
@@ -80,6 +84,9 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 		if v != "" {
 			out[k] = v
 		}
+	}
+	if typ == "video.started" || typ == "video.render_failed" {
+		return cleanProgress(typ, in)
 	}
 	if typ != "video.rendered" {
 		v := text(in, "vendor", 32)
@@ -103,6 +110,10 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 	}
 	switch typ {
 	case "video.rendered":
+		// The optional autodaily run id clears the in-production item of that run. Invalid is dropped, never a 422.
+		if r := strings.TrimSpace(strInput(in, "run")); validOpaque(r, 64) {
+			out["run"] = r
+		}
 		put("channel", text(in, "channel", 120))
 		put("language", text(in, "language", 16))
 		if f := text(in, "format", 8); f == "video" || f == "reel" {
@@ -141,6 +152,37 @@ func Clean(typ string, in map[string]any) (map[string]any, error) {
 		out["channel"] = ch
 		if a := text(in, "account", 120); a != "" && !strings.Contains(a, "@") {
 			out["account"] = a
+		}
+	}
+	return out, nil
+}
+
+// cleanProgress validates the in-progress types video.started and video.render_failed: run and stage are
+// required (run is checked first), the title is optional, there is no vendor, and only allowlisted keys survive.
+func cleanProgress(typ string, in map[string]any) (map[string]any, error) {
+	out := map[string]any{}
+	run := strings.TrimSpace(strInput(in, "run"))
+	if !validOpaque(run, 64) {
+		return nil, Err{"data.run", "data.run is required: 1 to 64 characters of A-Z a-z 0-9 _ -"}
+	}
+	out["run"] = run
+	stage := text(in, "stage", 16)
+	if stage != "naskah" && stage != "render" {
+		return nil, Err{"data.stage", "data.stage must be naskah or render"}
+	}
+	out["stage"] = stage
+	if c := strings.TrimSpace(strInput(in, "code")); validCode(c) {
+		out["code"] = c
+	}
+	if ch := text(in, "channel", 120); ch != "" {
+		out["channel"] = ch
+	}
+	if typ == "video.started" {
+		if t := text(in, "title", 200); t != "" {
+			out["title"] = t
+		}
+		if f := text(in, "format", 8); f == "video" || f == "reel" {
+			out["format"] = f
 		}
 	}
 	return out, nil
