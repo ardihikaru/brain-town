@@ -3,6 +3,8 @@ package store
 import (
 	"context"
 	"time"
+
+	"github.com/ardihikaru/brain-town/backend/internal/consumer"
 )
 
 // Persister is the durable side of the store. The Store keeps the working set in memory and
@@ -16,6 +18,7 @@ type Persister interface {
 // Snapshot is what Load returns at startup.
 type Snapshot struct {
 	Integrations []Integration
+	Consumers    []consumer.Consumer
 	Orgs         []Org
 	Products     []Product
 	Events       []Event // oldest first, at most the newest maxEvents
@@ -38,16 +41,19 @@ const (
 	OpEventUpdate // update product and raw of an existing event (by Seq) and replace its ABOUT edge
 	OpRekeyEvents // bulk column update: events of Kind with product From get product To (no raw, no edges)
 	OpProductDel  // delete the product vertex Key
+	OpConsumer    // upsert a downstream reader
+	OpConsumerDel // delete a downstream reader
 )
 
 type Op struct {
 	Kind        OpKind
 	Integration *Integration
+	Consumer    *consumer.Consumer
 	Org         *Org
 	Product     *Product
 	Event       *Event
 	Settings    *Settings
-	Key         string // OpSeen key, OpIntegrationDel id, OpProductDel product key
+	Key         string // OpSeen key, OpIntegrationDel id, OpProductDel product key, OpConsumerDel id
 	EventKind   string // OpRekeyEvents: the event kind to re-key
 	From, To    string // OpRekeyEvents: old and new product key
 	At          time.Time

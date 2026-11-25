@@ -18,6 +18,18 @@ export interface UpdateIntegrationInput {
   feedUrl?: string;
 }
 
+export interface ConsumerScopeInput {
+  owners?: string[];
+  repos?: string[];
+  types?: string[];
+  kinds?: string[];
+}
+
+export interface CreateConsumerInput {
+  name: string;
+  scope?: ConsumerScopeInput;
+}
+
 export interface VisibilityInput {
   /** `public` or `hidden`; any string so negative tests can send other values. */
   visibility?: string;
@@ -110,6 +122,28 @@ export class AdminClient extends BaseApiClient {
 
   stats(): Promise<APIResponse> {
     return this.get('/api/admin/stats');
+  }
+
+  // ---- consumers: the downstream readers ----
+
+  listConsumers(): Promise<APIResponse> {
+    return this.get('/api/admin/consumers');
+  }
+
+  createConsumer(input: CreateConsumerInput): Promise<APIResponse> {
+    return this.post('/api/admin/consumers', { data: input });
+  }
+
+  updateConsumer(id: string, input: CreateConsumerInput): Promise<APIResponse> {
+    return this.patch(`/api/admin/consumers/${encodeURIComponent(id)}`, { data: input });
+  }
+
+  rotateConsumerToken(id: string): Promise<APIResponse> {
+    return this.post(`/api/admin/consumers/${encodeURIComponent(id)}/token`);
+  }
+
+  deleteConsumer(id: string): Promise<APIResponse> {
+    return this.delete(`/api/admin/consumers/${encodeURIComponent(id)}`);
   }
 
   /** Sends a body with an explicit content type, for the 415 / 400 contract checks. */

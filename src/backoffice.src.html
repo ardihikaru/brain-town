@@ -414,6 +414,7 @@ body.still .oa-act.fade{animation:none}
     <nav aria-label="Pages"><span id="navmark" aria-hidden="true"></span>
       <a href="#dashboard"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 3h6v8H3zM11 3h6v4h-6zM11 9h6v8h-6zM3 13h6v4H3z'/></svg><span class="full">Dashboard</span><span class="short">Home</span></a>
       <a href="#integrations"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><circle cx='5' cy='10' r='2.5'/><circle cx='15' cy='5' r='2.5'/><circle cx='15' cy='15' r='2.5'/><path d='M7.3 9l5.5-3M7.3 11l5.5 3'/></svg><span class="full">Integrations</span><span class="short">Connect</span><b id="n-int"></b></a>
+      <a href="#consumers"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 5h9l5 5v5H3z'/><path d='M12 5v5h5'/></svg><span class="full">Consumers</span><span class="short">Readers</span><b id="n-cons"></b></a>
       <a href="#events"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 5h14M3 10h14M3 15h9'/></svg><span class="full">Event log</span><span class="short">Events</span><b id="n-ev"></b></a>
       <a href="#products"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10z'/><circle cx='10' cy='10' r='2.3'/></svg><span class="full">Products and visibility</span><span class="short">Products</span></a>
       <a href="#prefs"><svg viewBox='0 0 20 20' width='20' height='20' fill='none' stroke='currentColor' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round' aria-hidden='true'><path d='M3 6h8M15 6h2M3 14h2M9 14h8'/><circle cx='13' cy='6' r='2'/><circle cx='7' cy='14' r='2'/></svg><span class="full">Settings</span><span class="short">Settings</span></a>
@@ -445,6 +446,33 @@ body.still .oa-act.fade{animation:none}
       <div class="head"><div class="grow"><h1>Integrations</h1><p>One card per connected platform. GitHub has one card per owner: an organization, or a personal account with one webhook per repo. A card turns amber when a repo is missing events and red after a rejected delivery.</p></div></div>
       <div id="igroups" style="display:flex;flex-direction:column;gap:22px"></div>
       <div class="cards" id="iadd"></div>
+    </section>
+
+    <!-- CONSUMERS -->
+    <section class="page" data-page="consumers">
+      <div class="head"><div class="grow"><h1>Consumers</h1><p>A consumer is a machine that reads what the town saw. It is not an integration: an integration sends events in, a consumer reads them out. Each one has its own scoped token and reads only what it asked for.</p></div></div>
+      <div class="panel pad stackf">
+        <h2>Add a consumer</h2>
+        <p class="small muted" style="margin:0">The token is shown once, right after you create it. Hand it to the platform through your own secret channel — never in this page.</p>
+        <div class="panel pad row" style="gap:10px">
+          <label class="grow">Name<input type="text" id="cs-name" placeholder="GAOS · HISv3" autocomplete="off"></label>
+          <label class="grow">Owners<input type="text" id="cs-owners" placeholder="developersismedika" autocomplete="off"></label>
+        </div>
+        <div class="panel pad row" style="gap:10px">
+          <label class="grow">Repositories<input type="text" id="cs-repos" placeholder="his-v3-ai, his-backend" autocomplete="off"></label>
+          <label class="grow">Event types<input type="text" id="cs-types" placeholder="pr.opened, pr.merged" autocomplete="off"></label>
+          <label class="grow">Kinds<input type="text" id="cs-kinds" placeholder="github" autocomplete="off"></label>
+        </div>
+        <p class="small muted" style="margin:0">Leave a field empty to match everything in that dimension. Owners and repositories are matched case-insensitively; a repository is the bare name, without the owner.</p>
+        <div class="row"><button type="button" id="cs-create">Create consumer</button></div>
+      </div>
+      <div class="panel pad stackf" id="cs-token-box" hidden>
+        <h2>Copy the token now</h2>
+        <p class="small muted" style="margin:0">It is not shown again. A rotation replaces it and the old one stops working at once.</p>
+        <div class="copy"><input type="text" id="cs-token" readonly aria-label="The new consumer token"><button type="button" id="cs-copy">Copy</button></div>
+      </div>
+      <div class="panel scroll"><table class="stack"><thead><tr><th>Consumer</th><th>Scope</th><th>Token</th><th>Last seen</th><th>Actions</th></tr></thead><tbody id="cs-body" data-empty="No consumer yet. A platform that reads the town's events registers one here."></tbody></table></div>
+      <div class="panel pad"><h3>What a consumer sees</h3><p class="small muted" style="margin:4px 0 10px">The public stream hides a hidden product's real name and every title. A consumer that asked for that repository by name gets the real name — the event was already reduced when it was stored, and the source payload itself is never kept.</p><div class="two"><pre id="cs-raw"></pre><pre id="cs-pub"></pre></div></div>
     </section>
 
     <!-- SETUP -->
@@ -1289,6 +1317,40 @@ function paintProducts(){
 document.querySelector('[data-page=products]').addEventListener('click',e=>{ const v=e.target.dataset.vis; if(!v) return; const [kind,id,val]=v.split(':'); if(LIVE){ liveSave(kind,id,{visibility:val},id+' is now '+val+' in the town'); return; } const o=kind==='org'?ORGS.find(x=>x.id===id):PRODUCTS.find(x=>x.key===id); o.vis=val; if(kind==='org'){ if(!orgCustom(o)) o.alias=val==='public'?o.id:oaGenerated(o); } else if(val==='public') o.alias=o.key; else if(o.alias===o.key) o.alias='Product '+String.fromCharCode(65+PRODUCTS.indexOf(o)); demoSyncRepos(); oaRepaintAll(); toast((o.id||o.key)+' is now '+val+' in the town'); });
 document.querySelector('[data-page=products]').addEventListener('change',e=>{ const a=e.target.dataset.alias, h=e.target.dataset.hall; if(LIVE){ if(a){ const [kind,id]=a.split(':'); liveSave(kind,id,{alias:e.target.value.trim()},'Public name saved'); } if(h) liveSave('prod',h,{hall:e.target.value},h+' now shows at '+e.target.value); return; } if(a){ const [kind,id]=a.split(':'); PRODUCTS.find(x=>x.key===id).alias=e.target.value.trim()||'Hidden'; demoSyncRepos(); paintProducts(); toast('Public name saved'); } if(h){ PRODUCTS.find(x=>x.key===h).hall=e.target.value; toast(h+' now shows at '+e.target.value); } });
 
+/* ============================ consumers ============================ */
+const CONSUMERS=[];
+function mapConsumer(c){ return {id:c.id,name:c.name,scope:c.scope||{},hint:c.tokenHint||'',created:ms(c.createdAt),last:ms(c.lastSeenAt)}; }
+function scopeText(s){ const p=[],add=(k,v)=>{ if(v&&v.length) p.push(k+': '+v.join(', ')); };
+  add('kinds',s.kinds); add('types',s.types); add('owners',s.owners); add('repos',s.repos); return p.length?p.join(' · '):'everything'; }
+function paintConsumers(){ $('n-cons').textContent=CONSUMERS.length;
+  $('cs-body').innerHTML=CONSUMERS.map(c=>`<tr><td class="lead"><b style="font-weight:600">${esc(c.name)}</b><div class="small muted mono">${esc(c.id)}</div></td><td class="small" data-l="Scope">${esc(scopeText(c.scope))}</td><td class="t" data-l="Token">····${esc(c.hint)}</td><td class="t" data-l="Last seen">${c.last?ago(c.last):'never'}</td><td data-l="Actions"><div class="row" style="gap:6px"><button type="button" class="quiet" data-cs-rotate="${esc(c.id)}">Rotate token</button><button type="button" class="quiet" data-cs-del="${esc(c.id)}">Delete</button></div></td></tr>`).join('');
+  const sample={id:'gh-1',type:'pr.opened',int:'gh',kind:'github',at:Date.now(),st:'ok',data:{at:'2026-11-24T13:41:31Z',id:'gh-1',org:'developersismedika',product:{key:'his-v3-ai',name:'his-v3-ai',visibility:'hidden'},task:{id:'4931',kind:'pr',title:'Fix export'},type:'pr.opened',data:{pr:4931,draft:false}}};
+  $('cs-raw').textContent='consumer stream\n'+JSON.stringify(sample.data,null,2);
+  $('cs-pub').textContent='public stream\n'+JSON.stringify({at:sample.data.at,id:sample.data.id,org:'Org A',product:{key:'Product B',name:'Product B',visibility:'hidden'},task:{id:'4931',kind:'pr'},type:sample.data.type,data:sample.data.data},null,2); }
+const csList=()=>document.querySelector('[data-page=consumers]');
+function csScope(){ const pick=id=>$(id).value.split(',').map(s=>s.trim()).filter(Boolean);
+  return {kinds:pick('cs-kinds'),types:pick('cs-types'),owners:pick('cs-owners'),repos:pick('cs-repos')}; }
+async function csCreate(){ const name=$('cs-name').value.trim(); if(!name){ toast('Give the consumer a name.'); return; }
+  const body={name,scope:csScope()};
+  if(LIVE){ const r=await apiCall('POST','/api/admin/consumers',body);
+    if(!r.ok){ toast(r.data&&r.data.error||'Could not create the consumer'); return; }
+    CONSUMERS.push(mapConsumer(r.data.consumer)); paintConsumers();
+    $('cs-token').value=r.data.token||''; $('cs-token-box').hidden=false; toast('Consumer created. Copy the token now.'); return; }
+  CONSUMERS.push({id:'btc-demo',name,scope:body.scope,hint:'demo',created:Date.now(),last:0}); paintConsumers(); toast('Consumer created (demo)'); }
+async function csRotate(id){ if(!LIVE){ toast('Token rotation needs the back-office service.'); return; }
+  const r=await apiCall('POST','/api/admin/consumers/'+encodeURIComponent(id)+'/token',{});
+  if(!r.ok){ toast(r.data&&r.data.error||'Could not rotate the token'); return; }
+  $('cs-token').value=r.data.token||''; $('cs-token-box').hidden=false; toast('A new token is ready. The old one stopped working.'); }
+async function csDelete(id){ const c=CONSUMERS.find(x=>x.id===id); if(!c) return;
+  if(!confirm('Delete “'+c.name+'”? Its token stops working at once.')) return;
+  if(LIVE){ const r=await apiCall('DELETE','/api/admin/consumers/'+encodeURIComponent(id)); if(!r.ok){ toast(r.data&&r.data.error||'Could not delete the consumer'); return; } }
+  CONSUMERS.splice(CONSUMERS.indexOf(c),1); paintConsumers(); toast('Consumer deleted'); }
+$('cs-create').onclick=csCreate;
+$('cs-copy').onclick=()=>copy($('cs-token').value,'Token');
+csList().addEventListener('click',e=>{ const r=e.target.dataset.csRotate, d=e.target.dataset.csDel;
+  if(r){ csRotate(r); return; } if(d){ csDelete(d); } });
+async function csLoad(){ if(!LIVE) return; const r=await apiCall('GET','/api/admin/consumers'); if(r.ok&&Array.isArray(r.data.consumers)){ CONSUMERS.splice(0,CONSUMERS.length,...r.data.consumers.map(mapConsumer)); paintConsumers(); } }
+
 /* ============================ settings ============================ */
 function paintDb(){ if(LIVE){ const c=liveStats, rows=c?[['Integration (vertex)',c.Integrations],['Org (vertex)',c.Orgs],['Product (vertex)',c.Products],['Event (vertex, newest 5,000)',c.Events],['Rejected deliveries',c.Rejected]]:[];
     $('db-body').innerHTML=rows.map(([a,b])=>`<tr><td>${a}</td><td class="t">${b.toLocaleString('en-US')}</td></tr>`).join(''); return; }
@@ -1299,7 +1361,7 @@ function tzFill(sel){ const have=new Set(), mk=(v,t)=>{ const o=document.createE
   try{ const all=Intl.supportedValuesOf('timeZone').filter(z=>!have.has(z)); if(all.length){ const g2=document.createElement('optgroup'); g2.label='All zones\u2026'; all.forEach(z=>g2.append(mk(z,z))); sel.append(g2); } }catch(e){} }
 function tzSet(z){ const sel=$('tz'); if(!z) z='Asia/Jakarta'; if(![...sel.options].some(o=>o.value===z)) sel.querySelector('optgroup').prepend(Object.assign(document.createElement('option'),{value:z,textContent:z})); sel.value=z; tzApply(); }
 function tzApply(){ let z=$('tz').value||'Asia/Jakarta'; try{ setBoTz(z); }catch(e){ setBoTz('Asia/Jakarta'); }
-  tzPreview(); $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); paintLog(); }
+  tzPreview(); $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); await csLoad(); paintLog(); }
 let tzDirty=false;
 function tzPreview(){ $('tz-now').textContent='Now: '+BO_TZF.hm.format(new Date())+' '+BO_TZF.label+(tzDirty?' (not saved)':''); }
 function tzTick(){ tzPreview(); setTimeout(tzTick,60000-Date.now()%60000+5); }
@@ -1320,7 +1382,7 @@ function ingest(ev){ const i=INTS.find(x=>x.id===ev.int); EVENTS.unshift(ev); if
 function tick(){ if(!paused&&!LIVE&&!$('app').hidden){ const live=INTS.filter(i=>i.state==='ok'); if(live.length) ingest(makeEvent(pick(live))); } setTimeout(tick,rnd(700,2100)); }
 setInterval(()=>{ buckets.shift(); buckets.push(0); },10000);
 setInterval(()=>{ document.querySelectorAll('[data-ago]').forEach(el=>{ const i=INTS.find(x=>x.id===el.dataset.ago); if(i) el.textContent=ago(lastOf(i)); }); document.querySelectorAll('[data-at]').forEach(el=>{ el.textContent=ago(+el.dataset.at); }); drawChart(); paintDb(); if(LIVE&&++statTick%5===0) refreshStats(); },1000);
-const ORDER=['dashboard','integrations','owner','setup','events','products','prefs']; let curPage=null, swapT=0;
+const ORDER=['dashboard','integrations','consumers','owner','setup','events','products','prefs']; let curPage=null, swapT=0;
 const isStill=()=>document.body.classList.contains('still')||matchMedia('(prefers-reduced-motion: reduce)').matches;
 function placeMark(){ const a=document.querySelector('#rail nav a[aria-current=page]'), m=$('navmark'); if(!a){ m.style.width='0'; return; } m.style.width=a.offsetWidth+'px'; m.style.height=a.offsetHeight+'px'; m.style.transform=`translate(${a.offsetLeft}px,${a.offsetTop}px)`; }
 function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'dashboard'; if(h==='setup-new-github'){ ghCreateWanted=true; location.replace('#integrations'); return; } if(h==='setup-new-qa'){ qaCreateWanted=true; location.replace('#integrations'); return; }
@@ -1331,7 +1393,7 @@ function route(){ if($('app').hidden) return; let h=location.hash.slice(1)||'das
   document.querySelectorAll('#rail nav a').forEach(a=>{ const on=a.getAttribute('href')==='#'+(page==='setup'||page==='owner'?'integrations':page); on?a.setAttribute('aria-current','page'):a.removeAttribute('aria-current'); }); placeMark();
   $('drawer').classList.remove('on'); ghPopClose(false); ghSecClear('su'); ghSecClear('own'); clearTimeout(swapT);
   const swap=()=>{ pages.forEach(p=>p.classList.remove('on','leave','enter')); next.style.setProperty('--dx',dx); next.classList.add('on'); void next.offsetWidth; next.classList.add('enter'); curPage=page;
-    if(page==='setup') openSetup(h.slice(6)); if(page==='owner') openOwner(h.slice(12)); if(page==='integrations'){ paintIntegrations(); if(ghCreateWanted){ ghCreateWanted=false; openGhCreate(); } if(qaCreateWanted){ qaCreateWanted=false; openQaCreate(); } } if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog();
+    if(page==='setup') openSetup(h.slice(6)); if(page==='owner') openOwner(h.slice(12)); if(page==='integrations'){ paintIntegrations(); if(ghCreateWanted){ ghCreateWanted=false; openGhCreate(); } if(qaCreateWanted){ qaCreateWanted=false; openQaCreate(); } } if(page==='dashboard'){ paintHealth(); drawChart(); } if(page==='products') paintProducts(); if(page==='events') paintLog(); if(page==='consumers') paintConsumers();
     window.scrollTo(0,0); swapT=setTimeout(()=>next.classList.remove('enter'),1100); };
   if(prev&&!isStill()){ const w=$('wipe'); w.style.transformOrigin=dir>0?'left':'right'; w.classList.remove('go'); void w.offsetWidth; w.classList.add('go'); pages.forEach(p=>p.classList.remove('enter')); prev.style.setProperty('--dx',dx); prev.classList.add('leave'); swapT=setTimeout(swap,150); }
   else swap(); }
@@ -1367,7 +1429,7 @@ async function loadLive(){ const [a,b,c]=await Promise.all([apiCall('GET','/api/
   EVENTS.forEach(e=>{ if(e.st!=='ok') return; if(e.type==='qa.run.finished'){ stats.qaRuns++; if(e.data.data&&e.data.data.failed) stats.qaFail++; } if(e.kind==='gaos'&&e.type==='task.done') stats.tasks++; if(e.kind==='site') stats.posts++; if(e.type==='video.published') stats.videos++; if(e.type==='video.publish_failed') stats.vidFail++; });
   const st=await apiCall('GET','/api/admin/settings'); if(st.ok){ $('keep').value=st.data.retentionDays; tzDirty=false; tzSet(st.data.timezone||'Asia/Jakarta'); document.body.classList.toggle('still',!st.data.animation); [...$('motion').children].forEach(b=>b.setAttribute('aria-pressed',(b.dataset.v==='on')===st.data.animation)); }
   $('svc-addr').textContent=location.origin; $('svc-pub').textContent=location.origin+'/events'; $('svc-adm').textContent=location.origin+'/admin/events'; await refreshStats();
-  $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
+  $('tail').innerHTML=''; EVENTS.slice(0,14).reverse().forEach(ev=>$('tail').prepend(tailRow(ev))); await csLoad(); $('n-ev').textContent=EVENTS.length; paintTiles(); fillFilters(); paintIntegrations(); paintHealth(); paintLog(); paintProducts(); startStream(); }
 function startStream(){ if(startStream.es) return; const es=new EventSource('/admin/events'); startStream.es=es;
   const types=['product.upserted','task.created','task.moved','gate.requested','gate.decided','task.claimed','task.qa','task.done','task.failed','qa.run.started','qa.step','qa.run.finished','article.published','illustration.published','site.visit','ping','issue.opened','issue.assigned','issue.closed','issue.labeled','issue.subissues','pr.opened','pr.merged','pr.closed','pr.reviewed','issue.commented','pr.checks','ci.run','repo.pushed','ref.created','ref.deleted','repo.labels','discussion.opened','discussion.answered','discussion.commented','repo.starred','video.rendered','video.scheduled','video.published','video.publish_failed','channel.connected'];
   const on=m=>{ if(paused||!m.data) return; const e=mapEv(JSON.parse(m.data)); const i=INTS.find(x=>x.id===e.int); if(!i||EVENTS.some(x=>x.id===e.id&&x.int===e.int)) return; if(i.state==='waiting') i.state='ok'; const first=!i.last; ingest(e); if(e.kind==='github'&&su===i&&curPage==='setup'&&e.st==='ok'){ first?wait.release():wait.add(i.kind); setWait(i); } if(e.kind==='github') ghLive(e,i); if(e.kind==='github'&&curPage==='owner'&&own===i) ownLive(i); paintIntegrations(); paintHealth(); };

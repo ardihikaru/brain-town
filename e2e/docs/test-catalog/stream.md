@@ -13,6 +13,7 @@
 - **US-STR-07** — As a town visitor I want QA events to carry the name of the QA tool that ran them so that the town groups runs per deployment.
 - **US-STR-08** — As a town visitor I want a public org with an alias to show the alias on the stream and the town snapshot, never its key.
 - **US-STR-09** — As a town visitor I want the town to know its configured time zone so that the clock and day boundaries are right.
+- **US-STR-10** — As a platform that acts on the town's events I want a scoped reader that gives me the repository's real name so that I can work on the right pull request.
 
 ## Test cases
 
@@ -45,5 +46,9 @@ One row per test case. `Done` is ☑ exactly when Status is `automated`. Scenari
 | ☑    | TC-STR-070 | US-STR-08 | Given a public org with an alias, when its QA events are pushed, then org, key mentions in data and urls show the alias or are removed and product is untouched             | +   | API   | P0  | automated | `tests/api/stream/events/org-alias.spec.ts`            |
 | ☑    | TC-STR-071 | US-STR-08 | Given a public owner with an alias, when GET /api/town, then the owner name is the alias with its type and the key is nowhere in the entry                                  | +   | API   | P0  | automated | `tests/api/rest/town/org-alias.spec.ts`                |
 | ☑    | TC-STR-054 | US-STR-09 | Given a configured timezone, when GET /api/town without auth, then the top-level timezone equals the setting                                                                | +   | API   | P0  | automated | `tests/api/rest/admin/timezone.spec.ts`                |
+| ☑    | TC-STR-080 | US-STR-10 | Given a consumer scoped to one repository, when an event of that repository is accepted, then the consumer receives it and an event of another repository never arrives     | +   | API   | P0  | automated | `tests/api/stream/events/consumer.spec.ts`             |
+| ☑    | TC-STR-081 | US-STR-10 | Given a product hidden in the back-office, when its event is pushed, then the consumer scoped to it sees the real product name and the title while /events stays masked     | +   | API   | P0  | automated | `tests/api/stream/events/consumer.spec.ts`             |
+| ☑    | TC-STR-082 | US-STR-10 | Given a consumer, when the stream is opened without a token, with a wrong token, after a token rotation or after the consumer is deleted, then 401                          | -   | API   | P0  | automated | `tests/api/stream/events/consumer.spec.ts`             |
+| ☑    | TC-STR-083 | US-STR-10 | Given a consumer, when the admin list of consumers is read, then it carries the scope and the token hint but never the token or its hash                                    | -   | API   | P1  | automated | `tests/api/stream/events/consumer.spec.ts`             |
 
 TC-STR-031 is `wont`: it needs a 15 s idle wait per run for little value (the heartbeat is a fixed ticker).

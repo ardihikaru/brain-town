@@ -92,6 +92,17 @@ export const PublicEventSchema = z
   .strict();
 export type PublicEvent = z.infer<typeof PublicEventSchema>;
 
+/**
+ * The consumer frame: the public frame plus the store's own answer about the
+ * product and its owner, and with an UNMASKED payload. A consumer that named
+ * the repository it wants sees the real name and the real title.
+ */
+export const ConsumerEventSchema = PublicEventSchema.extend({
+  productKey: z.string(),
+  orgLogin: z.string(),
+});
+export type ConsumerEvent = z.infer<typeof ConsumerEventSchema>;
+
 /** One stored delivery (accepted or rejected) with its public view, from /api/admin/events and /admin/events. */
 export const AdminEventSchema = z.object({
   seq: z.number().int().positive(),
@@ -125,3 +136,32 @@ export const StatsSchema = z.object({
   Events: z.number().int().nonnegative(),
   Rejected: z.number().int().nonnegative(),
 });
+
+/** One downstream reader. The token hash is never returned; the hint is its last 4 characters. */
+export const ConsumerScopeSchema = z
+  .object({
+    owners: z.array(z.string()),
+    repos: z.array(z.string()),
+    types: z.array(z.string()),
+    kinds: z.array(z.string()),
+  })
+  .strict();
+
+export const ConsumerSchema = z
+  .object({
+    id: z.string().regex(/^btc-[0-9a-f]{8}$/),
+    name: z.string(),
+    scope: ConsumerScopeSchema,
+    tokenHint: z.string().length(4),
+    createdAt: z.iso.datetime({ offset: true }),
+    lastSeenAt: z.string(),
+  })
+  .strict();
+
+export type Consumer = z.infer<typeof ConsumerSchema>;
+
+export const ConsumerListSchema = z.array(ConsumerSchema);
+
+export const CreatedConsumerSchema = z.object({ consumer: ConsumerSchema, token: z.string() }).strict();
+
+export const CONSUMER_TOKEN_PATTERN = /^bt_c_[0-9a-f]{48}$/;
