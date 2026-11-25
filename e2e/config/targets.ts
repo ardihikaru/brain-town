@@ -26,6 +26,8 @@ export const streams = {
   publicEvents: { url: env.SSE_EVENTS_URL },
   /** Back-office stream: every delivery, needs the admin session cookie. */
   adminEvents: { url: `${origin}/admin/events` },
+  /** Consumer stream: the stored envelope, scoped, needs a consumer bearer token. */
+  consumerEvents: { url: `${origin}/consumer/events` },
 } as const satisfies Record<string, { url: string }>;
 
 // ── Frontend apps ──────────────────────────────────────────────────────────

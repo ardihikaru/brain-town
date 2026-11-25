@@ -13,6 +13,8 @@ import {
 import { IngestClient } from '@api/rest/ingest/ingest.client';
 import { SseConnection, type SseConnectOptions } from '@api/stream/events/events.client';
 import { expectJson } from '@api/core/assertions';
+import { CreatedConsumerSchema, type Consumer } from '@api/rest/admin/admin.schemas';
+import type { ConsumerScopeInput } from '@api/rest/admin/admin.client';
 import { buildJsonFeed, type FeedItem } from '@data/factories/feed.factory';
 import { uniqueId } from '@utils/unique';
 
@@ -28,6 +30,13 @@ export interface TestIntegration {
   /** `/ingest/<kind>/<id>`, relative to BRAIN_TOWN_URL. */
   readonly ingestPath: string;
   readonly integration: Integration;
+}
+
+/** A consumer the test created: its id, its plaintext token (shown once) and its record. */
+export interface TestConsumer {
+  readonly id: string;
+  readonly token: string;
+  readonly consumer: Consumer;
 }
 
 export interface ApiWorkerFixtures {
@@ -46,8 +55,13 @@ export interface ApiFixtures {
   ingestApi: IngestClient;
   /** Creates an integration of `kind` through the admin API and deletes it after the test. */
   integration: (kind: IngestKind, input?: { name?: string; org?: string }) => Promise<TestIntegration>;
-  /** SSE streams. Every connection is closed after the test. `admin` sends the session cookie. */
-  sse: { connect: (stream: 'public' | 'admin', options?: SseConnectOptions) => Promise<SseConnection> };
+  /**
+   * SSE streams. Every connection is closed after the test.
+   * `admin` sends the session cookie; `consumer` sends the caller's bearer token in `options.headers`.
+   */
+  sse: { connect: (stream: 'public' | 'admin' | 'consumer', options?: SseConnectOptions) => Promise<SseConnection> };
+  /** Creates a scoped consumer through the admin API and deletes it after the test. */
+  consumer: (input?: { name?: string; scope?: ConsumerScopeInput }) => Promise<TestConsumer>;
   /** Publishes a JSON Feed file on the https feed fixture and returns its URL as the api container sees it. */
   feed: { publish: (items: FeedItem[]) => Promise<string> };
   /**
@@ -118,11 +132,31 @@ export const apiTest = base.extend<ApiFixtures, ApiWorkerFixtures>({
     });
   },
 
+  consumer: async ({ adminApi, cleanup }, use) => {
+    await use(async (input = {}) => {
+      const created = await expectJson(
+        await adminApi.createConsumer({
+          name: input.name ?? uniqueId('consumer'),
+          scope: input.scope ?? {},
+        }),
+        CreatedConsumerSchema,
+        201,
+      );
+      cleanup.add(() => adminApi.deleteConsumer(created.consumer.id));
+      return { id: created.consumer.id, token: created.token, consumer: created.consumer };
+    });
+  },
+
   sse: async ({ adminState }, use) => {
     const open: SseConnection[] = [];
     await use({
       connect: async (stream, options = {}) => {
-        const url = stream === 'admin' ? streams.adminEvents.url : streams.publicEvents.url;
+        const url =
+          stream === 'admin'
+            ? streams.adminEvents.url
+            : stream === 'consumer'
+              ? streams.consumerEvents.url
+              : streams.publicEvents.url;
         const headers = stream === 'admin' ? { cookie: cookieHeader(adminState), ...options.headers } : options.headers;
         const conn = await SseConnection.connect(url, { ...options, headers });
         open.push(conn);

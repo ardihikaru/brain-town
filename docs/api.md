@@ -145,6 +145,25 @@ Cookie session (`bt_session`, HttpOnly, SameSite=Strict). Bodies are JSON.
 | `GET /api/admin/events?integration=&type=&delivery=&q=&limit=` | Event log, newest first. |
 | `GET/PUT /api/admin/settings` | `retentionDays` (1 to 3650, pruned hourly), `animation`, `timezone` (IANA name, default `Asia/Jakarta`; omitted or empty keeps the current value; an unknown zone or `Local` is `422` `{"error":"timezone must be an IANA time zone name ..."}`). |
 | `GET /api/admin/stats` | Counts. |
+| `GET /api/admin/consumers` | The downstream readers: id, name, scope, token hint, created, last seen. Never a token, never a hash. |
+| `POST /api/admin/consumers` | Create a reader. Body `{"name": string, "scope": {"owners"?: [], "repos"?: [], "types"?: [], "kinds"?: []}}`. Answers `201 {"consumer": {…}, "token": "bt_c_…"}` — the token is in this answer and nowhere else. `409` when the name is taken (case-insensitive), `422` for a name shorter than 2 or longer than 64 characters. Each scope dimension holds at most 64 entries; an empty dimension matches everything within it. |
+| `PATCH /api/admin/consumers/{id}` | Rename and replace the scope. `404` for an unknown id, `409` when the name is taken, `422` for a bad name. |
+| `POST /api/admin/consumers/{id}/token` | Rotate the token; the old one stops working at once. Answers `{"token":"bt_c_…"}` once. `404` for an unknown id. |
+| `DELETE /api/admin/consumers/{id}` | Remove a reader; its token stops working at once. `404` for an unknown id. |
+
+### `GET /consumer/events` (a consumer's stream)
+
+Not a session route: the credential is the consumer's own bearer token, `Authorization:
+Bearer bt_c_…`. `401` when the token is missing, unknown, or belongs to a consumer that
+was deleted or rotated. `Last-Event-ID` replays everything after it; `?replay=N` (1 to
+500) starts a fresh subscriber with the newest `N` events, oldest first.
+
+The frame has the public frame's own shape — `seq`, `id`, `type`, `source`, `at`,
+`payload` — with the payload **unmasked**, plus `productKey` and `orgLogin` from the
+store: a hidden product's real name and the task title are present, because the consumer
+named the repository it wants. The source payload is still never stored, so there is no
+diff, no PR body and no login in the frame. The contract is
+`docs/integrations/gaos-consumer.md`.
 
 Integration objects carry `events` (the events subscribed on a GitHub webhook, from its last `ping`; `[]` until
 then). `secretEnc` and `tokenHash` are never returned. A `github` integration has no token hash; its

@@ -10,6 +10,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/ardihikaru/brain-town/backend/internal/consumer"
 )
 
 // Arcade persists to ArcadeDB over its HTTP API.
@@ -68,6 +70,11 @@ const schema = `
 CREATE VERTEX TYPE Integration IF NOT EXISTS;
 CREATE PROPERTY Integration.id IF NOT EXISTS STRING;
 CREATE INDEX IF NOT EXISTS ON Integration (id) UNIQUE;
+CREATE VERTEX TYPE Consumer IF NOT EXISTS;
+CREATE PROPERTY Consumer.id IF NOT EXISTS STRING;
+CREATE INDEX IF NOT EXISTS ON Consumer (id) UNIQUE;
+CREATE PROPERTY Consumer.name IF NOT EXISTS STRING;
+CREATE INDEX IF NOT EXISTS ON Consumer (name) NOTUNIQUE;
 CREATE VERTEX TYPE Org IF NOT EXISTS;
 CREATE PROPERTY Org.key IF NOT EXISTS STRING;
 CREATE INDEX IF NOT EXISTS ON Org (key) UNIQUE;
@@ -125,6 +132,15 @@ func (a *Arcade) Load(ctx context.Context) (Snapshot, error) {
 		_ = json.Unmarshal([]byte(str(r, "events")), &g.Events)
 		_ = json.Unmarshal([]byte(str(r, "repos")), &g.Repos) // absent on records written before per-repo state
 		sn.Integrations = append(sn.Integrations, g)
+	}
+	if rows, err = a.query(ctx, "SELECT FROM Consumer", nil); err != nil {
+		return sn, err
+	}
+	for _, r := range rows {
+		c := consumer.Consumer{ID: str(r, "id"), Name: str(r, "name"), TokenHash: str(r, "tokenHash"), TokenHint: str(r, "tokenHint"),
+			CreatedAt: parseT(str(r, "createdAt")), LastSeenAt: parseT(str(r, "lastSeenAt"))}
+		_ = json.Unmarshal([]byte(str(r, "scope")), &c.Scope)
+		sn.Consumers = append(sn.Consumers, c)
 	}
 	if rows, err = a.query(ctx, "SELECT FROM Org", nil); err != nil {
 		return sn, err
@@ -204,6 +220,13 @@ func buildScript(ops []Op) (string, map[string]any) {
 				set("se", g.SecretEnc), set("ev", jsonStr(g.Events)), set("ot", g.OwnerType), set("repos", jsonStr(g.Repos)), k("id"))
 		case OpIntegrationDel:
 			fmt.Fprintf(&sb, "DELETE VERTEX FROM Integration WHERE id=%s;\n", set("id", o.Key))
+		case OpConsumer:
+			g := o.Consumer
+			fmt.Fprintf(&sb, "UPDATE Consumer SET id=%s, name=%s, tokenHash=%s, tokenHint=%s, scope=%s, createdAt=%s, lastSeenAt=%s UPSERT WHERE id=%s;\n",
+				set("id", g.ID), set("name", g.Name), set("th", g.TokenHash), set("hint", g.TokenHint), set("scope", jsonStr(g.Scope)),
+				set("ca", g.CreatedAt.UTC().Format(TimeFmt)), set("ls", g.LastSeenAt.UTC().Format(TimeFmt)), k("id"))
+		case OpConsumerDel:
+			fmt.Fprintf(&sb, "DELETE VERTEX FROM Consumer WHERE id=%s;\n", set("id", o.Key))
 		case OpOrg:
 			g := o.Org
 			fmt.Fprintf(&sb, "UPDATE Org SET key=%s, visibility=%s, alias=%s UPSERT WHERE key=%s;\n", set("key", g.Key), set("vis", g.Visibility), set("alias", g.Alias), k("key"))

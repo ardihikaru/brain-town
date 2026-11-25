@@ -18,6 +18,8 @@ import (
 	"sync"
 	"time"
 	"unicode/utf8"
+
+	"github.com/ardihikaru/brain-town/backend/internal/consumer"
 )
 
 const (
@@ -115,6 +117,7 @@ const DefaultTimezone = "Asia/Jakarta"
 
 type state struct {
 	Integrations map[string]*Integration `json:"integrations"`
+	Consumers    map[string]*consumer.Consumer `json:"consumers"`
 	Orgs         map[string]*Org         `json:"orgs"`
 	Products     map[string]*Product     `json:"products"`
 	Events       []Event                 `json:"events"` // oldest first
@@ -135,7 +138,8 @@ const maxOps = 50000 // cap on the unwritten queue if the database is down for l
 // New builds a store. With a Persister it initialises the schema and loads existing data.
 func New(p Persister) (*Store, error) {
 	st := &Store{p: p, s: state{
-		Integrations: map[string]*Integration{}, Orgs: map[string]*Org{}, Products: map[string]*Product{},
+		Integrations: map[string]*Integration{}, Consumers: map[string]*consumer.Consumer{},
+		Orgs: map[string]*Org{}, Products: map[string]*Product{},
 		Seen: map[string]time.Time{}, NextSeq: 1, Settings: Settings{RetentionDays: 30, Animation: true, Timezone: DefaultTimezone},
 	}}
 	if p == nil {
@@ -153,6 +157,10 @@ func New(p Persister) (*Store, error) {
 	for i := range sn.Integrations {
 		v := sn.Integrations[i]
 		st.s.Integrations[v.ID] = &v
+	}
+	for i := range sn.Consumers {
+		v := sn.Consumers[i]
+		st.s.Consumers[v.ID] = &v
 	}
 	for i := range sn.Orgs {
 		v := sn.Orgs[i]
@@ -608,6 +616,149 @@ func (st *Store) DeleteIntegration(id string) bool {
 	return ok
 }
 
+// ---- consumers ----
+
+// CreateConsumer registers a scoped reader and returns its plaintext token once.
+// The name must be unique so the back office can tell two readers apart.
+func (st *Store) CreateConsumer(name string, scope consumer.Scope) (consumer.Consumer, string, error) {
+	name = strings.TrimSpace(name)
+	if err := consumer.ValidateName(name); err != nil {
+		return consumer.Consumer{}, "", err
+	}
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	for _, c := range st.s.Consumers {
+		if strings.EqualFold(c.Name, name) {
+			return consumer.Consumer{}, "", ErrConsumerName
+		}
+	}
+	plain, hash, hint := consumer.NewToken()
+	idb := make([]byte, 4)
+	_, _ = rand.Read(idb)
+	c := &consumer.Consumer{
+		ID:        "btc-" + hex.EncodeToString(idb),
+		Name:      name,
+		TokenHash: hash,
+		TokenHint: hint,
+		Scope:     scope.Normalize(),
+		CreatedAt: time.Now().UTC(),
+	}
+	st.s.Consumers[c.ID] = c
+	st.qConsumer(c)
+	return c.Public(), plain, nil
+}
+
+// Consumers lists the registered readers, oldest first.
+func (st *Store) Consumers() []consumer.Consumer {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	out := make([]consumer.Consumer, 0, len(st.s.Consumers))
+	for _, c := range st.s.Consumers {
+		out = append(out, c.Public())
+	}
+	sort.Slice(out, func(a, b int) bool {
+		return out[a].CreatedAt.Before(out[b].CreatedAt) || (out[a].CreatedAt.Equal(out[b].CreatedAt) && out[a].ID < out[b].ID)
+	})
+	return out
+}
+
+// GetConsumer returns one reader.
+func (st *Store) GetConsumer(id string) (consumer.Consumer, bool) {
+	st.mu.RLock()
+	defer st.mu.RUnlock()
+	c, ok := st.s.Consumers[id]
+	if !ok {
+		return consumer.Consumer{}, false
+	}
+	return c.Public(), true
+}
+
+// UpdateConsumer renames a reader and replaces its scope.
+func (st *Store) UpdateConsumer(id, name string, scope consumer.Scope) (consumer.Consumer, error) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	c, ok := st.s.Consumers[id]
+	if !ok {
+		return consumer.Consumer{}, ErrNotFound
+	}
+	name = strings.TrimSpace(name)
+	if err := consumer.ValidateName(name); err != nil {
+		return consumer.Consumer{}, err
+	}
+	for otherID, other := range st.s.Consumers {
+		if otherID != id && strings.EqualFold(other.Name, name) {
+			return consumer.Consumer{}, ErrConsumerName
+		}
+	}
+	c.Name = name
+	c.Scope = scope.Normalize()
+	st.qConsumer(c)
+	return c.Public(), nil
+}
+
+// RotateConsumerToken replaces the token. The old one stops working at once.
+func (st *Store) RotateConsumerToken(id string) (string, bool) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	c, ok := st.s.Consumers[id]
+	if !ok {
+		return "", false
+	}
+	plain, hash, hint := consumer.NewToken()
+	c.TokenHash, c.TokenHint = hash, hint
+	st.qConsumer(c)
+	return plain, true
+}
+
+// DeleteConsumer removes a reader.
+func (st *Store) DeleteConsumer(id string) bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	_, ok := st.s.Consumers[id]
+	delete(st.s.Consumers, id)
+	if ok {
+		st.q(Op{Kind: OpConsumerDel, Key: id})
+	}
+	return ok
+}
+
+// CheckConsumerToken resolves a presented bearer token to its reader. The
+// comparison is constant time and a miss returns nothing about the store.
+func (st *Store) CheckConsumerToken(token string) (consumer.Consumer, bool) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	for _, c := range st.s.Consumers {
+		if consumer.Verify(c.TokenHash, token) {
+			c.LastSeenAt = time.Now().UTC()
+			st.qConsumer(c)
+			return c.Public(), true
+		}
+	}
+	return consumer.Consumer{}, false
+}
+
+// TouchConsumer records that a reader is alive. It is written at most once a
+// minute so a busy stream does not turn into a write per event.
+func (st *Store) TouchConsumer(id string) {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	c, ok := st.s.Consumers[id]
+	if !ok {
+		return
+	}
+	now := time.Now().UTC()
+	if !c.LastSeenAt.IsZero() && now.Sub(c.LastSeenAt) < time.Minute {
+		return
+	}
+	c.LastSeenAt = now
+	st.qConsumer(c)
+}
+
+func (st *Store) qConsumer(c *consumer.Consumer) {
+	v := c.Clone()
+	st.q(Op{Kind: OpConsumer, Consumer: &v})
+}
+
 // ---- orgs / products ----
 
 func nextAlias(prefix string, taken map[string]bool) string {
@@ -787,6 +938,9 @@ var (
 	ErrOrgNotFound = errors.New("no such org")
 	ErrConflict    = errors.New("conflict")
 	ErrInvalid     = errors.New("invalid")
+	ErrNotFound    = errors.New("not found")
+	// ErrConsumerName is returned when a consumer name is already taken.
+	ErrConsumerName = errors.New("a consumer with that name already exists")
 )
 
 type OrgError struct {
